@@ -86,3 +86,7 @@ button.primary, label.primary { color: #fff; cursor: pointer; background: linear
 .meter { flex: 1; height: 10px; background: var(--panel3); border-radius: 5px; overflow: hidden; }
 .meter .fill { height: 100%; width: 0; background: linear-gradient(90deg, #22C55E, #F59E0B 75%, #EF4444); transition: width .05s; }
 button.rec { border-color: #7f1d1d; color: #FCA5A5; }
+
+button.install { background: linear-gradient(90deg, #3B82F6, #EC4899); border: 0; border-radius: 10px; padding: 7px 12px; color: #fff; font-weight: 700; white-space: nowrap; }
+.installhint { position: fixed; left: 12px; right: 12px; bottom: calc(16px + env(safe-area-inset-bottom)); background: var(--panel2); border: 1px solid var(--violet); border-radius: 14px; padding: 12px 14px; z-index: 11; box-shadow: 0 8px 30px rgba(0,0,0,.5); }
+.installhint div { color: var(--text2); margin: 6px 0 10px; font-size: 14px; }

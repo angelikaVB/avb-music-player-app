@@ -15,6 +15,7 @@
 <header class="top">
   <div class="logo"></div>
   <div class="appname">AVB Music Player</div>
+  <button class="install" id="installBtn" hidden>Install app</button>
   <nav class="tabs" id="pages">
     <button data-page="play" class="on">Play</button>
     <button data-page="library">Library</button>
@@ -128,6 +129,11 @@
   </section>
 </main>
 
+<div class="installhint" id="installHint" hidden>
+  <b>Open it as an app</b>
+  <div id="installText"></div>
+  <button class="ghost" id="installClose">OK</button>
+</div>
 <div class="toast" id="toast"></div>
 <div class="sheet" id="sheet"></div>
 <script type="module" src="app.js"></script>

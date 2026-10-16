@@ -1,5 +1,5 @@
 // Offline shell: everything the app needs is cached on first visit.
-const VERSION = "avb-player-v2";
+const VERSION = "avb-player-v3";
 const FILES = ["./", "index.html", "styles.css", "app.js", "analysis-worker.js", "stretch-worker.js", "player-worklet.js",
   "manifest.webmanifest", "icons/icon-192.png", "icons/icon-512.png", "icons/maskable-192.png", "icons/maskable-512.png",
   "vendor/rubberband.esm.js", "vendor/rubberband.wasm"];

@@ -603,6 +603,35 @@ function toast(t) { const e = $("#toast"); e.textContent = t; e.classList.add("o
 renderList(); drawWave(); refreshSave();
 if (lib.queue.length && lib.index >= 0 && songs[lib.queue[lib.index]]) { $("#title").textContent = songs[lib.queue[lib.index]].name.replace(/\.[^.]+$/, ""); $("#listen").textContent = "Tap play to continue"; }
 if ("serviceWorker" in navigator && location.protocol !== "file:") navigator.serviceWorker.register("sw.js").catch(() => { });
+
+// ---------------------------------------------------------------- install
+// Opened as an installed app: nothing to offer.  In Chrome: Chrome's own
+// installer behind our button.  Elsewhere (an app's built-in browser, a
+// home-screen shortcut): say how to get the real install.
+const standalone = matchMedia("(display-mode: standalone)").matches || navigator.standalone;
+let installEvent = null;
+window.addEventListener("beforeinstallprompt", e => { e.preventDefault(); installEvent = e; $("#installBtn").hidden = false; });
+window.addEventListener("appinstalled", () => { $("#installBtn").hidden = true; $("#installHint").hidden = true; toast("Installed: open AVB Music Player from its icon"); });
+$("#installBtn").onclick = async () => {
+  if (installEvent) { installEvent.prompt(); const r = await installEvent.userChoice; if (r.outcome === "accepted") $("#installBtn").hidden = true; installEvent = null; return; }
+  showInstallHint();
+};
+$("#installClose").onclick = () => { $("#installHint").hidden = true; sessionStorage.setItem("hintClosed", "1"); };
+function showInstallHint() {
+  const ua = navigator.userAgent;
+  const inApp = /; wv\)|FBAN|FBAV|Instagram|Line\/|WhatsApp|GSA\//.test(ua);
+  const chrome = /Chrome\//.test(ua) && !/EdgA|SamsungBrowser|OPR|YaBrowser/.test(ua);
+  $("#installText").innerHTML = inApp
+    ? "This page is open inside another app. Tap ⋮ and choose <b>Open in Chrome</b>, then tap <b>Install app</b> at the top."
+    : chrome
+      ? "You are in the browser. Tap ⋮ (top right) → <b>Install app</b> (or <b>Add to Home screen</b> → <b>Install</b>, not “Create shortcut”). If you made a shortcut before, delete it first."
+      : "For the full app, open this link in <b>Chrome</b>, then tap ⋮ → <b>Install app</b>.";
+  $("#installHint").hidden = false;
+}
+if (!standalone) {
+  $("#installBtn").hidden = false;                       // shown at once; Chrome's own prompt attaches when it is ready
+  if (!sessionStorage.getItem("hintClosed")) setTimeout(() => { if (!installEvent && !standalone) showInstallHint(); }, 2500);
+}
 // a test hook: ?demo=<url> loads a file without a file picker (used only on localhost)
 const demo = new URLSearchParams(location.search).get("demo");
 if (demo && ["localhost", "127.0.0.1"].includes(location.hostname)) {

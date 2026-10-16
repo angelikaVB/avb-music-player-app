@@ -2,6 +2,7 @@
   "name": "AVB Music Player",
   "short_name": "AVB Player",
   "description": "Play, analyse, change tempo and key, cut and save copies of your music.",
+  "id": "./",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
