@@ -99,7 +99,8 @@ async function loadSong(id, autoplay = true) {
   }
   if (st.id !== id) return;
   st.buffer = buf; st.sr = buf.sampleRate; st.duration = buf.duration;
-  st.info = { fmt: fmtOf(rec.name), rate: buf.sampleRate, channels: buf.numberOfChannels, size: rec.size, bits: bitsOf(rec) };
+  const hdr = await sniffHeader(rec.blob, rec.name);
+  st.info = { fmt: fmtOf(rec.name), rate: hdr.rate || buf.sampleRate, channels: buf.numberOfChannels, size: rec.size, bits: hdr.bits || bitsOf(rec) };
   fillBadges(); fillStats();
   const chans = channelsOf(buf);
   send({ cmd: "load", channels: chans });
@@ -124,17 +125,23 @@ function bitsOf(rec) {
   if (f === "WAV" || f === "AIFF" || f === "AIF" || f === "FLAC") return rec.bits || 0;
   return 0;
 }
-async function sniffBits(blob, name) {
+async function sniffBits(blob, name) { return (await sniffHeader(blob, name)).bits; }
+async function sniffHeader(blob, name) {
+  // WAV / FLAC / AIFF headers say their sample rate and depth; compressed formats get the rate only where easy
   const f = fmtOf(name);
   try {
-    const head = new DataView(await blob.slice(0, 64).arrayBuffer());
+    const head = new DataView(await blob.slice(0, 4096).arrayBuffer());
     if (f === "WAV" && head.getUint32(0, false) === 0x52494646) {
       let p = 12;
-      while (p + 8 < 64) { const id = head.getUint32(p, false), sz = head.getUint32(p + 4, true); if (id === 0x666d7420) return head.getUint16(p + 22, true); p += 8 + sz; }
+      while (p + 8 < head.byteLength) { const id = head.getUint32(p, false), sz = head.getUint32(p + 4, true); if (id === 0x666d7420) return { rate: head.getUint32(p + 12, true), bits: head.getUint16(p + 22, true) }; p += 8 + sz + (sz & 1); }
     }
-    if (f === "FLAC" && head.getUint32(0, false) === 0x664c6143) { const b = head.getUint8(20) & 1, c = head.getUint8(21); return (((b << 4) | (c >> 4)) & 0x1f) + 1; }
+    if (f === "FLAC" && head.getUint32(0, false) === 0x664c6143) {
+      const rate = (head.getUint8(18) << 12) | (head.getUint8(19) << 4) | (head.getUint8(20) >> 4);
+      const bits = ((((head.getUint8(20) & 1) << 4) | (head.getUint8(21) >> 4)) & 0x1f) + 1;
+      return { rate, bits };
+    }
   } catch (_) { }
-  return 0;
+  return { rate: 0, bits: 0 };
 }
 
 // ---------------------------------------------------------------- transport
