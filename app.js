@@ -140,7 +140,7 @@ async function sniffBits(blob, name) {
 // ---------------------------------------------------------------- transport
 function play() { if (!st.buffer) return; audio().then(() => { send({ cmd: "play" }); st.playing = true; $("#play").textContent = "❚❚"; if (navigator.mediaSession) navigator.mediaSession.playbackState = "playing"; }); }
 function pause() { send({ cmd: "pause" }); st.playing = false; $("#play").textContent = "▶"; if (navigator.mediaSession) navigator.mediaSession.playbackState = "paused"; }
-function togglePlay() { if (!st.buffer) { if (lib.queue.length) playIndex(Math.max(0, lib.index)); else $("#files").click(); return; } st.playing ? pause() : play(); }
+function togglePlay() { if (!st.buffer) { if (lib.queue.length) playIndex(Math.max(0, lib.index)); else $("#files2").click(); return; } st.playing ? pause() : play(); }
 function seek(t) { if (!st.buffer) return; t = Math.max(0, Math.min(st.duration, t)); st.pos = t; send({ cmd: "seek", frame: Math.round(t * st.sr) }); drawWave(); }
 function onEnded() {
   st.playing = false; $("#play").textContent = "▶";
@@ -256,7 +256,7 @@ function drawWave() {
   wctx.fillStyle = "#0E0D26"; wctx.fillRect(0, 0, w, h);
   if (!st.buffer) {
     wctx.fillStyle = "#9592BF"; wctx.font = "600 14px system-ui"; wctx.textAlign = "center";
-    wctx.fillText(lib.queue.length ? "Tap to play" : "Open files to start", w / 2, h / 2);
+    wctx.fillText(lib.queue.length ? "Tap to play" : "Tap here or “+ Open files” to pick songs", w / 2, h / 2);
     return;
   }
   const top = SECT_H + 4, bottom = h - RULER_H, mid = (top + bottom) / 2, amp = (bottom - top) / 2 - 2;
@@ -314,7 +314,7 @@ function roundRect(c, x, y, w, h, r) { c.beginPath(); c.moveTo(x + r, y); c.arcT
 // touch: tap = seek / section jump, drag a flag = move it, pinch = zoom
 let drag = null, pinch = null, lastTap = 0;
 wave.addEventListener("pointerdown", e => {
-  if (!st.buffer) { if (lib.queue.length) playIndex(Math.max(0, lib.index)); else $("#files").click(); return; }
+  if (!st.buffer) { if (lib.queue.length) playIndex(Math.max(0, lib.index)); else $("#files2").click(); return; }
   wave.setPointerCapture(e.pointerId);
   const r = wave.getBoundingClientRect(), x = e.clientX - r.left, y = e.clientY - r.top, w = r.width;
   const now = Date.now();
@@ -558,6 +558,7 @@ function showPage(p) { document.querySelectorAll(".page").forEach(e => e.classLi
 $("#pages").querySelectorAll("button").forEach(b => b.onclick = () => showPage(b.dataset.page));
 $("#tools").querySelectorAll("button").forEach(b => b.onclick = () => { $("#tools").querySelectorAll("button").forEach(x => x.classList.toggle("on", x === b)); document.querySelectorAll(".tab").forEach(t => t.classList.toggle("on", t.id === "tab-" + b.dataset.tab)); if (b.dataset.tab === "loud") drawLoud(); });
 $("#files").onchange = e => { addFiles([...e.target.files]); e.target.value = ""; };
+$("#files2").onchange = e => { addFiles([...e.target.files]); e.target.value = ""; };
 $("#play").onclick = togglePlay; $("#prev").onclick = prevTrack; $("#next").onclick = () => nextTrack(false);
 $("#back10").onclick = () => seek(st.pos - 10); $("#fwd10").onclick = () => seek(st.pos + 10);
 $("#markA").onclick = () => markButton("A"); $("#markB").onclick = () => markButton("B");
@@ -578,7 +579,7 @@ $("#keepVoice").checked = lib.keepVoice; $("#keepVoice").onchange = e => { lib.k
 $("#part").onchange = refreshSave; $("#fmt").onchange = refreshSave; $("#saveBtn").onclick = saveCopy;
 $("#notes").oninput = () => { if (st.id) { lib.notes[st.id] = $("#notes").value; save("notes"); } };
 $("#newList").onclick = () => newPlaylist();
-$("#recBtn").onclick = recordStart; $("#recStop").onclick = () => recordStop(true); $("#recCancel").onclick = () => recordStop(false);
+$("#recBtn").onclick = recordStart; $("#recBtn2").onclick = () => { showPage("library"); recordStart(); }; $("#recStop").onclick = () => recordStop(true); $("#recCancel").onclick = () => recordStop(false);
 $("#filter").oninput = renderList;
 window.addEventListener("resize", () => { drawWave(); drawLoud(); });
 document.addEventListener("keydown", e => { if (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA") return; if (e.code === "Space") { e.preventDefault(); togglePlay(); } if (e.key === "ArrowLeft") seek(st.pos - 5); if (e.key === "ArrowRight") seek(st.pos + 5); });

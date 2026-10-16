@@ -90,3 +90,6 @@ button.rec { border-color: #7f1d1d; color: #FCA5A5; }
 button.install { background: linear-gradient(90deg, #3B82F6, #EC4899); border: 0; border-radius: 10px; padding: 7px 12px; color: #fff; font-weight: 700; white-space: nowrap; }
 .installhint { position: fixed; left: 12px; right: 12px; bottom: calc(16px + env(safe-area-inset-bottom)); background: var(--panel2); border: 1px solid var(--violet); border-radius: 14px; padding: 12px 14px; z-index: 11; box-shadow: 0 8px 30px rgba(0,0,0,.5); }
 .installhint div { color: var(--text2); margin: 6px 0 10px; font-size: 14px; }
+
+.startbar { display: flex; gap: 10px; }
+.startbar .big { flex: 1; text-align: center; padding: 14px 16px; font-size: 16px; border-radius: 14px; }
