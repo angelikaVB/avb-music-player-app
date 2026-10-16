@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0B0A1F">
+<meta name="mobile-web-app-capable" content="yes">
+<title>AVB Music Player</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<header class="top">
+  <div class="logo"></div>
+  <div class="appname">AVB Music Player</div>
+  <nav class="tabs" id="pages">
+    <button data-page="play" class="on">Play</button>
+    <button data-page="library">Library</button>
+  </nav>
+</header>
+
+<main id="page-play" class="page on">
+  <section class="card header">
+    <div class="cover" id="cover"></div>
+    <div class="hcol">
+      <div class="hrow"><div class="title" id="title">No song loaded</div><button class="icon" id="heart" title="Favourite">♡</button></div>
+      <div class="badges" id="badges"></div>
+    </div>
+  </section>
+
+  <section class="card wavecard">
+    <canvas id="wave"></canvas>
+    <div class="transport">
+      <div class="time"><span id="tnow">0:00</span><span class="muted"> / </span><span id="tdur">0:00</span></div>
+      <div class="buttons">
+        <button class="icon" id="prev" title="Previous">⏮</button>
+        <button class="play" id="play" title="Play / pause">▶</button>
+        <button class="icon" id="next" title="Next">⏭</button>
+      </div>
+      <div class="buttons small">
+        <button class="mark a" id="markA" title="Set A at the playhead">A</button>
+        <button class="mark b" id="markB" title="Set B at the playhead">B</button>
+        <button class="ghost" id="back10">−10s</button>
+        <button class="ghost" id="fwd10">+10s</button>
+        <button class="ghost" id="repeat" title="Repeat">↻ off</button>
+        <select id="speedQuick" class="ghost" title="Speed">
+          <option value="0.5">0.5×</option><option value="0.75">0.75×</option><option value="0.9">0.9×</option>
+          <option value="1" selected>1×</option><option value="1.1">1.1×</option><option value="1.25">1.25×</option><option value="1.5">1.5×</option>
+        </select>
+      </div>
+    </div>
+    <input type="range" id="seek" min="0" max="1000" value="0" class="seekbar">
+  </section>
+
+  <section class="card">
+    <nav class="pills" id="tools">
+      <button data-tab="intel" class="on">Music</button>
+      <button data-tab="mix">Tempo &amp; Key</button>
+      <button data-tab="save">Save</button>
+      <button data-tab="loud">Loudness</button>
+      <button data-tab="notes">Notes</button>
+    </nav>
+
+    <div class="tab on" id="tab-intel">
+      <div class="status" id="listen"></div>
+      <div class="bigrow">
+        <div class="big"><div class="cap">TEMPO</div><div class="bpm" id="bpm">—</div><div class="faint" id="bpmnote"></div></div>
+        <div class="big"><div class="cap">KEY</div><div class="key" id="key">—</div><div class="faint" id="keynote"></div></div>
+        <div class="mini"><button class="ghost" id="half">½</button><button class="ghost" id="dbl">×2</button></div>
+      </div>
+      <div class="grid" id="stats"></div>
+      <div class="sections" id="sections"></div>
+    </div>
+
+    <div class="tab" id="tab-mix">
+      <div class="row"><label>Tempo</label><input type="range" id="speed" min="50" max="150" value="100"><span class="val" id="speedval">100%</span></div>
+      <div class="row"><label>Target BPM</label><input type="number" id="bpmTarget" step="0.1" min="20" max="400"><span class="val" id="bpmFrom"></span></div>
+      <div class="row"><label>Key</label><button class="ghost" id="keyDown">−</button><span class="val" id="semis">±0 st</span><button class="ghost" id="keyUp">+</button><span class="val" id="keyResult"></span></div>
+      <label class="check"><input type="checkbox" id="keepVoice" checked> Keep the voice's character when the key moves</label>
+      <label class="check"><input type="checkbox" id="finer"> Finer engine (slower on a phone)</label>
+      <div class="row"><button id="applyChange" class="primary">Apply</button><button class="ghost" id="resetChange">Reset</button><span class="status" id="changeStatus"></span></div>
+      <div class="faint">Rubber Band (GPL) runs in the phone; the song keeps playing as it was until the changed version is ready.</div>
+    </div>
+
+    <div class="tab" id="tab-save">
+      <div class="row"><label>Part</label>
+        <select id="part"><option value="whole">Whole song</option><option value="keep">A–B piece</option><option value="remove">Cut A–B out</option></select></div>
+      <div class="row"><label>Format</label>
+        <select id="fmt"><option value="16">WAV 16-bit</option><option value="24">WAV 24-bit</option><option value="32">WAV 32-bit float</option></select></div>
+      <div class="faint" id="saveName"></div>
+      <div class="row"><button id="saveBtn" class="primary">Save a copy</button><span class="status" id="saveStatus"></span></div>
+      <div class="faint">Never above the file's own bit depth. The copy goes to your phone's Downloads. A tempo/key change is rendered into it.</div>
+    </div>
+
+    <div class="tab" id="tab-loud">
+      <canvas id="loud"></canvas>
+      <div class="grid" id="loudstats"></div>
+    </div>
+
+    <div class="tab" id="tab-notes">
+      <textarea id="notes" placeholder="Notes on this song: mix ideas, where the vocal comes in, what to fix… Saved by themselves, per song."></textarea>
+    </div>
+  </section>
+</main>
+
+<main id="page-library" class="page">
+  <section class="card">
+    <div class="row">
+      <label class="primary filebtn">+ Open files<input type="file" id="files" multiple accept="audio/*,.wav,.flac,.mp3,.ogg,.m4a,.aac,.opus,.aiff,.aif"></label>
+      <button class="ghost rec" id="recBtn" title="Record from the microphone or a USB interface">● Record</button>
+      <button class="ghost" id="newList">+ Playlist</button>
+      <input type="search" id="filter" placeholder="Filter">
+    </div>
+    <nav class="pills" id="views">
+      <button data-view="queue" class="on">Queue</button>
+      <button data-view="favorites">Favourites</button>
+      <button data-view="recent">Recent</button>
+      <span id="listTabs"></span>
+    </nav>
+    <div class="recbox" id="recbox">
+      <div class="row"><span class="recdot"></span><span class="time" id="recTime">0:00</span><div class="meter"><div class="fill" id="recLevel"></div></div><span class="val" id="recPeak"></span></div>
+      <div class="row"><button class="primary" id="recStop">■ Stop and keep</button><button class="ghost" id="recCancel">Cancel</button><span class="faint" id="recInfo"></span></div>
+    </div>
+    <div class="faint" id="storage"></div>
+    <ul class="list" id="list"></ul>
+  </section>
+</main>
+
+<div class="toast" id="toast"></div>
+<div class="sheet" id="sheet"></div>
+<script type="module" src="app.js"></script>
+</body>
+</html>
