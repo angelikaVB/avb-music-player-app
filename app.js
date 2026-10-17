@@ -1149,7 +1149,7 @@ function showLyrics(text, source, id) {
   lyr = { id, text: text || "", source, ...parseLrc(text || "") };
   const el = $("#lyrics");
   if (!lyr.text.trim()) {
-    el.innerHTML = `<div class="empty">${source === "searching" ? "Looking for lyrics…" : "No lyrics found for this song. Tap Edit to paste or type them."}</div>`;
+    el.innerHTML = `<div class="empty">${source === "searching" ? "Looking for lyrics…" : "No lyrics found: they come from inside the file or from LRCLIB (released songs only). Tap Edit to paste them once; they stay with the song."}</div>`;
   } else {
     el.innerHTML = lyr.lines.map((l, i) => l.text ? `<div class="l" data-i="${i}">${l.text.replace(/&/g, "&amp;").replace(/</g, "&lt;")}</div>` : `<div class="l gap"></div>`).join("");
     if (lyr.timed) el.querySelectorAll(".l[data-i]").forEach(d => d.onclick = () => { const t = lyr.lines[+d.dataset.i].t; if (t != null) seek(t); });
@@ -1193,7 +1193,8 @@ async function findLyrics(id, rec, preTags) {
 }
 function openLyricsTab() { /* lyrics live under the controls in Now Playing → Listen */ }
 function lyricsTick(t) {
-  if (!lyr.timed || $("#np").hidden || npMode !== "listen") return;
+  const seen = !$("#homeLyrics").hidden || (!$("#np").hidden && npMode === "listen");   // home screen or Listen
+  if (!lyr.timed || !seen) return;
   let k = -1;
   for (let i = 0; i < lyr.lines.length; i++) if (lyr.lines[i].t != null && lyr.lines[i].t <= t + 0.15) k = i;
   if (k === lyr.now) return;
@@ -1926,6 +1927,7 @@ let npMode = "listen";
 // one waveform (with pinch zoom, seek, A/B, flags): on the home screen, or in Studio while that is open
 // the Tempo and Key rows live under the home waveform, and go back into Studio's Tempo & Key while it is open
 const MIX_ROWS = ["rowTempo", "rowKey", "rowChange"].map(id => { const el = $("#" + id), a = document.createComment(id); el.before(a); return [el, a]; });
+const LYR = (() => { const el = $("#tab-lyrics"), anchor = document.createComment("lyrics"); el.before(anchor); return { el, anchor }; })();
 function placeWave() {
   const inStudio = !$("#np").hidden && npMode === "studio";
   const slot = inStudio ? $("#npWaveSlot") : $("#homeWave");
@@ -1934,6 +1936,11 @@ function placeWave() {
   $("#homeWave").hidden = !show; $("#homeMix").hidden = !show; $("#homeTransport").hidden = !show; $("#homeTitle").hidden = !show;
   $("#cutBar").hidden = !show || !cutMode;
   $("#homeTools").hidden = !show;
+  // the lyrics: on the home screen, or in Now Playing > Listen while that is open
+  const inListen = !$("#np").hidden && npMode === "listen";
+  if (inListen) { if (LYR.el.previousSibling !== LYR.anchor) LYR.anchor.after(LYR.el); }
+  else if (LYR.el.parentElement !== $("#homeLyrics")) $("#homeLyrics").appendChild(LYR.el);
+  $("#homeLyrics").hidden = !show || inListen;
   for (const [el, anchor] of MIX_ROWS) {
     if (inStudio) { if (el.previousSibling !== anchor) anchor.after(el); }
     else if (el.parentElement !== $("#homeMix")) $("#homeMix").appendChild(el);
@@ -1990,6 +1997,7 @@ $("#hCut").onclick = () => cutMode ? closeCut() : openCut();
 // the tools, one tap from the home screen: Now Playing opens on that tool
 $("#homeTools").querySelectorAll("button").forEach(b => b.onclick = () => {
   const t = b.dataset.tool;
+  if (t === "lyrics") { $("#homeLyrics").scrollIntoView({ behavior: "smooth", block: "start" }); return; }
   openNP(t === "lyrics" ? "listen" : "studio");
   if (t !== "lyrics") selectTool(t);
   requestAnimationFrame(() => { const el = t === "lyrics" ? $("#tab-lyrics") : $(".toolsbox"); $("#npScroll").scrollTop = el.offsetTop - 70; });

@@ -701,3 +701,7 @@ body.hasmini .snack { bottom: calc(76px + env(safe-area-inset-bottom)); }
 #keyResult.moved { color: #FFE600; }
 .homemix #keyResult { color: #19F0DC; }
 .homemix #keyResult.moved { color: #FFE600; }
+/* lyrics on the home screen: about ten lines, following the song */
+.homelyrics { margin: 0 0 12px; }
+.homelyrics .lyrblock { margin-top: 0; }
+.homelyrics .lyrics { max-height: 300px; overflow-y: auto; font-size: 17px; scroll-behavior: smooth; }
