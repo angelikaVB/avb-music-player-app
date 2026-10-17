@@ -25,7 +25,8 @@ const lib = {
 };
 const save = k => kvSet(k, lib[k]);
 let songs = {};
-for (const s of await songsAll()) songs[s.id] = { id: s.id, name: s.name, size: s.size, type: s.type, added: s.added };
+for (const s of await songsAll()) songs[s.id] = { id: s.id, name: s.name, size: s.size, type: s.type, added: s.added, kind: s.kind || "app" };
+const isRecording = id => !!songs[id] && songs[id].kind === "recording";
 
 // ---------------------------------------------------------------- state
 const st = {
@@ -80,8 +81,15 @@ function analyse() {
 }
 
 async function loadSong(id, autoplay = true) {
-  const rec = await songGet(id);
-  if (!rec) { toast("That song is no longer in the app"); return; }
+  let rec = null;
+  if (songs[id] && songs[id].url) {
+    // a song on the phone (All music / Recordings): read it where it is
+    try {
+      const blob = await (await fetch(songs[id].url)).blob();
+      rec = { ...songs[id], blob, size: songs[id].size > 0 ? songs[id].size : blob.size };
+    } catch (err) { toast("Cannot read that song from the phone"); return; }
+  } else rec = await songGet(id).catch(() => null);
+  if (!rec || !rec.blob) { toast("That song is no longer in the app"); return; }
   await audio();
   st.id = id; st.name = rec.name; st.playing = false; st.pos = 0; st.a = st.b = null; st.loopOn = false; st.bpmScale = 1; st.changed = false;
   st.music = null; st.sections = []; st.peaks = null; st.loud = null; st.view = { a: 0, b: 1 };
@@ -106,7 +114,7 @@ async function loadSong(id, autoplay = true) {
   send({ cmd: "load", channels: chans });
   $("#tdur").textContent = fmtTime(buf.duration);
   $("#notes").value = lib.notes[id] || "";
-  lib.recent = [id, ...lib.recent.filter(x => x !== id)].slice(0, 60); save("recent");
+  if (!isRecording(id)) { lib.recent = [id, ...lib.recent.filter(x => x !== id)].slice(0, 60); save("recent"); }
   analyse();
   if (st.speed !== 1 || st.semis) applyChange();            // the sliders carry over to the next song
   if (autoplay) play();
@@ -145,12 +153,13 @@ async function sniffHeader(blob, name) {
 }
 
 // ---------------------------------------------------------------- transport
-function play() { if (!st.buffer) return; audio().then(() => { send({ cmd: "play" }); st.playing = true; $("#play").textContent = "❚❚"; if (navigator.mediaSession) navigator.mediaSession.playbackState = "playing"; }); }
-function pause() { send({ cmd: "pause" }); st.playing = false; $("#play").textContent = "▶"; if (navigator.mediaSession) navigator.mediaSession.playbackState = "paused"; }
+const ANDROID = window.AVBAndroid || null;
+function play() { if (!st.buffer) return; audio().then(() => { send({ cmd: "play" }); st.playing = true; $("#play").textContent = "❚❚"; if (ANDROID) ANDROID.playing(true); if (navigator.mediaSession) navigator.mediaSession.playbackState = "playing"; }); }
+function pause() { send({ cmd: "pause" }); st.playing = false; $("#play").textContent = "▶"; if (ANDROID) ANDROID.playing(false); if (navigator.mediaSession) navigator.mediaSession.playbackState = "paused"; }
 function togglePlay() { if (!st.buffer) { if (lib.queue.length) playIndex(Math.max(0, lib.index)); else $("#files2").click(); return; } st.playing ? pause() : play(); }
 function seek(t) { if (!st.buffer) return; t = Math.max(0, Math.min(st.duration, t)); st.pos = t; send({ cmd: "seek", frame: Math.round(t * st.sr) }); drawWave(); }
 function onEnded() {
-  st.playing = false; $("#play").textContent = "▶";
+  st.playing = false; $("#play").textContent = "▶"; if (ANDROID) ANDROID.playing(false);
   if (lib.repeat === "one") { seek(0); play(); } else nextTrack(true);
 }
 function playIndex(i) { if (i < 0 || i >= lib.queue.length) return; lib.index = i; save("index"); loadSong(lib.queue[i]); }
@@ -403,10 +412,23 @@ async function saveCopy() {
     if (peak > 1 && bits !== 32) { const g = 0.989 / peak; for (const c of chans) for (let i = 0; i < c.length; i++) c[i] *= g; note = ` · lowered ${(20 * Math.log10(g)).toFixed(1)} dB so it does not clip`; }
     const blob = wavBlob(chans, sr, bits);
     const name = saveName(part, bits);
-    const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = name; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 60000);
+    if (ANDROID) await androidSave(blob, name);
+    else { const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = name; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 60000); }
     status.textContent = `Saved ${name} (${(blob.size / 1e6).toFixed(1)} MB)${note}`; toast("Saved to Downloads: " + name);
   } catch (err) { status.textContent = "Save failed: " + (err && err.message || err); }
   clearInterval(clock);
+}
+async function androidSave(blob, name, where = "downloads") {
+  const id = ANDROID.saveBegin(name, blob.type || "audio/wav", where);
+  if (id < 0) throw new Error("could not create the file in Downloads");
+  const step = 768 * 1024;
+  for (let p = 0; p < blob.size; p += step) {
+    const bytes = new Uint8Array(await blob.slice(p, p + step).arrayBuffer());
+    let bin = "";
+    for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+    if (!ANDROID.saveChunk(id, btoa(bin))) throw new Error("writing to Downloads failed");
+  }
+  if (!ANDROID.saveEnd(id)) throw new Error("finishing the file in Downloads failed");
 }
 function renderOnce(chans, sr) {
   return new Promise((ok, no) => {
@@ -452,12 +474,18 @@ async function addFiles(files, playNow = false) {
   const ids = [];
   for (const f of files) {
     const id = `${f.name}|${f.size}|${f.lastModified}`;
-    if (!songs[id]) {
-      const bits = await sniffBits(f, f.name);
-      await tx("songs", "readwrite", s => s.put({ id, name: f.name, size: f.size, type: f.type, added: Date.now(), blob: f, bits }));
-      songs[id] = { id, name: f.name, size: f.size, type: f.type, added: Date.now(), bits };
+    try {
+      if (!songs[id]) {
+        // a copy of the bytes, not the picker's handle: a handle can stop being readable later
+        const blob = new Blob([await f.arrayBuffer()], { type: f.type || "" });
+        const bits = await sniffBits(blob, f.name);
+        await tx("songs", "readwrite", s => s.put({ id, name: f.name, size: f.size, type: f.type, added: Date.now(), blob, bits }));
+        songs[id] = { id, name: f.name, size: f.size, type: f.type, added: Date.now(), bits };
+      }
+      ids.push(id);
+    } catch (err) {
+      toast(`Could not open ${f.name}: ${err && err.message || err}`);
     }
-    ids.push(id);
   }
   const before = lib.queue.length;
   for (const id of ids) if (!lib.queue.includes(id)) lib.queue.push(id);
@@ -466,21 +494,46 @@ async function addFiles(files, playNow = false) {
   else if (ids.length) toast(`Added ${lib.queue.length - before} to the queue`);
   renderList();
 }
-let view = "queue", listName = "";
+let view = ANDROID ? "phone" : "queue", listName = "";
+let phoneIds = [], recordingIds = [], phoneState = ANDROID ? "loading" : "web";
+function subLine(s) {
+  const bits = [];
+  if (s.artist && !/unknown/i.test(s.artist)) bits.push(s.artist);
+  if (s.duration) bits.push(fmtTime(s.duration));
+  bits.push(fmtOf(s.name));
+  if (s.size > 0) bits.push((s.size / 1e6).toFixed(1) + " MB");
+  if (s.folder) bits.push(s.folder.replace(/\/$/, ""));
+  return bits.join(" · ");
+}
+function emptyText() {
+  if (view === "phone") return phoneState === "denied" ? "Allow AVB Music Player to see your music: tap All music again, then Allow."
+    : phoneState === "loading" ? "Looking for music on your phone…" : "No music found on this phone.";
+  if (view === "recordings") return "No recordings yet: tap ● Record on the Play page.";
+  if (view === "queue") return ANDROID ? "Pick songs in All music, or + Open files." : "Open files to start.";
+  if (view === "favorites") return "No favourites yet: tap ♡ on a song.";
+  if (view === "recent") return "Nothing played yet.";
+  return "Empty playlist. Use ⋯ on a song to add it.";
+}
 function renderList() {
   const filter = $("#filter").value.toLowerCase();
-  let ids = view === "queue" ? lib.queue : view === "favorites" ? lib.favorites : view === "recent" ? lib.recent : (lib.playlists.find(p => p.name === listName) || { items: [] }).items;
-  ids = ids.filter(id => songs[id] && songs[id].name.toLowerCase().includes(filter));
+  let ids = view === "phone" ? phoneIds : view === "recordings" ? recordingIds : view === "queue" ? lib.queue : view === "favorites" ? lib.favorites
+    : view === "recent" ? lib.recent : (lib.playlists.find(p => p.name === listName) || { items: [] }).items;
+  if (view !== "recordings") ids = ids.filter(id => !isRecording(id) || view === "queue");
+  ids = ids.filter(id => songs[id] && ((songs[id].name + " " + (songs[id].artist || "") + " " + (songs[id].album || "")).toLowerCase().includes(filter)));
   const el = $("#list");
-  el.innerHTML = ids.map(id => { const s = songs[id]; return `<li data-id="${id}" class="${id === st.id ? "now" : ""}"><div class="thumb" style="background:${coverFor(s.name)}"></div><div class="n"><div class="name">${lib.favorites.includes(id) ? "♥ " : ""}${s.name.replace(/\.[^.]+$/, "")}</div><div class="sub">${fmtOf(s.name)} · ${(s.size / 1e6).toFixed(1)} MB</div></div><button class="icon more" title="More">⋯</button></li>`; }).join("")
-    || `<li class="muted">${view === "queue" ? "Open files to start." : view === "favorites" ? "No favourites yet: tap ♡ on a song." : view === "recent" ? "Nothing played yet." : "Empty playlist. Use ⋯ on a song to add it."}</li>`;
+  el.innerHTML = ids.map(id => { const s = songs[id]; return `<li data-id="${id}" class="${id === st.id ? "now" : ""}"><div class="thumb" style="background:${coverFor(s.name)}"></div><div class="n"><div class="name">${lib.favorites.includes(id) ? "♥ " : ""}${s.name.replace(/\.[^.]+$/, "")}</div><div class="sub">${subLine(s)}</div></div><button class="icon more" title="More">⋯</button></li>`; }).join("")
+    || `<li class="muted">${emptyText()}</li>`;
   el.querySelectorAll("li[data-id]").forEach(li => {
     li.querySelector(".n").onclick = () => { if (view === "queue") playIndex(lib.queue.indexOf(li.dataset.id)); else { lib.queue = ids.slice(); save("queue"); playIndex(ids.indexOf(li.dataset.id)); } showPage("play"); };
     li.querySelector(".more").onclick = () => songMenu(li.dataset.id);
   });
   $("#listTabs").innerHTML = lib.playlists.map(p => `<button data-view="list" data-name="${p.name}" class="${view === "list" && listName === p.name ? "on" : ""}">${p.name}</button>`).join("");
-  $("#views").querySelectorAll("button").forEach(b => { b.classList.toggle("on", b.dataset.view === view && (view !== "list" || b.dataset.name === listName)); b.onclick = () => { view = b.dataset.view; listName = b.dataset.name || ""; renderList(); }; });
-  navigator.storage && navigator.storage.estimate && navigator.storage.estimate().then(e => $("#storage").textContent = `${Object.keys(songs).length} song${Object.keys(songs).length === 1 ? "" : "s"} stored in the app · ${(e.usage / 1e6).toFixed(0)} MB of ${(e.quota / 1e9).toFixed(1)} GB`);
+  $("#views").querySelectorAll("button").forEach(b => { b.classList.toggle("on", b.dataset.view === view && (view !== "list" || b.dataset.name === listName)); b.onclick = () => { view = b.dataset.view; listName = b.dataset.name || ""; if (view === "phone" && phoneState === "denied") loadPhone(true); if (view === "recordings" && ANDROID) loadRecordings(); renderList(); }; });
+  const n = ids.length;
+  if (view === "phone") $("#storage").textContent = phoneState === "ok" ? `${n} song${n === 1 ? "" : "s"} on this phone` : "";
+  else if (view === "recordings") $("#storage").textContent = ANDROID ? `${n} recording${n === 1 ? "" : "s"} · saved in Recordings/AVB Music Player on your phone` : `${n} recording${n === 1 ? "" : "s"} · kept in the app`;
+  else if (!ANDROID && navigator.storage && navigator.storage.estimate) navigator.storage.estimate().then(e => $("#storage").textContent = `${Object.keys(songs).length} songs stored in the app · ${(e.usage / 1e6).toFixed(0)} MB of ${(e.quota / 1e9).toFixed(1)} GB`);
+  else $("#storage").textContent = "";
 }
 function sheet(items) {
   const s = $("#sheet");
@@ -497,7 +550,7 @@ function songMenu(id) {
   ];
   if (view === "queue") items.push({ label: "Remove from queue", run: () => { const i = lib.queue.indexOf(id); if (i >= 0) { lib.queue.splice(i, 1); if (i < lib.index) lib.index--; else if (i === lib.index) lib.index = -1; } save("queue"); save("index"); renderList(); } });
   if (view === "list") items.push({ label: "Remove from this playlist", run: () => { const p = lib.playlists.find(p => p.name === listName); p.items = p.items.filter(x => x !== id); save("playlists"); renderList(); } });
-  items.push({ label: "Delete from the app (the file on your phone stays)", danger: true, run: async () => {
+  if (!songs[id].url) items.push({ label: "Delete from the app (the file on your phone stays)", danger: true, run: async () => {
     await tx("songs", "readwrite", s => s.delete(id)); delete songs[id];
     lib.queue = lib.queue.filter(x => x !== id); lib.favorites = lib.favorites.filter(x => x !== id); lib.recent = lib.recent.filter(x => x !== id);
     lib.playlists.forEach(p => p.items = p.items.filter(x => x !== id)); delete lib.notes[id];
@@ -509,17 +562,39 @@ function songMenu(id) {
 }
 function toggleFav(id) { if (!id) return; const i = lib.favorites.indexOf(id); if (i >= 0) lib.favorites.splice(i, 1); else lib.favorites.unshift(id); save("favorites"); $("#heart").textContent = lib.favorites.includes(st.id) ? "♥" : "♡"; renderList(); }
 function newPlaylist(items = []) {
-  const name = prompt("Playlist name", `Playlist ${lib.playlists.length + 1}`); if (!name) return;
+  ask("New playlist", "", `Playlist ${lib.playlists.length + 1}`, "Create").then(name => { if (!name) return; newPlaylistNamed(name, items); });
+}
+function newPlaylistNamed(name, items) {
   lib.playlists.push({ name: name.trim(), items: items.slice() }); save("playlists"); view = "list"; listName = name.trim(); renderList();
 }
+
+// ---------------------------------------------------------------- dialogs
+// An in-page question with a text field (window.prompt is not available
+// inside the Android app, and this one matches the player).
+function ask(title, text, value, yes = "Save", no = "Cancel", withInput = true) {
+  return new Promise(done => {
+    const d = $("#dialog"), inp = $("#dlgInput");
+    $("#dlgTitle").textContent = title; $("#dlgText").textContent = text || ""; $("#dlgText").hidden = !text;
+    $("#dlgYes").textContent = yes; $("#dlgNo").textContent = no; inp.value = value || ""; inp.hidden = !withInput;
+    d.hidden = false;
+    if (withInput) setTimeout(() => { inp.focus(); inp.select(); }, 50);
+    const finish = v => { d.hidden = true; $("#dlgYes").onclick = $("#dlgNo").onclick = inp.onkeydown = null; done(v); };
+    $("#dlgYes").onclick = () => finish(withInput ? (inp.value.trim() || value || "") : true);
+    $("#dlgNo").onclick = () => finish(withInput ? null : false);
+    inp.onkeydown = e => { if (e.key === "Enter") $("#dlgYes").onclick(); if (e.key === "Escape") finish(null); };
+  });
+}
+const confirmBox = (title, text, yes, no = "Cancel") => ask(title, text, "", yes, no, false);
 
 // ---------------------------------------------------------------- recording
 // The microphone (or a USB interface the phone treats as its input) -> raw
 // PCM through an AudioWorklet -> a 24-bit WAV in the app, into the queue.
+// While recording the waveform draws itself live; pause/resume; on stop the
+// take gets a name.
 let rec = null;
 async function recordStart() {
   if (rec) return;
-  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { toast("This browser cannot record"); return; }
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { toast("This device cannot record here"); return; }
   let stream;
   try {
     stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false, channelCount: 2 } });
@@ -527,45 +602,110 @@ async function recordStart() {
   await audio();
   if (st.playing) pause();
   const src = ctx.createMediaStreamSource(stream);
-  const tap = new AudioWorkletNode(ctx, "avb-tap", { numberOfInputs: 1, numberOfOutputs: 0, channelCount: src.channelCount || 1 });
-  const chunks = [], nch = src.channelCount || 1;
-  let frames = 0, peak = 0, clip = 0;
+  const nch = Math.max(1, Math.min(2, src.channelCount || 1));
+  const tap = new AudioWorkletNode(ctx, "avb-tap", { numberOfInputs: 1, numberOfOutputs: 0, channelCount: nch, channelCountMode: "explicit" });
+  rec = { stream, src, tap, chunks: [], nch, frames: 0, peak: 0, clip: 0, paused: false, started: Date.now(), peaks: [], sr: ctx.sampleRate };
+  const BLOCK = Math.round(ctx.sampleRate * 0.02);           // one waveform column per 20 ms
+  let acc = 0, mn = 0, mx = 0;
   tap.port.onmessage = e => {
-    chunks.push(e.data.channels); frames += e.data.channels[0].length;
-    let p = 0; for (const ch of e.data.channels) for (let i = 0; i < ch.length; i += 4) { const v = Math.abs(ch[i]); if (v > p) p = v; if (v >= 0.999) clip++; }
-    peak = Math.max(peak, p);
-    $("#recLevel").style.width = Math.min(100, Math.max(0, (20 * Math.log10(p + 1e-6) + 48) / 48 * 100)) + "%";
-    $("#recPeak").textContent = (20 * Math.log10(peak + 1e-6)).toFixed(1) + " dB" + (clip ? " CLIP" : "");
-    $("#recTime").textContent = fmtTime(frames / ctx.sampleRate);
+    const r = rec;
+    if (!r || r.paused) return;
+    const ch = e.data.channels;
+    r.chunks.push(ch); r.frames += ch[0].length;
+    let p = 0;
+    const a = ch[0], b = ch[ch.length - 1];
+    for (let i = 0; i < a.length; i++) {
+      const v = (a[i] + b[i]) / 2, av = Math.max(Math.abs(a[i]), Math.abs(b[i]));
+      if (av > p) p = av; if (av >= 0.999) r.clip++;
+      if (v < mn) mn = v; if (v > mx) mx = v;
+      if (++acc >= BLOCK) { r.peaks.push(mn, mx); acc = 0; mn = mx = 0; }
+    }
+    r.peak = Math.max(r.peak, p); r.level = p;
   };
   src.connect(tap);
-  rec = { stream, src, tap, chunks, nch, started: Date.now() };
-  $("#recbox").classList.add("on"); $("#recInfo").textContent = `${(ctx.sampleRate / 1000).toFixed(1).replace(".0", "")} kHz · ${nch === 1 ? "mono" : "stereo"} · 24-bit WAV`;
-  $("#recLevel").style.width = "0"; $("#recPeak").textContent = ""; $("#recTime").textContent = "0:00";
+  showPage("play");
+  $("#recbar").classList.add("on"); $("#recbar").classList.remove("paused");
+  $("#recLabel").textContent = "REC"; $("#recPause").textContent = "❚❚ Pause";
+  $("#recInfo").textContent = `${(ctx.sampleRate / 1000).toFixed(1).replace(".0", "")} kHz · ${nch === 1 ? "mono" : "stereo"} · saved as a 24-bit WAV`;
+  $("#startbar").style.display = "none";
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
+function recordPause() {
+  if (!rec) return;
+  rec.paused = !rec.paused;
+  $("#recbar").classList.toggle("paused", rec.paused);
+  $("#recLabel").textContent = rec.paused ? "PAUSED" : "REC";
+  $("#recPause").textContent = rec.paused ? "● Resume" : "❚❚ Pause";
+  if (rec.paused) rec.peaks.push(-0.02, 0.02, -0.02, 0.02);   // a small gap marks where it paused
 }
 async function recordStop(keep) {
   if (!rec) return;
-  const { stream, src, tap, chunks, nch, started } = rec; rec = null;
-  src.disconnect(); tap.disconnect(); stream.getTracks().forEach(t => t.stop());
-  $("#recbox").classList.remove("on");
-  if (!keep || !chunks.length) return;
-  const n = chunks.reduce((s, c) => s + c[0].length, 0);
-  const chans = []; for (let c = 0; c < nch; c++) chans.push(new Float32Array(n));
-  let p = 0; for (const ch of chunks) { for (let c = 0; c < nch; c++) chans[c].set(ch[Math.min(c, ch.length - 1)], p); p += ch[0].length; }
-  const d = new Date(started), pad = x => String(x).padStart(2, "0");
-  const name = `Recording ${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}.${pad(d.getMinutes())}.wav`;
-  const blob = wavBlob(chans, ctx.sampleRate, 24);
-  const f = new File([blob], name, { type: "audio/wav", lastModified: started });
-  await addFiles([f]);
-  toast(`Kept ${name} (${fmtTime(n / ctx.sampleRate)})`);
+  const r = rec; rec = null;
+  r.src.disconnect(); r.tap.disconnect(); r.stream.getTracks().forEach(t => t.stop());
+  $("#recbar").classList.remove("on"); $("#startbar").style.display = "";
+  drawWave();
+  if (!keep || !r.frames) { if (keep) toast("Nothing was recorded"); return; }
+  const n = r.frames;
+  const chans = []; for (let c = 0; c < r.nch; c++) chans.push(new Float32Array(n));
+  let p = 0; for (const ch of r.chunks) { for (let c = 0; c < r.nch; c++) chans[c].set(ch[Math.min(c, ch.length - 1)], p); p += ch[0].length; }
+  const d = new Date(r.started), pad = x => String(x).padStart(2, "0");
+  const suggested = `Recording ${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}.${pad(d.getMinutes())}`;
+  let name = await ask("Name this recording", `${fmtTime(n / r.sr)} recorded`, suggested, "Save", "Discard");
+  if (name === null) {
+    if (await confirmBox("Throw this recording away?", "It has not been saved.", "Discard", "Keep it")) { toast("Recording discarded"); return; }
+    name = suggested;
+  }
+  name = name.replace(/[\\/:*?"<>|]+/g, " ").trim().replace(/\.wav$/i, "") + ".wav";
+  const blob = wavBlob(chans, r.sr, 24);
+  await saveRecording(blob, name, r.started);
+  toast(`Saved “${name}” in Recordings (${fmtTime(n / r.sr)})`);
+}
+async function saveRecording(blob, name, started) {
+  if (ANDROID && ANDROID.saveBegin) {
+    await androidSave(blob, name, "recordings");            // Recordings/AVB Music Player on the phone
+    loadRecordings();
+    const id = recordingIds.find(x => songs[x].name === name) || recordingIds[0];
+    view = "recordings"; renderList();
+    if (id) { lib.queue = recordingIds.slice(); save("queue"); playIndex(lib.queue.indexOf(id)); }
+    return;
+  }
+  // web: kept in the app, in the Recordings library only
+  const id = `rec|${name}|${started}`;
+  await tx("songs", "readwrite", st2 => st2.put({ id, name, size: blob.size, type: "audio/wav", added: Date.now(), blob, bits: 24, kind: "recording" }));
+  songs[id] = { id, name, size: blob.size, type: "audio/wav", added: Date.now(), kind: "recording" };
+  recordingIds.unshift(id);
+  view = "recordings"; renderList();
+  lib.queue = recordingIds.slice(); save("queue"); playIndex(0);
+}
+function drawRecording() {
+  const dpr = sizeCanvas(wave); const w = wave.width / dpr, h = wave.height / dpr;
+  wctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  wctx.fillStyle = rec.paused ? "#0E0D26" : "#1a0a18"; wctx.fillRect(0, 0, w, h);
+  const top = 30, bottom = h - 8, mid = (top + bottom) / 2, amp = (bottom - top) / 2 - 2;
+  const cols = rec.peaks.length / 2;
+  const span = Math.max(cols, Math.floor(w));                 // fills from the left, then scrolls
+  const first = Math.max(0, cols - Math.floor(w));
+  const g = wctx.createLinearGradient(0, 0, w, 0); ["#EF4444", "#EC4899", "#D946EF", "#8B5CF6"].forEach((c, i) => g.addColorStop(i / 3, c));
+  wctx.fillStyle = g; wctx.beginPath();
+  for (let i = first, x = 0; i < cols; i++, x++) {
+    const lo = rec.peaks[i * 2], hi = rec.peaks[i * 2 + 1];
+    wctx.rect(x, mid - hi * amp, 1, Math.max(1, (hi - lo) * amp));
+  }
+  wctx.fill();
+  const head = Math.min(w - 2, cols - first);
+  wctx.shadowColor = "#EF4444"; wctx.shadowBlur = 10; wctx.fillStyle = "#fff"; wctx.fillRect(head, top, 2, bottom - top); wctx.shadowBlur = 0;
+  wctx.fillStyle = rec.paused ? "#F59E0B" : "#EF4444"; wctx.font = "800 14px system-ui"; wctx.textAlign = "left";
+  wctx.fillText(rec.paused ? "❚❚ PAUSED" : "● RECORDING", 10, 20);
+  wctx.textAlign = "right"; wctx.fillStyle = "#fff"; wctx.fillText(fmtTime(rec.frames / rec.sr), w - 10, 20);
+  void span;
 }
 
 // ---------------------------------------------------------------- ui wiring
 function showPage(p) { document.querySelectorAll(".page").forEach(e => e.classList.toggle("on", e.id === "page-" + p)); $("#pages").querySelectorAll("button").forEach(b => b.classList.toggle("on", b.dataset.page === p)); if (p === "play") drawWave(); }
 $("#pages").querySelectorAll("button").forEach(b => b.onclick = () => showPage(b.dataset.page));
 $("#tools").querySelectorAll("button").forEach(b => b.onclick = () => { $("#tools").querySelectorAll("button").forEach(x => x.classList.toggle("on", x === b)); document.querySelectorAll(".tab").forEach(t => t.classList.toggle("on", t.id === "tab-" + b.dataset.tab)); if (b.dataset.tab === "loud") drawLoud(); });
-$("#files").onchange = e => { addFiles([...e.target.files]); e.target.value = ""; };
-$("#files2").onchange = e => { addFiles([...e.target.files]); e.target.value = ""; };
+$("#files").onchange = e => { addFiles([...e.target.files], true); e.target.value = ""; };
+$("#files2").onchange = e => { addFiles([...e.target.files], true); e.target.value = ""; };
 $("#play").onclick = togglePlay; $("#prev").onclick = prevTrack; $("#next").onclick = () => nextTrack(false);
 $("#back10").onclick = () => seek(st.pos - 10); $("#fwd10").onclick = () => seek(st.pos + 10);
 $("#markA").onclick = () => markButton("A"); $("#markB").onclick = () => markButton("B");
@@ -586,7 +726,9 @@ $("#keepVoice").checked = lib.keepVoice; $("#keepVoice").onchange = e => { lib.k
 $("#part").onchange = refreshSave; $("#fmt").onchange = refreshSave; $("#saveBtn").onclick = saveCopy;
 $("#notes").oninput = () => { if (st.id) { lib.notes[st.id] = $("#notes").value; save("notes"); } };
 $("#newList").onclick = () => newPlaylist();
-$("#recBtn").onclick = recordStart; $("#recBtn2").onclick = () => { showPage("library"); recordStart(); }; $("#recStop").onclick = () => recordStop(true); $("#recCancel").onclick = () => recordStop(false);
+$("#recBtn").onclick = recordStart; $("#recBtn2").onclick = recordStart; $("#recPause").onclick = recordPause;
+$("#recStop").onclick = () => recordStop(true);
+$("#recCancel").onclick = async () => { const was = rec && rec.paused; if (rec && !was) recordPause(); if (await confirmBox("Throw this take away?", "It has not been saved.", "Discard", "Keep recording")) recordStop(false); else if (rec && !was) recordPause(); };
 $("#filter").oninput = renderList;
 window.addEventListener("resize", () => { drawWave(); drawLoud(); });
 document.addEventListener("keydown", e => { if (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA") return; if (e.code === "Space") { e.preventDefault(); togglePlay(); } if (e.key === "ArrowLeft") seek(st.pos - 5); if (e.key === "ArrowRight") seek(st.pos + 5); });
@@ -594,7 +736,14 @@ document.addEventListener("keydown", e => { if (e.target.tagName === "INPUT" || 
 // clock
 let lastDraw = 0;
 function tick(now) {
-  if (st.buffer && st.playing && now - lastDraw > 40) {
+  if (rec && now - lastDraw > 33) {
+    lastDraw = now;
+    if ($("#page-play").classList.contains("on")) drawRecording();
+    const lv = rec.paused ? 0 : (rec.level || 0);
+    $("#recLevel").style.width = Math.min(100, Math.max(0, (20 * Math.log10(lv + 1e-6) + 48) / 48 * 100)) + "%";
+    $("#recPeak").textContent = "peak " + (20 * Math.log10(rec.peak + 1e-6)).toFixed(1) + " dB" + (rec.clip ? " · CLIP" : "");
+    $("#recTime").textContent = fmtTime(rec.frames / rec.sr);
+  } else if (st.buffer && st.playing && now - lastDraw > 40) {
     lastDraw = now; $("#tnow").textContent = fmtTime(st.pos); $("#seek").value = Math.round(st.pos / st.duration * 1000); drawWave();
     if ($("#tab-loud").classList.contains("on")) drawLoud();
     const i = st.sections.findIndex(s => st.pos >= s.start && st.pos < s.end);
@@ -610,13 +759,13 @@ function toast(t) { const e = $("#toast"); e.textContent = t; e.classList.add("o
 
 renderList(); drawWave(); refreshSave();
 if (lib.queue.length && lib.index >= 0 && songs[lib.queue[lib.index]]) { $("#title").textContent = songs[lib.queue[lib.index]].name.replace(/\.[^.]+$/, ""); $("#listen").textContent = "Tap play to continue"; }
-if ("serviceWorker" in navigator && location.protocol !== "file:") navigator.serviceWorker.register("sw.js").catch(() => { });
+if (!ANDROID && "serviceWorker" in navigator && location.protocol !== "file:") navigator.serviceWorker.register("sw.js").catch(() => { });
 
 // ---------------------------------------------------------------- install
 // Opened as an installed app: nothing to offer.  In Chrome: Chrome's own
 // installer behind our button.  Elsewhere (an app's built-in browser, a
 // home-screen shortcut): say how to get the real install.
-const standalone = matchMedia("(display-mode: standalone)").matches || navigator.standalone;
+const standalone = !!ANDROID || matchMedia("(display-mode: standalone)").matches || navigator.standalone;
 let installEvent = null;
 window.addEventListener("beforeinstallprompt", e => { e.preventDefault(); installEvent = e; $("#installBtn").hidden = false; });
 window.addEventListener("appinstalled", () => { $("#installBtn").hidden = true; $("#installHint").hidden = true; toast("Installed: open AVB Music Player from its icon"); });
@@ -658,6 +807,56 @@ async function takeInbox() {
   await addFiles(files, true);
 }
 await takeInbox();
+// The Android app: songs from "Open with" / "Share" arrive as URLs the app streams from the phone's storage.
+async function takeAndroid() {
+  if (!ANDROID) return;
+  const items = JSON.parse(ANDROID.takePending() || "[]");
+  if (!items.length) return;
+  $("#listen").textContent = items.length > 1 ? `Opening ${items.length} songs…` : `Opening ${items[0].name}…`;
+  const files = [];
+  for (const it of items) {
+    try {
+      const blob = await (await fetch(it.url)).blob();
+      files.push(new File([blob], it.name, { type: it.type || blob.type || "", lastModified: it.size > 0 ? it.size : Date.now() }));
+    } catch (err) { toast("Could not open " + it.name); }
+  }
+  if (files.length) await addFiles(files, true);
+}
+window.avbTakeAndroid = takeAndroid;
+// All music and Recordings come from the phone itself (MediaStore), streamed when played.
+function phoneEntries(json, kind, prefix) {
+  const out = [];
+  for (const m of JSON.parse(json || "[]")) {
+    const id = prefix + m.id;
+    songs[id] = { id, name: m.name, title: m.title, artist: m.artist, album: m.album, duration: m.duration / 1000, size: m.size,
+                  type: m.mime, url: m.url, folder: m.folder, kind, added: m.added };
+    out.push(id);
+  }
+  return out;
+}
+function loadPhone(ask) {
+  if (!ANDROID || !ANDROID.listMusic) return;
+  const r = ANDROID.listMusic(!!ask);
+  if (r === "PERMISSION") { phoneState = "denied"; renderList(); return; }       // the app asked; avbPhoneReady() follows
+  phoneIds = phoneEntries(r, "phone", "m:"); phoneState = "ok"; renderList();
+}
+function loadRecordings() {
+  if (!ANDROID || !ANDROID.listRecordings) return;
+  const r = ANDROID.listRecordings();
+  if (r === "PERMISSION") return;
+  recordingIds = phoneEntries(r, "recording", "r:"); renderList();
+}
+window.avbPhoneReady = () => { loadPhone(false); loadRecordings(); };
+if (ANDROID) { $("#viewPhone").hidden = false; setTimeout(() => { loadPhone(true); loadRecordings(); }, 300); }
+else recordingIds = Object.values(songs).filter(x => x.kind === "recording").sort((a, b) => b.added - a.added).map(x => x.id);
+if (ANDROID && ANDROID.askDefault) { $("#makeDefault").hidden = false; $("#makeDefault").onclick = () => ANDROID.askDefault(); }
+window.avbBack = () => {
+  if ($("#sheet").classList.contains("on")) { $("#sheet").classList.remove("on"); return true; }
+  if (!$("#installHint").hidden) { $("#installHint").hidden = true; return true; }
+  if ($("#page-library").classList.contains("on")) { showPage("play"); return true; }
+  return false;
+};
+await takeAndroid();
 if ("launchQueue" in window) {
   window.launchQueue.setConsumer(async params => {
     if (!params.files || !params.files.length) return;

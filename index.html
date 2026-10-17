@@ -36,6 +36,18 @@
     <button class="ghost rec big" id="recBtn2">● Record</button>
   </section>
 
+  <section class="recbar" id="recbar">
+    <div class="recstate"><span class="recdot"></span><b id="recLabel">REC</b><span class="time" id="recTime">0:00</span></div>
+    <div class="meter"><div class="fill" id="recLevel"></div></div>
+    <span class="recpeak" id="recPeak"></span>
+    <div class="recbtns">
+      <button class="ghost big2" id="recPause">❚❚ Pause</button>
+      <button class="primary big2" id="recStop">■ Stop</button>
+      <button class="ghost" id="recCancel" title="Throw this take away">✕</button>
+    </div>
+    <div class="faint" id="recInfo"></div>
+  </section>
+
   <section class="card wavecard">
     <canvas id="wave"></canvas>
     <div class="transport">
@@ -117,18 +129,17 @@
       <label class="primary filebtn">+ Open files<input type="file" id="files" multiple accept="audio/*,.wav,.flac,.mp3,.ogg,.m4a,.aac,.opus,.aiff,.aif"></label>
       <button class="ghost rec" id="recBtn" title="Record from the microphone or a USB interface">● Record</button>
       <button class="ghost" id="newList">+ Playlist</button>
+      <button class="ghost" id="makeDefault" hidden>Make default player</button>
       <input type="search" id="filter" placeholder="Filter">
     </div>
     <nav class="pills" id="views">
+      <button data-view="phone" id="viewPhone" hidden>All music</button>
       <button data-view="queue" class="on">Queue</button>
       <button data-view="favorites">Favourites</button>
       <button data-view="recent">Recent</button>
+      <button data-view="recordings">Recordings</button>
       <span id="listTabs"></span>
     </nav>
-    <div class="recbox" id="recbox">
-      <div class="row"><span class="recdot"></span><span class="time" id="recTime">0:00</span><div class="meter"><div class="fill" id="recLevel"></div></div><span class="val" id="recPeak"></span></div>
-      <div class="row"><button class="primary" id="recStop">■ Stop and keep</button><button class="ghost" id="recCancel">Cancel</button><span class="faint" id="recInfo"></span></div>
-    </div>
     <div class="faint" id="storage"></div>
     <ul class="list" id="list"></ul>
   </section>
@@ -138,6 +149,14 @@
   <b>Open it as an app</b>
   <div id="installText"></div>
   <button class="ghost" id="installClose">OK</button>
+</div>
+<div class="dialog" id="dialog" hidden>
+  <div class="dlgbox">
+    <b id="dlgTitle"></b>
+    <div class="faint" id="dlgText"></div>
+    <input type="text" id="dlgInput" autocomplete="off" spellcheck="false">
+    <div class="row end"><button class="ghost" id="dlgNo">Cancel</button><button class="primary" id="dlgYes">Save</button></div>
+  </div>
 </div>
 <div class="toast" id="toast"></div>
 <div class="sheet" id="sheet"></div>

@@ -98,3 +98,21 @@ button.install { background: linear-gradient(90deg, #3B82F6, #EC4899); border: 0
 .top { flex-wrap: nowrap; }
 button.install { padding: 6px 10px; font-size: 13px; flex: none; }
 @media (max-width: 420px) { .appname { display: none; } .top .install { margin-right: auto; } }
+
+.recbar { display: none; background: #2a0f1d; border: 1px solid #7f1d1d; border-radius: 16px; padding: 10px 12px; gap: 8px 12px; align-items: center; flex-wrap: wrap; }
+.recbar.on { display: flex; }
+.recbar.paused { background: var(--panel); border-color: var(--line2); }
+.recbar.paused .recdot { animation: none; background: var(--amber); }
+.recstate { display: flex; align-items: center; gap: 8px; font-size: 18px; }
+.recstate .time { font-size: 18px; min-width: 0; }
+.recbar .meter { flex: 1; min-width: 120px; }
+.recpeak { font-size: 12px; color: var(--text3); min-width: 64px; }
+.recbtns { display: flex; gap: 8px; margin-left: auto; }
+.big2 { padding: 10px 14px; font-weight: 700; }
+.recbar .faint { width: 100%; margin: 0; }
+.dialog { position: fixed; inset: 0; background: rgba(5, 4, 15, .65); display: flex; align-items: center; justify-content: center; z-index: 20; padding: 16px; }
+.dialog[hidden] { display: none; }
+.dlgbox { width: min(440px, 100%); background: var(--panel); border: 1px solid var(--line2); border-radius: 16px; padding: 16px; display: flex; flex-direction: column; gap: 10px; }
+.dlgbox b { font-size: 17px; }
+.dlgbox input { width: 100%; background: var(--bg2); border: 1px solid var(--violet); border-radius: 10px; padding: 11px 12px; color: var(--text); font-size: 16px; }
+.row.end { justify-content: flex-end; margin: 4px 0 0; }
