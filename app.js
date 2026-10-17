@@ -122,7 +122,7 @@ async function loadSong(id, autoplay = true) {
   fillBadges(); fillStats();
   const chans = channelsOf(buf);
   send({ cmd: "load", channels: chans });
-  $("#tdur").textContent = fmtTime(buf.duration);
+  $("#tdur").textContent = fmtTime(buf.duration); $("#hDur").textContent = fmtTime(buf.duration); $("#hNow").textContent = "0:00";
   if (mkEditing && mkEditing.ctx === songMk) closeMarkEdit();
   $("#notes").value = lib.notes[id] || "";
   renderMarks();
@@ -234,7 +234,7 @@ function play() { if (!st.buffer) return; audio().then(() => { send({ cmd: "play
 function pause() { send({ cmd: "pause" }); st.playing = false; $("#play").textContent = "▶"; setMiniPlay(false); if (ANDROID) ANDROID.playing(false); if (navigator.mediaSession) navigator.mediaSession.playbackState = "paused"; }
 function togglePlay() { if (!st.buffer) { if (lib.queue.length) playIndex(Math.max(0, lib.index), true); else $("#files2").click(); return; } st.playing ? pause() : play(); }
 function seek(t) { if (!st.buffer) return; t = Math.max(0, Math.min(st.duration, t)); st.pos = t; send({ cmd: "seek", frame: Math.round(t * st.sr) }); drawWave();
-  $("#miniProg").style.width = (t / st.duration * 100) + "%"; $("#tnow").textContent = fmtTime(t); $("#seek").value = Math.round(t / st.duration * 1000); }
+  $("#miniProg").style.width = (t / st.duration * 100) + "%"; $("#tnow").textContent = fmtTime(t); $("#hNow").textContent = fmtTime(t); $("#seek").value = Math.round(t / st.duration * 1000); }
 function onEnded() {
   st.playing = false; $("#play").textContent = "▶"; setMiniPlay(false); if (ANDROID) ANDROID.playing(false);
   if (lib.repeat === "one") { seek(0); play(); } else if (!isRecording(st.id)) nextTrack(true);
@@ -824,7 +824,10 @@ function renderList() {
     || `<li class="muted">${emptyText()}</li>`;
   shownIds.music = ids; el.style.setProperty("--numw", String(ids.length).length + "ch");
   el.querySelectorAll("li[data-id]").forEach(li => {
-    li.querySelector(".n").onclick = () => { if (pickRow(li, "music")) return; if (view === "queue") playIndex(lib.queue.indexOf(li.dataset.id)); else { lib.queue = ids.slice(); save("queue"); playIndex(ids.indexOf(li.dataset.id)); } };
+    li.querySelector(".n").onclick = () => { if (pickRow(li, "music")) return;
+      const id = li.dataset.id;
+      if (st.id === id && st.buffer) { if (!st.playing) play(); return; }        // the loaded song: carry on, never restart
+      if (view === "queue") playIndex(lib.queue.indexOf(id), true); else { lib.queue = ids.slice(); save("queue"); playIndex(ids.indexOf(id), true); } };
     wireRow(li, "music");
   });
   el.classList.toggle("selecting", sel.where === "music"); updateSelbar();
@@ -1883,6 +1886,9 @@ function setMiniPlay(on) {
     ? `<svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="9.5"/><path d="M10 8.5v7M14 8.5v7"/></svg>`
     : `<svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="#fff" stroke-width="1.8" stroke-linejoin="round"><circle cx="12" cy="12" r="9.5"/><path d="M10 8.3v7.4l6-3.7z"/></svg>`;
   $("#mini").classList.toggle("playing", !!on);
+  $("#hPlay").innerHTML = on
+    ? `<svg viewBox="0 0 24 24" width="30" height="30" fill="#15133A"><rect x="7" y="5.5" width="3.6" height="13" rx="1"/><rect x="13.4" y="5.5" width="3.6" height="13" rx="1"/></svg>`
+    : `<svg viewBox="0 0 24 24" width="30" height="30" fill="#15133A"><path d="M8.5 5.8v12.4L18.5 12z"/></svg>`;
 }
 let npMode = "listen";
 // one waveform (with pinch zoom, seek, A/B, flags): on the home screen, or in Studio while that is open
@@ -1893,7 +1899,7 @@ function placeWave() {
   const slot = inStudio ? $("#npWaveSlot") : $("#homeWave");
   if (wave.parentElement !== slot) slot.appendChild(wave);
   const show = !!st.id && !!songs[st.id] && !inStudio;
-  $("#homeWave").hidden = !show; $("#homeMix").hidden = !show;
+  $("#homeWave").hidden = !show; $("#homeMix").hidden = !show; $("#homeTransport").hidden = !show;
   for (const [el, anchor] of MIX_ROWS) {
     if (inStudio) { if (el.previousSibling !== anchor) anchor.after(el); }
     else if (el.parentElement !== $("#homeMix")) $("#homeMix").appendChild(el);
@@ -1919,6 +1925,10 @@ $("#npMode").querySelectorAll("button").forEach(b => b.onclick = () => setNpMode
 $("#mini").onclick = e => { if (e.target.closest(".minibtn")) return; openNP(); };
 $("#miniPlay").onclick = () => togglePlay();
 $("#miniPrev").onclick = () => prevTrack();
+// Stop: the music stops and goes back to the start
+function stopPlay() { if (!st.buffer) return; pause(); seek(0); }
+$("#hStop").onclick = stopPlay; $("#npStop").onclick = stopPlay;
+$("#hPlay").onclick = () => togglePlay(); $("#hPrev").onclick = () => prevTrack(); $("#hNext").onclick = () => nextTrack(false);
 $("#miniNext").onclick = () => nextTrack(false);
 setMiniPlay(false);
 
@@ -2204,7 +2214,7 @@ function tick(now) {
       if (quiet && !rec.warned) { rec.warned = true; if (navigator.vibrate) try { navigator.vibrate([60, 60, 60]); } catch (_) { } }
     }
   } else if (st.buffer && st.playing && now - lastDraw > 40) {
-    lastDraw = now; $("#tnow").textContent = fmtTime(st.pos); $("#miniProg").style.width = (st.pos / st.duration * 100) + "%"; lyricsTick(st.pos); if ($("#tab-eq").classList.contains("on")) drawEq(); $("#seek").value = Math.round(st.pos / st.duration * 1000); drawWave();
+    lastDraw = now; $("#tnow").textContent = fmtTime(st.pos); $("#hNow").textContent = fmtTime(st.pos); $("#miniProg").style.width = (st.pos / st.duration * 100) + "%"; lyricsTick(st.pos); if ($("#tab-eq").classList.contains("on")) drawEq(); $("#seek").value = Math.round(st.pos / st.duration * 1000); drawWave();
     if ($("#tab-loud").classList.contains("on")) drawLoud();
     const i = st.sections.findIndex(s => st.pos >= s.start && st.pos < s.end);
     document.querySelectorAll(".sec").forEach((d, k) => d.classList.toggle("now", k === i));

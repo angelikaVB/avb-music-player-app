@@ -591,3 +591,12 @@ body.hasmini .snack { bottom: calc(76px + env(safe-area-inset-bottom)); }
 .homemix .ghost { min-width: 40px; height: 36px; padding: 0 12px; font-size: 18px; }
 .homemix #resetChange { font-size: 13px; height: 30px; }
 #listTabs button[data-pl="new"] { background: transparent; box-shadow: inset 0 0 0 1.5px rgba(255,255,255,.18); }
+
+/* the play row under the home waveform */
+.htrans { display: flex; align-items: center; gap: 6px; margin: -6px 0 12px; }
+.htrans .htime { flex: 1; color: var(--text3); font-size: 13px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.htrans .htime b { color: #fff; font-weight: 700; }
+.hbtn { width: 44px; height: 44px; border: 0; background: none; padding: 0; border-radius: 50%; display: flex; align-items: center; justify-content: center; flex: none; }
+.hbtn:active { background: rgba(255,255,255,.08); }
+.hbtn.hplay { width: 56px; height: 56px; background: #fff; box-shadow: 0 6px 18px rgba(0,0,0,.4); }
+.controls #npStop { font-size: 18px; color: #fff; }

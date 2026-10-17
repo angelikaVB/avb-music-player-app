@@ -27,6 +27,13 @@
 <!-- MUSIC: the library is the home screen -->
 <main id="page-music" class="page on">
   <section class="homewave" id="homeWave" hidden></section>
+  <section class="htrans" id="homeTransport" hidden>
+    <span class="htime"><b id="hNow">0:00</b> / <span id="hDur">0:00</span></span>
+    <button class="hbtn" id="hPrev" title="Previous"><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="#fff" stroke-width="1.9" stroke-linejoin="round" stroke-linecap="round"><path d="M18 5v14L8 12z"/><path d="M6 5v14"/></svg></button>
+    <button class="hbtn hplay" id="hPlay" title="Play / pause"></button>
+    <button class="hbtn" id="hStop" title="Stop"><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="#fff" stroke-width="1.9" stroke-linejoin="round" stroke-linecap="round"><rect x="6.5" y="6.5" width="11" height="11" rx="1.5"/></svg></button>
+    <button class="hbtn" id="hNext" title="Next"><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="#fff" stroke-width="1.9" stroke-linejoin="round" stroke-linecap="round"><path d="M6 5v14l10-7z"/><path d="M18 5v14"/></svg></button>
+  </section>
   <section class="homemix" id="homeMix" hidden></section>
   <div class="searchbar"><input type="search" id="filter" placeholder="Search songs, artists, albums"></div>
 
@@ -159,6 +166,7 @@
         <button class="ctl" id="shuffle" title="Shuffle">⤮</button>
         <button class="ctl big" id="prev" title="Previous">⏮</button>
         <button class="play" id="play" title="Play / pause">▶</button>
+        <button class="ctl" id="npStop" title="Stop">■</button>
         <button class="ctl big" id="next" title="Next">⏭</button>
         <button class="ctl" id="repeat" title="Repeat">↻</button>
       </div>
