@@ -25,7 +25,7 @@ const lib = {
 };
 const save = k => kvSet(k, lib[k]);
 let songs = {};
-for (const s of await songsAll()) songs[s.id] = { id: s.id, name: s.name, size: s.size, type: s.type, added: s.added, kind: s.kind || "app" };
+for (const s of await songsAll()) songs[s.id] = { id: s.id, name: s.name, size: s.size, type: s.type, added: s.added, kind: s.kind || "app", duration: s.duration };
 const isRecording = id => !!songs[id] && songs[id].kind === "recording";
 
 // ---------------------------------------------------------------- state
@@ -115,6 +115,7 @@ async function loadSong(id, autoplay = true) {
   $("#tdur").textContent = fmtTime(buf.duration);
   $("#notes").value = lib.notes[id] || "";
   if (!isRecording(id)) { lib.recent = [id, ...lib.recent.filter(x => x !== id)].slice(0, 60); save("recent"); }
+  if ($("#tab-recs").classList.contains("on")) renderRecList();
   analyse();
   if (st.speed !== 1 || st.semis) applyChange();            // the sliders carry over to the next song
   if (autoplay) play();
@@ -651,6 +652,7 @@ async function recordStart() {
   $("#recLabel").textContent = "REC"; $("#recPause").textContent = "❚❚ Pause";
   $("#recInfo").textContent = `${(rctx.sampleRate / 1000).toFixed(1).replace(".0", "")} kHz · ${nch === 1 ? "mono" : "stereo"} · saved as a 24-bit WAV`;
   $("#startbar").style.display = "none";
+  document.querySelector(".wavecard").classList.add("recording");
   window.scrollTo({ top: 0, behavior: "smooth" });
 }
 function recordPause() {
@@ -668,6 +670,7 @@ async function recordStop(keep) {
   r.stream.getTracks().forEach(t => t.stop());
   r.rctx.close().catch(() => { });
   $("#recbar").classList.remove("on"); $("#startbar").style.display = "";
+  document.querySelector(".wavecard").classList.remove("recording");
   drawWave();
   if (!keep || !r.frames) { if (keep) toast("Nothing was recorded"); return; }
   const n = r.frames;
@@ -682,25 +685,50 @@ async function recordStop(keep) {
   }
   name = name.replace(/[\\/:*?"<>|]+/g, " ").trim().replace(/\.wav$/i, "") + ".wav";
   const blob = wavBlob(chans, r.sr, 24);
-  await saveRecording(blob, name, r.started);
+  await saveRecording(blob, name, r.started, n / r.sr);
   toast(`Saved “${name}” in Recordings (${fmtTime(n / r.sr)})`);
 }
-async function saveRecording(blob, name, started) {
+async function saveRecording(blob, name, started, seconds) {
   if (ANDROID && ANDROID.saveBegin) {
     await androidSave(blob, name, "recordings");            // Recordings/AVB Music Player on the phone
     loadRecordings();
     const id = recordingIds.find(x => songs[x].name === name) || recordingIds[0];
-    view = "recordings"; renderList();
-    if (id) { lib.queue = recordingIds.slice(); save("queue"); playIndex(lib.queue.indexOf(id)); }
+    if (id && !songs[id].duration) songs[id].duration = seconds;   // the phone may not have measured it yet
+    showSavedTake(id);
     return;
   }
   // web: kept in the app, in the Recordings library only
   const id = `rec|${name}|${started}`;
-  await tx("songs", "readwrite", st2 => st2.put({ id, name, size: blob.size, type: "audio/wav", added: Date.now(), blob, bits: 24, kind: "recording" }));
-  songs[id] = { id, name, size: blob.size, type: "audio/wav", added: Date.now(), kind: "recording" };
+  await tx("songs", "readwrite", st2 => st2.put({ id, name, size: blob.size, type: "audio/wav", added: Date.now(), blob, bits: 24, kind: "recording", duration: seconds }));
+  songs[id] = { id, name, size: blob.size, type: "audio/wav", added: Date.now(), kind: "recording", duration: seconds };
   recordingIds.unshift(id);
-  view = "recordings"; renderList();
-  lib.queue = recordingIds.slice(); save("queue"); playIndex(0);
+  showSavedTake(id);
+}
+let freshTake = null;
+function showSavedTake(id) {
+  freshTake = id;
+  selectTool("recs");
+  renderRecList();
+  renderList();
+  // nothing plays and nothing new loads: the take waits at the top of Recordings
+}
+function selectTool(name) {
+  $("#tools").querySelectorAll("button").forEach(x => x.classList.toggle("on", x.dataset.tab === name));
+  document.querySelectorAll(".tab").forEach(t => t.classList.toggle("on", t.id === "tab-" + name));
+  if (name === "loud") drawLoud();
+  if (name === "recs") renderRecList();
+}
+function renderRecList() {
+  const el = $("#recList");
+  const ids = recordingIds.filter(id => songs[id]);
+  const when = t => { if (!t) return ""; const d = new Date(t); return d.toLocaleDateString(undefined, { day: "numeric", month: "short" }) + " " + d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" }); };
+  el.innerHTML = ids.map(id => { const s = songs[id]; return `<li data-id="${id}" class="${id === st.id ? "now" : ""} ${id === freshTake ? "fresh" : ""}"><div class="thumb rec"></div><div class="n"><div class="name">${s.name.replace(/\.[^.]+$/, "")}</div><div class="sub">${[s.duration ? fmtTime(s.duration) : "", when(s.added), s.size > 0 ? (s.size / 1e6).toFixed(1) + " MB" : ""].filter(Boolean).join(" · ")}</div></div><button class="icon more" title="More">⋯</button></li>`; }).join("")
+    || `<li class="muted">No recordings yet: tap ● Record above.</li>`;
+  $("#recsInfo").textContent = ids.length ? (ANDROID ? `${ids.length} recording${ids.length === 1 ? "" : "s"} · Recordings/AVB Music Player on your phone` : `${ids.length} recording${ids.length === 1 ? "" : "s"}`) : "";
+  el.querySelectorAll("li[data-id]").forEach(li => {
+    li.querySelector(".n").onclick = () => { lib.queue = ids.slice(); save("queue"); playIndex(ids.indexOf(li.dataset.id)); window.scrollTo({ top: 0, behavior: "smooth" }); };
+    li.querySelector(".more").onclick = () => songMenu(li.dataset.id);
+  });
 }
 function drawRecording() {
   const dpr = sizeCanvas(wave); const w = wave.width / dpr, h = wave.height / dpr;
@@ -728,7 +756,7 @@ function drawRecording() {
 // ---------------------------------------------------------------- ui wiring
 function showPage(p) { document.querySelectorAll(".page").forEach(e => e.classList.toggle("on", e.id === "page-" + p)); $("#pages").querySelectorAll("button").forEach(b => b.classList.toggle("on", b.dataset.page === p)); if (p === "play") drawWave(); }
 $("#pages").querySelectorAll("button").forEach(b => b.onclick = () => showPage(b.dataset.page));
-$("#tools").querySelectorAll("button").forEach(b => b.onclick = () => { $("#tools").querySelectorAll("button").forEach(x => x.classList.toggle("on", x === b)); document.querySelectorAll(".tab").forEach(t => t.classList.toggle("on", t.id === "tab-" + b.dataset.tab)); if (b.dataset.tab === "loud") drawLoud(); });
+$("#tools").querySelectorAll("button").forEach(b => b.onclick = () => { if (b.dataset.tab === "recs" && ANDROID) loadRecordings(); selectTool(b.dataset.tab); });
 $("#files").onchange = e => { addFiles([...e.target.files], true); e.target.value = ""; };
 $("#files2").onchange = e => { addFiles([...e.target.files], true); e.target.value = ""; };
 $("#play").onclick = togglePlay; $("#prev").onclick = prevTrack; $("#next").onclick = () => nextTrack(false);
@@ -871,7 +899,7 @@ function loadRecordings() {
   if (!ANDROID || !ANDROID.listRecordings) return;
   const r = ANDROID.listRecordings();
   if (r === "PERMISSION") return;
-  recordingIds = phoneEntries(r, "recording", "r:"); renderList();
+  recordingIds = phoneEntries(r, "recording", "r:"); renderList(); if ($("#tab-recs").classList.contains("on")) renderRecList();
 }
 window.avbPhoneReady = () => { loadPhone(false); loadRecordings(); };
 if (ANDROID) { $("#viewPhone").hidden = false; setTimeout(() => { loadPhone(true); loadRecordings(); }, 300); }

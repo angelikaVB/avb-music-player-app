@@ -116,3 +116,9 @@ button.install { padding: 6px 10px; font-size: 13px; flex: none; }
 .dlgbox b { font-size: 17px; }
 .dlgbox input { width: 100%; background: var(--bg2); border: 1px solid var(--violet); border-radius: 10px; padding: 11px 12px; color: var(--text); font-size: 16px; }
 .row.end { justify-content: flex-end; margin: 4px 0 0; }
+
+/* while recording, the play controls go away: only the recording bar's buttons */
+.wavecard.recording .transport, .wavecard.recording .seekbar { display: none; }
+#recList li.now { background: rgba(239, 68, 68, .12); border-radius: 10px; }
+#recList li .thumb.rec { background: radial-gradient(circle at 50% 50%, #EF4444 0 26%, #3f0d1c 28% 100%); }
+#recList li.fresh .name::after { content: "  NEW"; color: #FCA5A5; font-size: 11px; font-weight: 800; }
