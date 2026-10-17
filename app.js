@@ -332,6 +332,7 @@ function refreshMusic() {
   const m = st.music || {}; const sp = +$("#speed").value; const fx = fixOf();
   $("#speedval").textContent = sp + "%"; $("#speedQuick").value = String(sp / 100);
   { const b0 = effBpm(); $("#speedBpm").textContent = (b0 ? `${(b0 * sp / 100).toFixed(1)} BPM` : "— BPM") + (sp !== 100 ? ` · ${sp}%` : ""); }
+  $("#speedBpm").classList.toggle("moved", sp !== 100);              // the song's own tempo teal, a changed one yellow
   $("#semis").textContent = st.semis ? `${st.semis > 0 ? "+" : ""}${st.semis} st` : "±0 st";
   $("#tempoReset").classList.toggle("on", sp !== 100); $("#keyReset").classList.toggle("on", !!st.semis);
   const bpm = effBpm();

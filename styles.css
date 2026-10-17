@@ -694,3 +694,10 @@ body.hasmini .snack { bottom: calc(76px + env(safe-area-inset-bottom)); }
 .hometitle { margin: 2px 0 8px; }
 .hometitle .htname { font-size: 19px; font-weight: 800; letter-spacing: -.02em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .hometitle .htsub { color: var(--text3); font-size: 12.5px; font-weight: 500; margin-top: 2px; }
+/* the song's own tempo and key: bright teal; a changed value: bright yellow */
+.bpmchip { color: #19F0DC; background: rgba(25,240,220,.14); }
+.bpmchip.moved { color: #FFE600; background: rgba(255,230,0,.16); }
+#keyResult { color: #19F0DC; font-weight: 800; }
+#keyResult.moved { color: #FFE600; }
+.homemix #keyResult { color: #19F0DC; }
+.homemix #keyResult.moved { color: #FFE600; }
