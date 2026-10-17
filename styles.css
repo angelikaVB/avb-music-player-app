@@ -669,3 +669,6 @@ body.hasmini .snack { bottom: calc(76px + env(safe-area-inset-bottom)); }
 .list li .nf .num { min-width: 0; }
 .list li .nf .fav { width: 20px; height: 26px; }
 .list li .nf .fav svg { width: 18px; height: 18px; }
+/* hearts are red */
+.redheart { color: #FF1744; }
+.npicon.heart { color: #FF1744; }

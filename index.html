@@ -81,7 +81,7 @@
     <nav class="chips" id="views">
       <button data-view="phone" id="viewPhone" hidden>All music</button>
       <button data-view="queue" class="on" id="viewQueue">My songs</button>
-      <button data-view="favorites">♥ Favourites</button>
+      <button data-view="favorites"><span class="redheart">♥</span> Favorites</button>
       <button data-view="recent">Recent</button>
       <span id="listTabs"></span>
       <button data-view="added" id="viewAdded" hidden>Added</button>
@@ -163,7 +163,7 @@
     <div class="nphead">
       <div class="cover" id="cover"></div>
       <div class="hcol">
-        <div class="hrow"><div class="title" id="title">No song loaded</div><button class="npicon heart" id="heart" title="Favourite">♡</button></div>
+        <div class="hrow"><div class="title" id="title">No song loaded</div><button class="npicon heart" id="heart" title="Favorite">♡</button></div>
         <div class="npartist" id="npArtist"></div>
         <div class="badges" id="badges"></div>
       </div>
@@ -271,7 +271,7 @@
           <div class="row"><label>Width (Q)</label><input type="range" id="eqQ" min="0" max="1000"><span class="val" id="eqQv"></span></div>
         </div>
         <div class="row"><label>Output</label><input type="range" id="eqOut" min="-120" max="120"><span class="val" id="eqOutv"></span></div>
-        <div class="row"><label>Balance</label><input type="range" id="balance" min="-100" max="100" value="0"><span class="val" id="balanceV">Centre</span></div>
+        <div class="row"><label>Balance</label><input type="range" id="balance" min="-100" max="100" value="0"><span class="val" id="balanceV">Center</span></div>
         <div class="faint">Drag a dot on the curve: sideways = frequency, up/down = gain. Changes are live; Save a copy can include the EQ (its name then says “EQ”).</div>
       </div>
 

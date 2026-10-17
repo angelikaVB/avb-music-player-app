@@ -1,5 +1,5 @@
 // AVB Music Player - phone version.  Everything runs on the phone: songs you
-// open are copied into the app's own storage, analysed in a worker, played by
+// open are copied into the app's own storage, analyzed in a worker, played by
 // an AudioWorklet, re-timed/re-pitched by Rubber Band in WebAssembly.
 
 const $ = s => document.querySelector(s);
@@ -77,7 +77,7 @@ function analyse() {
     if (d.stage === "checks") { st.checks = d; fillStats(); drawWave(); }
     if (d.stage === "tempo") { st.music = { ...(st.music || {}), ...d }; refreshMusic(); }
     if (d.stage === "key") { st.music = { ...(st.music || {}), ...d }; refreshMusic(); }
-    if (d.stage === "sections") { st.sections = d.sections; drawWave(); fillSections(); $("#listen").textContent = `analysed in ${((performance.now() - t0) / 1000).toFixed(0)} s`; }
+    if (d.stage === "sections") { st.sections = d.sections; drawWave(); fillSections(); $("#listen").textContent = `analyzed in ${((performance.now() - t0) / 1000).toFixed(0)} s`; }
   };
   $("#listen").textContent = "Listening…";
   worker.postMessage({ channels: chans, sampleRate: st.sr, columns: 1600 }, chans.map(c => c.buffer));
@@ -406,7 +406,7 @@ function drawWave() {
   }
   // loop band
   if (st.loopOn && st.a !== null && st.b !== null) { wctx.fillStyle = "rgba(236,72,153,.15)"; wctx.fillRect(xOf(st.a, w), top, xOf(st.b, w) - xOf(st.a, w), bottom - top); }
-  // waveform in the colour run, played part brighter
+  // waveform in the color run, played part brighter
   if (st.peaks) {
     const cols = st.peaks.length / 2;
     const g = wctx.createLinearGradient(0, 0, w, 0); RUN.forEach((c, i) => g.addColorStop(i / 5, c));
@@ -430,7 +430,7 @@ function drawWave() {
     wctx.strokeStyle = "rgba(255,255,255,.12)";
     for (const b of st.music.beats) { const x = xOf(b, w); if (x >= 0 && x <= w) { wctx.beginPath(); wctx.moveTo(x, top); wctx.lineTo(x, bottom); wctx.stroke(); } }
   }
-  // the user's markers: small coloured flags along the top of the wave
+  // the user's markers: small colored flags along the top of the wave
   for (const mk of (lib.marks[st.id] || [])) {
     const x = xOf(mk.t, w); if (x < -6 || x > w + 6) continue;
     const c = mkColor(mk);
@@ -585,7 +585,7 @@ function saveReason(part, f) {
 function refreshSave() {
   const part = $("#part").value, f = fmtChoice();
   $("#partHint").hidden = part === "whole";
-  // grey out the formats the rules do not allow for this song
+  // gray out the formats the rules do not allow for this song
   for (const o of $("#fmt").querySelectorAll("option")) { const [k, n] = o.value.split("-"); o.disabled = !!st.buffer && !!saveReason("whole", { kind: k, n: +n }) && !saveReason(part, { kind: k, n: +n }).startsWith("Mark"); }
   const reason = saveReason(part, f);
   $("#saveBtn").disabled = !st.buffer || !!reason || !!saving;
@@ -798,7 +798,7 @@ async function addFiles(files, playNow = false) {
 let view = ANDROID ? "phone" : "queue", listName = "";
 let phoneIds = [], recordingIds = [], phoneState = ANDROID ? "loading" : "web";
 function subLine(s) {
-  // the format as a coloured tag (WAV blue, MP3 pink …), then artist, length, size
+  // the format as a colored tag (WAV blue, MP3 pink …), then artist, length, size
   const f = fmtOf(s.name), kind = { WAV: "wav", MP3: "mp3", FLAC: "flac", M4A: "m4a", AAC: "m4a", MP4: "m4a", OGG: "ogg", OPUS: "ogg", AIFF: "aif", AIF: "aif", AIFC: "aif" }[f] || "other";
   const bits = [];
   if (s.artist && !/unknown/i.test(s.artist)) bits.push(esc(s.artist));
@@ -811,7 +811,7 @@ function emptyText() {
     : phoneState === "loading" ? "Looking for music on your phone…" : "No music found on this phone.";
   if (view === "recordings") return "No recordings yet: tap ● Record on the Play page.";
   if (view === "queue") return ANDROID ? "Pick songs in All music, or + Open files." : "Open files to start.";
-  if (view === "favorites") return "No favourites yet: tap ♡ on a song.";
+  if (view === "favorites") return "No favorites yet: tap ♡ on a song.";
   if (view === "recent") return "Nothing played yet.";
   return "Empty playlist. Use ⋯ on a song to add it.";
 }
@@ -839,7 +839,7 @@ function renderList() {
   ids = ids.filter(id => !isRecording(id) && !String(id).startsWith("r:"));
   ids = ids.filter(id => songs[id] && ((songs[id].name + " " + (songs[id].artist || "") + " " + (songs[id].album || "")).toLowerCase().includes(filter)));
   const el = $("#list");
-  el.innerHTML = ids.map((id, i) => { const s = songs[id]; return `<li data-id="${id}" class="${id === st.id ? "now" : ""}"><div class="nf"><div class="num">${id === st.id ? "♪" : i + 1}</div><button class="fav${lib.favorites.includes(id) ? " on" : ""}" title="Favourite">${HEART}</button></div><div class="n"><div class="name">${s.name.replace(/\.[^.]+$/, "")}</div><div class="sub">${subLine(s)}</div></div>${rowEnd(id, "music")}</li>`; }).join("")
+  el.innerHTML = ids.map((id, i) => { const s = songs[id]; return `<li data-id="${id}" class="${id === st.id ? "now" : ""}"><div class="nf"><div class="num">${id === st.id ? "♪" : i + 1}</div><button class="fav${lib.favorites.includes(id) ? " on" : ""}" title="Favorite">${HEART}</button></div><div class="n"><div class="name">${s.name.replace(/\.[^.]+$/, "")}</div><div class="sub">${subLine(s)}</div></div>${rowEnd(id, "music")}</li>`; }).join("")
     || `<li class="muted">${emptyText()}</li>`;
   shownIds.music = ids; el.style.setProperty("--numw", String(ids.length).length + "ch");
   el.querySelectorAll("li[data-id]").forEach(li => {
@@ -848,7 +848,7 @@ function renderList() {
       if (st.id === id && st.buffer) { if (!st.playing) play(); return; }        // the loaded song: carry on, never restart
       if (view === "queue") playIndex(lib.queue.indexOf(id), true); else { lib.queue = ids.slice(); save("queue"); playIndex(ids.indexOf(id), true); } };
     wireRow(li, "music");
-    li.querySelector(".fav").onclick = e => { e.stopPropagation(); const on = !lib.favorites.includes(li.dataset.id); toggleFav(li.dataset.id); toast(on ? "Added to Favourites" : "Removed from Favourites"); };
+    li.querySelector(".fav").onclick = e => { e.stopPropagation(); const on = !lib.favorites.includes(li.dataset.id); toggleFav(li.dataset.id); toast(on ? "Added to Favorites" : "Removed from Favorites"); };
   });
   el.classList.toggle("selecting", sel.where === "music"); updateSelbar();
   $("#listTabs").innerHTML = lib.playlists.map((p, i) => `<button data-pl="list" data-i="${i}" class="${view === "list" && listName === p.name ? "on" : ""}">${esc(p.name)}</button>`).join("") + `<button data-pl="new">＋ Playlist</button>`;
@@ -954,9 +954,9 @@ $("#selMore").onclick = () => {
   const allFav = ids.every(id => lib.favorites.includes(id));
   const items = [{ label: `Share ${n} ${word}`, run: () => shareMany(ids) }];
   if (sel.where === "music") {
-    items.push({ label: allFav ? "Remove from favourites" : "Add to favourites", run: () => {
+    items.push({ label: allFav ? "Remove from favorites" : "Add to favorites", run: () => {
       if (allFav) lib.favorites = lib.favorites.filter(x => !ids.includes(x)); else lib.favorites = [...ids.filter(x => !lib.favorites.includes(x)), ...lib.favorites];
-      save("favorites"); $("#heart").textContent = lib.favorites.includes(st.id) ? "♥" : "♡"; selEnd(); toast(allFav ? `${n} removed from favourites` : `${n} added to favourites`);
+      save("favorites"); $("#heart").textContent = lib.favorites.includes(st.id) ? "♥" : "♡"; selEnd(); toast(allFav ? `${n} removed from favorites` : `${n} added to favorites`);
     } });
     for (const p of lib.playlists) items.push({ label: `Add to ${p.name}`, run: () => { for (const id of ids) if (!p.items.includes(id)) p.items.push(id); save("playlists"); selEnd(); toast(`${n} added to ${p.name}`); } });
     items.push({ label: `New playlist with these ${n}`, run: () => { selEnd(true); newPlaylist(ids); } });
@@ -1050,7 +1050,7 @@ function sheet(items, title) {
 function songMenu(id) {
   const fav = lib.favorites.includes(id);
   const items = [
-    { label: fav ? "Remove from favourites" : "Add to favourites", run: () => toggleFav(id) },
+    { label: fav ? "Remove from favorites" : "Add to favorites", run: () => toggleFav(id) },
     ...lib.playlists.map(p => ({ label: `Add to ${p.name}`, run: () => { if (!p.items.includes(id)) p.items.push(id); save("playlists"); renderList(); } })),
     { label: "New playlist with this song", run: () => newPlaylist([id]) },
   ];
@@ -1738,7 +1738,7 @@ function drawRecorder() {
   const span = Math.max(30, Math.ceil(elapsed * 1.25 / 30) * 30);          // always room ahead of the playhead
   const step = 5, bars = Math.floor(w / step), perBar = span / bars;
   const xHead = elapsed / span * w;
-  // the centre line ahead
+  // the center line ahead
   g.fillStyle = "rgba(255,255,255,.10)"; g.fillRect(xHead, mid - .5, w - xHead, 1);
   if (rec && rec.peaks.length) {
     const grad = g.createLinearGradient(0, 0, Math.max(xHead, 40), 0);
@@ -1866,13 +1866,13 @@ function renderShelves() {
     artFor(t.dataset.id, t.querySelector(".art"));
     t.onclick = () => { const id = t.dataset.id; if (!lib.queue.includes(id)) { lib.queue.push(id); save("queue"); } playIndex(lib.queue.indexOf(id)); openNP("listen"); };
   });
-  const lists = [{ key: "favorites", name: "Favourites", n: lib.favorites.length, cls: "fav" }, ...lib.playlists.map(p => ({ key: "list", name: p.name, n: p.items.length }))];
+  const lists = [{ key: "favorites", name: "Favorites", n: lib.favorites.length, cls: "fav" }, ...lib.playlists.map(p => ({ key: "list", name: p.name, n: p.items.length }))];
   $("#listTiles").innerHTML = lists.map(p => `<button class="tile" data-view="${p.key}" data-name="${esc(p.name)}"><div class="art ${p.cls || ""}" style="${p.cls ? "" : "background:" + coverFor(p.name)}"><span>${p.cls ? "♥" : esc(p.name[0] || "♪").toUpperCase()}</span></div><div class="tname">${esc(p.name)}</div><div class="tsub">${p.n} song${p.n === 1 ? "" : "s"}</div></button>`).join("")
     + `<button class="tile" id="newList"><div class="art add"><span>+</span></div><div class="tname">New playlist</div><div class="tsub">&nbsp;</div></button>`;
-  $("#listTiles").querySelectorAll(".tile[data-view]").forEach(t => t.onclick = () => openDrill(t.dataset.view, t.dataset.view === "list" ? t.dataset.name : "", t.dataset.view === "favorites" ? "Favourites" : t.dataset.name));
+  $("#listTiles").querySelectorAll(".tile[data-view]").forEach(t => t.onclick = () => openDrill(t.dataset.view, t.dataset.view === "list" ? t.dataset.name : "", t.dataset.view === "favorites" ? "Favorites" : t.dataset.name));
   $("#newList").onclick = () => newPlaylist();
 }
-// a playlist, Favourites, an artist or an album opens on its own; Back returns to all music
+// a playlist, Favorites, an artist or an album opens on its own; Back returns to all music
 let drill = null;
 const homeView = () => ANDROID ? "phone" : "queue";
 function openDrill(v, name, title) {
@@ -2041,11 +2041,11 @@ const setShuffleUi = () => $("#shuffle").classList.toggle("on", !!lib.shuffle);
 $("#shuffle").onclick = () => { lib.shuffle = !lib.shuffle; save("shuffle"); setShuffleUi(); toast(lib.shuffle ? "Shuffle on" : "Shuffle off"); };
 setShuffleUi();
 $("#mono").onclick = () => { lib.mono = !lib.mono; $("#mono").classList.toggle("on", lib.mono); if (ctx && eqOut) buildOutputStage(); toast(lib.mono ? "Mono check: both speakers play the same sum" : "Stereo again"); };
-const balText = v => v === 0 ? "Centre" : v < 0 ? `L ${-v}` : `R ${v}`;
+const balText = v => v === 0 ? "Center" : v < 0 ? `L ${-v}` : `R ${v}`;
 $("#balance").value = lib.balance; $("#balanceV").textContent = balText(lib.balance);
 $("#balance").oninput = e => { let v = +e.target.value; if (Math.abs(v) < 4) v = 0; lib.balance = v; $("#balanceV").textContent = balText(v); setBalance(); };
 $("#balance").onchange = () => save("balance");
-$("#balance").ondblclick = () => { lib.balance = 0; $("#balance").value = 0; $("#balanceV").textContent = "Centre"; setBalance(); save("balance"); };
+$("#balance").ondblclick = () => { lib.balance = 0; $("#balance").value = 0; $("#balanceV").textContent = "Center"; setBalance(); save("balance"); };
 // tap tempo: the median of the last taps; a pause of 2.5 s starts again
 let taps = [];
 $("#tapBtn").onclick = () => {
@@ -2079,7 +2079,7 @@ $("#fixReset").onclick = () => { delete lib.fix[st.id]; save("fix"); $("#tapBtn"
 // One tap drops a marker at the exact moment; a note, a category and the time can
 // be changed later, all without pausing playback or recording.  Per song in
 // lib.marks[id] = [{ id, t, text, cat }], sorted by time.
-const MK_CATS = { idea: ["Idea", "#A78BFA"], fix: ["Fix", "#FB923C"], fav: ["Favourite", "#F472B6"], section: ["Section", "#22D3EE"] };
+const MK_CATS = { idea: ["Idea", "#A78BFA"], fix: ["Fix", "#FB923C"], fav: ["Favorite", "#F472B6"], section: ["Section", "#22D3EE"] };
 const mkColor = m => (MK_CATS[m.cat] || MK_CATS.idea)[1];
 const mkCatName = m => (MK_CATS[m.cat] || MK_CATS.idea)[0];
 const mkTime = t => { t = Math.max(0, t || 0); const h = Math.floor(t / 3600), m = Math.floor(t / 60) % 60, sec = Math.floor(t % 60), d = Math.floor((t % 1) * 10); return `${h ? h + ":" + String(m).padStart(2, "0") : m}:${String(sec).padStart(2, "0")}.${d}`; };
