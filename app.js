@@ -2010,9 +2010,6 @@ async function cutSave(part) {
 }
 $("#cutKeep").onclick = () => cutSave("keep");
 $("#cutRemove").onclick = () => cutSave("remove");
-// Stop: the music stops and goes back to the start
-function stopPlay() { if (!st.buffer) return; pause(); seek(0); }
-$("#hStop").onclick = stopPlay; $("#npStop").onclick = stopPlay;
 $("#hPlay").onclick = () => togglePlay(); $("#hPrev").onclick = () => prevTrack(); $("#hNext").onclick = () => nextTrack(false);
 $("#miniNext").onclick = e => { e.stopPropagation(); nextTrack(false); };
 setMiniPlay(false);
