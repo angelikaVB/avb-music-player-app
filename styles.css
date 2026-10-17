@@ -787,3 +787,6 @@ body.hasmini .snack { bottom: calc(76px + env(safe-area-inset-bottom)); }
 .list li.now .num { color: #C084FC; text-shadow: 0 0 8px rgba(157,43,255,.7); }
 /* the playing row keeps its number (same size as the others, so it never gets cut) */
 .list li.now .num { font-size: 13.5px; overflow: visible; }
+/* lines already sung stay lit in soft orange; the line being sung glows */
+.lyrics .l.past { color: rgba(255,154,74,.78); }
+.lyrics .l.now { background: linear-gradient(90deg, rgba(255,122,26,.18), rgba(255,122,26,.04)); box-shadow: inset 3px 0 0 #FF7A1A; border-radius: 8px; padding-left: 8px; }

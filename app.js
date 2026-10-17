@@ -1225,7 +1225,7 @@ function syncStart() {
 }
 function syncShow() {
   const s = syncing; if (!s) return;
-  $("#lyrics").querySelectorAll(".l").forEach(d => d.classList.remove("now", "next"));
+  $("#lyrics").querySelectorAll(".l").forEach(d => d.classList.remove("now", "next", "past"));
   const i = s.idx[s.n];
   const el = i != null && $("#lyrics").querySelector(`.l[data-i="${i}"]`);
   if (el) { el.classList.add("next"); const box = $("#lyrics"); box.scrollTop = el.offsetTop - box.offsetTop - box.clientHeight / 3; }
@@ -1267,6 +1267,8 @@ function lyricsTick(t) {
   if (k !== lyr.now) {
     lyr.now = k;
     $("#lyrics").querySelectorAll(".l.now").forEach(d => { d.classList.remove("now"); d.querySelectorAll(".w.sung").forEach(w => w.classList.remove("sung")); });
+    // lines already sung stay lit (a jump back un-lights the ones after it)
+    $("#lyrics").querySelectorAll(".l[data-i]").forEach(d => d.classList.toggle("past", +d.dataset.i < k));
     const cur = $("#lyrics").querySelector(`.l[data-i="${k}"]`);
     if (cur) { cur.classList.add("now"); const box = $("#lyrics"); box.scrollTop = cur.offsetTop - box.offsetTop - box.clientHeight / 3; }
   }
