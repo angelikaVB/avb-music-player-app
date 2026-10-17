@@ -764,3 +764,7 @@ body.hasmini .snack { bottom: calc(76px + env(safe-area-inset-bottom)); }
 #eqDraw.on { background: rgba(255,138,30,.25); border-color: #FF8A1E; color: #FFB27A; }
 /* no + in the header: adding a file is in Settings */
 .top .addbtn { display: none !important; }
+/* the song's name at the top: saturated glossy purple */
+.hometitle .htname { color: transparent; -webkit-background-clip: text; background-clip: text;
+  background-image: linear-gradient(180deg, #F3E8FF 0%, #D8B4FE 22%, #B65CFF 48%, #9D2BFF 72%, #7A12E8 100%);
+  filter: drop-shadow(0 0 8px rgba(157,43,255,.45)); padding-bottom: 2px; }
