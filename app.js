@@ -1264,6 +1264,7 @@ function parseLrc(text) {
   if (timed) lines.sort((a, b) => (a.t ?? 1e9) - (b.t ?? 1e9));
   return { lines, timed };
 }
+var lyrShownFor = null;            // the song the lyrics box shows (a new song starts with the box closed)
 function showLyrics(text, source, id) {
   lyr = { id, text: text || "", source, ...parseLrc(text || "") };
   const el = $("#lyrics");
@@ -1275,7 +1276,10 @@ function showLyrics(text, source, id) {
     if (lyr.timed) el.querySelectorAll(".l[data-i]").forEach(d => d.onclick = () => { const t = lyr.lines[+d.dataset.i].t; if (t != null) seek(t); });
   }
   const none = !lyr.text.trim();
+  if (id !== lyrShownFor) { lyrShownFor = id; document.body.classList.remove("lyrforce"); }   // a new song starts with the chip
   $("#tab-lyrics").classList.toggle("nolyr", none);                // no lyrics: one slim line
+  document.body.classList.toggle("nolyrics", none);                // home: a Lyrics chip instead of a bar
+  if (!none) document.body.classList.remove("lyrforce");
   $("#lyrSource").textContent = none ? (source === "searching" ? "Looking…" : "No lyrics found") : "";      // where they came from is not shown
   $("#lyrSync").hidden = !lyr.text.trim() || lyr.timed;            // no times yet: tap along once to time them
   $("#lyrCopy").disabled = !lyr.text.trim();
@@ -2175,7 +2179,7 @@ $("#settingsBtn").onclick = () => {
   else if (/Android/.test(navigator.userAgent)) items.push({ label: "Download the Android app", run: () => { location.href = APK_URL; } });
   if (ANDROID && ANDROID.updateCheck) items.push(updateInfo
     ? { label: `Update to AVB Player ${updateInfo.name}`, run: startUpdate }
-    : { label: "Check for updates", run: () => { updateManual = true; ANDROID.updateCheck(); } });
+    : { label: "Check for updates", run: () => { updateManual = true; toast("Checking for updates"); ANDROID.updateCheck(); } });
   items.push({ label: ANDROID ? "Open a song from Drive or another app" : "Add music from your files", run: () => $("#files2").click() });
   items.push({ label: "Save the markers and notes of every song in one spreadsheet (to Downloads)", run: exportAllMarks });
   if (canAskManaged()) items.push({ label: "Delete and rename without Android asking", run: () => { ANDROID.askManageMedia(); toast("Turn on “Allow media management” for AVB Player, then come back"); } });
@@ -2378,7 +2382,11 @@ $("#hMore").onclick = () => { if (st.id && songs[st.id]) songMenu(st.id); };
 // the tools, one tap from the home screen: Now Playing opens on that tool
 $("#homeTools").querySelectorAll("button").forEach(b => b.onclick = () => {
   const t = b.dataset.tool;
-  if (t === "lyrics") { $("#homeLyrics").scrollIntoView({ behavior: "smooth", block: "start" }); return; }
+  if (t === "lyrics") {
+    // no lyrics for this song: the chip opens (or closes) the lyrics box, to see why or to add them
+    if (document.body.classList.contains("nolyrics") && !document.body.classList.toggle("lyrforce")) return;
+    $("#homeLyrics").scrollIntoView({ behavior: "smooth", block: "start" }); return;
+  }
   openNP(t === "lyrics" ? "listen" : "studio");
   if (t !== "lyrics") selectTool(t);
   requestAnimationFrame(() => { const el = t === "lyrics" ? $("#tab-lyrics") : $(".toolsbox"); $("#npScroll").scrollTop = el.offsetTop - 70; });
@@ -2697,7 +2705,8 @@ $("#files3").onchange = e => { addFiles([...e.target.files], true); e.target.val
 $("#recBtn").onclick = recordStart; $("#recPause").onclick = recordPause;
 $("#recStop").onclick = () => recordStop(true);
 $("#recCancel").onclick = async () => { const was = rec && rec.paused; if (rec && !was) recordPause(); if (await confirmBox("Throw this take away?", "It has not been saved.", "Discard", "Keep recording")) recordStop(false); else if (rec && !was) recordPause(); };
-$("#filter").oninput = renderList;
+// typing a search: the song panel steps aside so the matches show right under the box (the mini player keeps playing)
+$("#filter").oninput = () => { document.body.classList.toggle("searching", !!$("#filter").value.trim()); renderList(); };
 window.addEventListener("resize", () => { drawWave(); drawLoud(); drawEq(); drawRecorder(); drawMeter(); });
 document.addEventListener("keydown", e => { if (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA") return; if (e.code === "Space") { e.preventDefault(); togglePlay(); } if (e.key === "ArrowLeft") seek(st.pos - 5); if (e.key === "ArrowRight") seek(st.pos + 5); });
 
@@ -2867,14 +2876,18 @@ window.avb = { st, lib, eqResponse: f => eqResponse(f), fitEqToLine: (p, w, h) =
 // ---------------------------------------------------------------- updates (Android app)
 // version.json on the download page names the newest APK; Update downloads it inside the app and
 // hands it to Android's installer (which asks once to allow installs from AVB Player)
-var updateInfo = null, updateManual = false, updateBusy = false;
+var updateInfo = null, updateManual = false, updateBusy = false, updateAt = 0;
 window.avbUpdateInfo = text => {
   let v = null;
   try { v = text ? JSON.parse(text) : null; } catch (_) { }
   const mine = ANDROID && ANDROID.versionCode ? +ANDROID.versionCode() : 0;
   updateInfo = v && +v.code > mine && v.url ? v : null;
   showUpdateBar();
-  if (updateManual) { updateManual = false; if (!updateInfo) toast(v ? "AVB Player is up to date" : "Could not check for updates. Are you online?"); }
+  if (updateManual) {
+    updateManual = false;
+    if (updateInfo) startUpdate();                      // asked from Settings: go straight on
+    else toast(v ? `AVB Player ${ANDROID.version ? ANDROID.version() : ""} is the newest version` : "Could not check for updates. Are you online?");
+  }
 };
 function showUpdateBar(text) {
   const later = updateInfo && sessionStorage.getItem("updLater") === String(updateInfo.code);
@@ -2882,22 +2895,34 @@ function showUpdateBar(text) {
   $("#updText").textContent = text || (updateInfo ? `New version: AVB Player ${updateInfo.name}` : "");
   $("#updBtn").hidden = updateBusy; $("#updLater").hidden = updateBusy;
 }
+// an update that went quiet (Android's screen closed, a lost connection) never blocks the next tap
+function updateStalled() { return updateBusy && Date.now() - updateAt > 45000; }
 function startUpdate() {
-  if (!updateInfo || updateBusy) return;
+  if (!updateInfo) { updateManual = true; toast("Checking for updates"); ANDROID.updateCheck(); return; }
+  if (updateBusy && !updateStalled()) { toast($("#updText").textContent || "The update is on its way"); return; }
+  updateBusy = false;
   const r = ANDROID.updateInstall(updateInfo.url, updateInfo.sha256 || "");
   if (r === "permission") {
     ask("Allow updates once", "Android needs your OK one time: turn on “Allow from this source” for AVB Player, come back here and tap Update again.", "", "Open settings", "Cancel", false)
       .then(ok => { if (ok) ANDROID.openInstallSettings(); });
     return;
   }
-  if (r !== "ok") { toast("This update cannot be installed from here"); return; }
-  updateBusy = true; showUpdateBar("Downloading the update… 0%");
+  if (r !== "ok") { ask("Update", "This update cannot be installed from here (" + r + "). Download it from the AVB Player page instead.", "", "Open the page", "Cancel", false).then(ok => { if (ok) location.href = APK_URL; }); return; }
+  updateBusy = true; updateAt = Date.now(); showUpdateBar("Downloading the update… 0%");
 }
 window.avbUpdateProgress = pct => {
-  updateBusy = true;
+  updateBusy = true; updateAt = Date.now();
   showUpdateBar(+pct >= 100 ? "Installing… tap Update when Android asks. The app then closes: open it again." : `Downloading the update… ${pct}%`);
 };
-window.avbUpdateError = text => { updateBusy = false; showUpdateBar(); toast(text); };
+// problems are shown in a box (not a passing toast) so they can be read and reported
+window.avbUpdateError = text => {
+  updateBusy = false; showUpdateBar();
+  if (/cancel/i.test(text || "")) toast(text); else ask("Update did not finish", text || "Update failed", "", "OK", "", false);
+};
+// back from Android's install screen without the new version: Update can be tapped again
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible" && updateBusy && /Installing/.test($("#updText").textContent)) setTimeout(() => { updateBusy = false; showUpdateBar(); }, 2500);
+});
 $("#updBtn").onclick = startUpdate;
 $("#updLater").onclick = () => { try { sessionStorage.setItem("updLater", String(updateInfo && updateInfo.code)); } catch (_) { } showUpdateBar(); };
 if (ANDROID && ANDROID.updateCheck) setTimeout(() => ANDROID.updateCheck(), 3000);

@@ -822,3 +822,12 @@ body.hasmini .snack { bottom: calc(76px + env(safe-area-inset-bottom)); }
 
 /* Sort and Select side by side at the right of the Library heading */
 .libbtns { display: flex; gap: 14px; align-items: center; }
+
+/* while searching, the song panel on the Music page steps aside for the matches */
+body.searching #homeTitle, body.searching #homeWave, body.searching #homeTransport, body.searching #cutBar,
+body.searching #homeMix, body.searching #homeTools, body.searching #homeLyrics, body.searching #recentShelf { display: none !important; }
+
+/* a song without lyrics: no full-width Lyrics bar on the home screen, a Lyrics chip in the tool row (it opens the box) */
+body:not(.nolyrics) #lyrChip { display: none; }
+body.nolyrics:not(.lyrforce) #homeLyrics { display: none !important; }
+body.nolyrics.lyrforce #lyrChip { background: rgba(255,255,255,.16); color: #fff; }

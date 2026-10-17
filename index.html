@@ -29,6 +29,8 @@
 
 <!-- MUSIC: the library is the home screen -->
 <main id="page-music" class="page on">
+  <!-- search stays at the very top, also while a song is shown -->
+  <div class="searchbar"><input type="search" id="filter" placeholder="Search songs, artists, albums"></div>
   <div class="hometitle" id="homeTitle" hidden><div class="htcol"><div class="htname" id="hTitle"></div><div class="htsub" id="hSub"></div></div><button class="htbtn fav" id="hHeart" title="Favorite"></button><button class="htbtn" id="hMore" title="More: share, playlist, remove, delete">⋯</button></div>
   <section class="homewave" id="homeWave" hidden><span class="htime"><b id="hNow">0:00</b> / <span id="hDur">0:00</span></span></section>
   <section class="htrans" id="homeTransport" hidden>
@@ -60,9 +62,9 @@
     <button data-tool="loud">Loudness</button>
     <button data-tool="notes">Notes</button>
     <button data-tool="save">Save copy</button>
+    <button data-tool="lyrics" id="lyrChip">Lyrics</button>
   </nav>
   <section class="homelyrics" id="homeLyrics" hidden></section>
-  <div class="searchbar"><input type="search" id="filter" placeholder="Search songs, artists, albums"></div>
 
   <section class="hero" id="hero" hidden>
     <div class="herotitle">Your music, beautifully played</div>
