@@ -1532,6 +1532,11 @@ function drawEq() {
   const g = c.createLinearGradient(0, 0, w, 0); RUN.forEach((col, i) => g.addColorStop(i / 5, col));
   c.strokeStyle = lib.eq.on ? g : "#6C6996"; c.lineWidth = 2.5; c.beginPath();
   r.total.forEach((v, i) => { const xx = i / (N - 1) * w, yy = y(Math.max(-EQ_DB, Math.min(EQ_DB, v))); i ? c.lineTo(xx, yy) : c.moveTo(xx, yy); }); c.stroke();
+  // the line being drawn
+  if (eqStroke && eqStroke.length > 1) {
+    c.strokeStyle = "#fff"; c.lineWidth = 3; c.lineJoin = c.lineCap = "round"; c.shadowColor = "#FF8A1E"; c.shadowBlur = 8;
+    c.beginPath(); eqStroke.forEach((p, i) => i ? c.lineTo(p.x, p.y) : c.moveTo(p.x, p.y)); c.stroke(); c.shadowBlur = 0;
+  }
   // band dots
   lib.eq.bands.forEach((b, i) => {
     const cut = b.type === "highpass" || b.type === "lowpass";
@@ -1576,9 +1581,15 @@ function eqWire() {
     for (const [i, v] of p) Object.assign(lib.eq.bands[i], v);
     eqChanged(true);
   };
+  // draw mode: trace a line with the finger, the bands follow it
+  $("#eqDraw").onclick = () => { eqDrawMode = !eqDrawMode; $("#eqDraw").classList.toggle("on", eqDrawMode); if (eqDrawMode) toast("Draw a line across the curve: left is bass, right is treble"); };
   // drag the dots on the curve
   const cv = $("#eqCurve"); let dragging = null;
   cv.addEventListener("pointerdown", e => {
+    if (eqDrawMode) {
+      const r = cv.getBoundingClientRect(); eqStroke = [{ x: e.clientX - r.left, y: e.clientY - r.top }];
+      try { cv.setPointerCapture(e.pointerId); } catch (_) { } return;
+    }
     const r = cv.getBoundingClientRect(), x = e.clientX - r.left, yy = e.clientY - r.top, w = r.width, h = r.height;
     const y = db => h / 2 - db / EQ_DB * (h / 2 - 14);
     let best = -1, bd = 1e9;
@@ -1588,6 +1599,7 @@ function eqWire() {
     if (!lib.eq.bands[best].on) { lib.eq.bands[best].on = true; eqChanged(true); } else { fillEqEdit(); drawEq(); }
   });
   cv.addEventListener("pointermove", e => {
+    if (eqStroke) { const r = cv.getBoundingClientRect(); eqStroke.push({ x: e.clientX - r.left, y: e.clientY - r.top }); drawEq(); return; }
     if (!dragging) return;
     const r = cv.getBoundingClientRect(), x = e.clientX - r.left, yy = e.clientY - r.top, { w, h } = dragging;
     const b = lib.eq.bands[eqSel]; const was = eqBandActive(b);
@@ -1595,8 +1607,37 @@ function eqWire() {
     if (!(b.type === "highpass" || b.type === "lowpass")) { b.g = Math.max(-EQ_DB, Math.min(EQ_DB, (h / 2 - yy) / (h / 2 - 14) * EQ_DB)); b.g = Math.round(b.g * 10) / 10; if (Math.abs(b.g) < 0.2) b.g = 0; }
     eqChanged(was !== eqBandActive(b));
   });
-  const up = () => { dragging = null; };
+  const up = () => {
+    dragging = null;
+    if (eqStroke) { const r = cv.getBoundingClientRect(); const pts = eqStroke; eqStroke = null; if (pts.length > 3) fitEqToLine(pts, r.width, r.height); else drawEq(); }
+  };
   cv.addEventListener("pointerup", up); cv.addEventListener("pointercancel", up);
+}
+let eqDrawMode = false, eqStroke = null;
+// fit the six tone bands (low shelf, four bells, air shelf) to the drawn line
+function fitEqToLine(pts, w, h) {
+  const dbAt = yy => Math.max(-EQ_DB, Math.min(EQ_DB, (h / 2 - yy) / (h / 2 - 14) * EQ_DB));
+  const line = pts.map(p => ({ f: eqF(p.x, w), g: dbAt(p.y) })).sort((a, b) => a.f - b.f);
+  const fLo = line[0].f, fHi = line[line.length - 1].f;
+  const target = f => {                                        // the line's gain at f (0 dB outside it)
+    if (f < fLo || f > fHi) return 0;
+    let i = 0; while (i < line.length - 1 && line[i + 1].f < f) i++;
+    const a = line[i], b = line[Math.min(line.length - 1, i + 1)];
+    const t = b.f === a.f ? 0 : Math.log(f / a.f) / Math.log(b.f / a.f);
+    return a.g + (b.g - a.g) * Math.max(0, Math.min(1, t));
+  };
+  const keep = lib.eq.bands;
+  const plan = [[1, 90, 0.71], [2, 230, 1.1], [3, 650, 1.1], [4, 1700, 1.1], [5, 4300, 1.1], [6, 10500, 0.71]];
+  for (const [i, f, q] of plan) Object.assign(keep[i], { f, q, g: target(f), on: true });
+  // a few rounds: compare the EQ's real curve with the line and nudge each band
+  const fs = Float32Array.from(plan, p => p[1]);
+  for (let round = 0; round < 14; round++) {
+    const r = eqResponse(fs);
+    plan.forEach(([i], k) => { const b = keep[i]; b.g = Math.max(-EQ_DB, Math.min(EQ_DB, b.g + 0.6 * (target(fs[k]) - (r.total[k] - (lib.eq.on ? lib.eq.out : 0))))); });
+  }
+  for (const [i] of plan) { const b = keep[i]; b.g = Math.round(b.g * 10) / 10; if (Math.abs(b.g) < 0.2) b.g = 0; }
+  lib.eq.on = true; eqDrawMode = false; $("#eqDraw").classList.remove("on");
+  eqChanged(true); toast("The EQ follows your line. Drag a dot to fine-tune.");
 }
 eqWire();
 
