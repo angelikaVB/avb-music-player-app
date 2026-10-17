@@ -663,3 +663,9 @@ body.hasmini .snack { bottom: calc(76px + env(safe-area-inset-bottom)); }
 .list li .nf { display: flex; align-items: center; gap: 3px; flex: none; width: calc(var(--numw, 2ch) + 30px); }
 .list li .nf .num { min-width: 0; width: auto; }
 .list li .nf .fav { width: 24px; margin: 0; }
+/* compact: number, heart and title close together */
+.list li { gap: 6px; }
+.list li .nf { width: auto; gap: 2px; }
+.list li .nf .num { min-width: 0; }
+.list li .nf .fav { width: 20px; height: 26px; }
+.list li .nf .fav svg { width: 18px; height: 18px; }
