@@ -448,7 +448,7 @@ function sourceKbps() { return st.info && st.duration ? st.info.size * 8 / st.du
 function saveReason(part, f) {
   if (!st.buffer) return "";
   if (part !== "whole" && (st.a === null || st.b === null)) return "Mark the piece first: tap A where it starts and B where it ends.";
-  const changed = part !== "whole" || st.speed !== 1 || !!st.semis;
+  const changed = part !== "whole" || st.speed !== 1 || !!st.semis || eqActive();
   const lossless = !!st.info.bits;
   if (f.kind === "wav" || f.kind === "flac") {
     if (!lossless && f.n > 16) return `${st.info.fmt} is compressed, so lossless copies stop at 16-bit.`;
@@ -485,34 +485,103 @@ function saveName(part, f) {
   return `${stem}${tags.length ? ` (${tags.join(", ")})` : ""}.${f.kind}`;
 }
 let saving = null;
+// a copy of the loaded song: the piece asked for, tempo/key, EQ, back to its own rate, then the format
+async function makeCopy(part, f, onStage) {
+  let chans = channelsOf(st.buffer); let sr = st.sr;
+  if (part !== "whole") chans = applySpan(chans, sr, part);
+  if (st.speed !== 1 || st.semis) { onStage("Changing tempo / key"); chans = await renderOnce(chans, sr); }
+  if (eqActive()) { onStage("Applying the EQ"); chans = await renderEq(chans, sr); }
+  if (st.info.rate && st.info.rate !== sr) { onStage("Back to " + (st.info.rate / 1000).toFixed(1).replace(".0", "") + " kHz"); chans = await resample(chans, sr, st.info.rate); sr = st.info.rate; }
+  let peak = 0; for (const c of chans) for (let i = 0; i < c.length; i++) peak = Math.max(peak, Math.abs(c[i]));
+  let note = "";
+  if (peak > 1 && !(f.kind === "wav" && f.n === 32)) { const g = 0.989 / peak; for (const c of chans) for (let i = 0; i < c.length; i++) c[i] *= g; note = ` · lowered ${(20 * Math.log10(g)).toFixed(1)} dB so it does not clip`; }
+  onStage(f.kind === "mp3" ? "Encoding MP3" : f.kind === "flac" ? "Encoding FLAC" : "Writing WAV");
+  const { bytes, mime } = await encode(chans, sr, f);
+  return { blob: new Blob([bytes], { type: mime }), name: saveName(part, f), note };
+}
 async function saveCopy() {
   if (!st.buffer || saving) return;
   const part = $("#part").value, f = fmtChoice();
   if (saveReason(part, f)) return;
-  let chans = channelsOf(st.buffer); let sr = st.sr;
-  if (part !== "whole") chans = applySpan(chans, sr, part);
   const t0 = performance.now(); const status = $("#saveStatus");
   let stage = "Preparing";
   saving = true; refreshSave();
   const clock = setInterval(() => status.textContent = `${stage}… ${((performance.now() - t0) / 1000).toFixed(0)} s`, 500);
   try {
-    if (st.speed !== 1 || st.semis) { stage = "Changing tempo / key"; chans = await renderOnce(chans, sr); }
-    if (eqActive()) { stage = "Applying the EQ"; chans = await renderEq(chans, sr); }
-    // back to the song's own sample rate (the phone plays everything at its own rate)
-    if (st.info.rate && st.info.rate !== sr) { stage = "Back to " + (st.info.rate / 1000).toFixed(1).replace(".0", "") + " kHz"; chans = await resample(chans, sr, st.info.rate); sr = st.info.rate; }
-    let peak = 0; for (const c of chans) for (let i = 0; i < c.length; i++) peak = Math.max(peak, Math.abs(c[i]));
-    let note = "";
-    if (peak > 1 && !(f.kind === "wav" && f.n === 32)) { const g = 0.989 / peak; for (const c of chans) for (let i = 0; i < c.length; i++) c[i] *= g; note = ` · lowered ${(20 * Math.log10(g)).toFixed(1)} dB so it does not clip`; }
-    stage = f.kind === "mp3" ? "Encoding MP3" : f.kind === "flac" ? "Encoding FLAC" : "Writing WAV";
-    const { bytes, mime } = await encode(chans, sr, f);
-    const blob = new Blob([bytes], { type: mime });
-    const name = saveName(part, f);
+    const { blob, name, note } = await makeCopy(part, f, x => stage = x);
     stage = "Saving";
     if (ANDROID) await androidSave(blob, name);
     else { const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = name; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 60000); }
     status.textContent = `Saved ${name} (${(blob.size / 1e6).toFixed(1)} MB, ${((performance.now() - t0) / 1000).toFixed(0)} s)${note}`; toast("Saved to Downloads: " + name);
   } catch (err) { status.textContent = "Save failed: " + (err && err.message || err); }
   clearInterval(clock); saving = null; refreshSave();
+}
+
+// ---------------------------------------------------------------- share
+// The ⤴ button: the original file, or a copy in any format (with the tempo /
+// key / EQ as they sound now), handed to Android's share sheet.
+async function shareSong(id) {
+  id = id || st.id;
+  if (!id || !songs[id]) { toast("Load a song first"); return; }
+  if (st.id !== id) { await loadSong(id, false); if (st.id !== id || !st.buffer) return; }
+  if (!st.buffer) { toast("The song is still loading"); return; }
+  const s0 = songs[id];
+  const changes = [st.speed !== 1 || st.semis ? "tempo/key" : "", eqActive() ? "EQ" : ""].filter(Boolean).join(" + ");
+  const tail = changes ? ` · with your ${changes}` : "";
+  const srcFmt = st.info.fmt, bits = st.info.bits;
+  const options = [];
+  options.push({ label: `Original file · ${srcFmt}${s0.size > 0 ? ` · ${(s0.size / 1e6).toFixed(1)} MB` : ""}${changes ? " (without your changes)" : ""}`, run: () => shareOriginal(id) });
+  const fmts = [
+    [{ kind: "mp3", n: 320 }, "MP3 · best quality"],
+    [{ kind: "mp3", n: 192 }, "MP3 · smaller, good for messages"],
+    [{ kind: "flac", n: bits && bits <= 24 ? (bits > 16 ? 24 : 16) : 16 }, "FLAC · lossless"],
+    [{ kind: "wav", n: bits && bits <= 24 ? (bits > 16 ? 24 : 16) : 16 }, "WAV"],
+  ];
+  for (const [f, label] of fmts) {
+    const why = saveReason("whole", f);
+    if (why && !why.startsWith("This would be an identical")) continue;     // above the song's own quality
+    if (why) continue;                                                          // identical: that is the Original
+    options.push({ label: label + tail, run: () => shareCopy(f) });
+  }
+  sheet(options, `Share “${s0.name.replace(/\.[^.]+$/, "")}”`);
+}
+async function shareOriginal(id) {
+  const s0 = songs[id];
+  if (ANDROID && s0.url && /^[mr]:/.test(id)) { ANDROID.shareMedia(id.slice(2), s0.name); return; }
+  const rec = await songGet(id).catch(() => null);
+  const blob = rec && rec.blob ? rec.blob : (s0.url ? await (await fetch(s0.url)).blob() : null);
+  if (!blob) { toast("Cannot read that song"); return; }
+  await deliverShare(blob, s0.name);
+}
+async function shareCopy(f) {
+  const t0 = performance.now(); let stage = "Preparing";
+  const clock = setInterval(() => toast(`${stage}… ${((performance.now() - t0) / 1000).toFixed(0)} s`), 600);
+  try {
+    const { blob, name } = await makeCopy("whole", f, x => stage = x);
+    clearInterval(clock);
+    await deliverShare(blob, name);
+  } catch (err) { clearInterval(clock); toast("Could not make the copy: " + (err && err.message || err)); }
+}
+async function deliverShare(blob, name) {
+  if (ANDROID && ANDROID.shareBegin) {
+    const id = ANDROID.shareBegin(name, blob.type || "audio/*");
+    if (id < 0) { toast("Could not prepare the file"); return; }
+    const step = 768 * 1024;
+    for (let p = 0; p < blob.size; p += step) {
+      const bytes = new Uint8Array(await blob.slice(p, p + step).arrayBuffer());
+      let bin = ""; for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+      if (!ANDROID.saveChunk(id, btoa(bin))) { toast("Could not prepare the file"); return; }
+    }
+    ANDROID.shareEnd(id);
+    return;
+  }
+  const file = new File([blob], name, { type: blob.type || "audio/*" });
+  if (navigator.canShare && navigator.canShare({ files: [file] })) {
+    try { await navigator.share({ files: [file], title: name }); } catch (err) { if (err && err.name !== "AbortError") toast("Sharing failed: " + err.message); }
+    return;
+  }
+  const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = name; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 60000);
+  toast("This browser cannot share files: saved to Downloads instead");
 }
 function encode(chans, sr, f) {
   return new Promise((ok, no) => {
@@ -648,9 +717,9 @@ function renderList() {
   else if (!ANDROID && navigator.storage && navigator.storage.estimate) navigator.storage.estimate().then(e => $("#storage").textContent = `${Object.keys(songs).length} songs stored in the app · ${(e.usage / 1e6).toFixed(0)} MB of ${(e.quota / 1e9).toFixed(1)} GB`);
   else $("#storage").textContent = "";
 }
-function sheet(items) {
+function sheet(items, title) {
   const s = $("#sheet");
-  s.innerHTML = items.map((it, i) => `<button class="${it.danger ? "danger" : ""}" data-i="${i}">${it.label}</button>`).join("") + `<button data-i="-1">Cancel</button>`;
+  s.innerHTML = (title ? `<div class="sheettitle">${title.replace(/</g, "&lt;")}</div>` : "") + items.map((it, i) => `<button class="${it.danger ? "danger" : ""}" data-i="${i}">${it.label}</button>`).join("") + `<button data-i="-1">Cancel</button>`;
   s.classList.add("on");
   s.querySelectorAll("button").forEach(b => b.onclick = () => { s.classList.remove("on"); const i = +b.dataset.i; if (i >= 0) items[i].run(); });
 }
@@ -663,6 +732,7 @@ function songMenu(id) {
   ];
   if (view === "queue") items.push({ label: "Remove from queue", run: () => { const i = lib.queue.indexOf(id); if (i >= 0) { lib.queue.splice(i, 1); if (i < lib.index) lib.index--; else if (i === lib.index) lib.index = -1; } save("queue"); save("index"); renderList(); } });
   if (view === "list") items.push({ label: "Remove from this playlist", run: () => { const p = lib.playlists.find(p => p.name === listName); p.items = p.items.filter(x => x !== id); save("playlists"); renderList(); } });
+  items.unshift({ label: "Share… (any format)", run: () => shareSong(id) });
   const rec = isRecording(id);
   const twin = phoneTwin(id);                         // the phone file behind an app copy, when it can be found
   if (!rec) items.push({ label: "Remove from AVB Music Player (the file stays on your phone)", run: () => removeFromApp(id) });
@@ -1280,6 +1350,7 @@ $("#repeat").onclick = () => { lib.repeat = { off: "all", all: "one", one: "off"
 $("#repeat").textContent = { off: "↻ off", all: "↻ all", one: "↻ one" }[lib.repeat]; $("#repeat").classList.toggle("on", lib.repeat !== "off");
 $("#seek").oninput = e => seek(+e.target.value / 1000 * st.duration);
 $("#heart").onclick = () => toggleFav(st.id);
+$("#shareBtn").onclick = () => shareSong();
 $("#half").onclick = () => { st.bpmScale = Math.max(0.25, st.bpmScale / 2); refreshMusic(); refreshSave(); };
 $("#dbl").onclick = () => { st.bpmScale = Math.min(4, st.bpmScale * 2); refreshMusic(); refreshSave(); };
 // the change happens by itself: when the finger lifts off the slider, or shortly after the last tap on − / +
@@ -1456,4 +1527,4 @@ if (demo && ["localhost", "127.0.0.1"].includes(location.hostname)) {
   const f = new File([blob], decodeURIComponent(demo.split("/").pop()), { type: blob.type, lastModified: 1 });
   await addFiles([f]);
 }
-window.avb = { st, lib, loadSong, applyChange, saveCopy, seek, play, pause, markButton, loopRange };
+window.avb = { st, lib, shareSong, loadSong, applyChange, saveCopy, seek, play, pause, markButton, loopRange };

@@ -143,3 +143,6 @@ button.install { padding: 6px 10px; font-size: 13px; flex: none; }
 .eqbands button.off { opacity: .45; }
 .eqedit { background: var(--bg2); border: 1px solid var(--line); border-radius: 12px; padding: 4px 10px; margin-bottom: 6px; }
 .eqon { margin: 0; }
+
+button.icon.share { font-size: 19px; font-weight: 700; background: linear-gradient(135deg, rgba(59,130,246,.35), rgba(236,72,153,.35)); }
+.sheet .sheettitle { color: var(--text3); font-size: 13px; padding: 4px 6px 8px; }
