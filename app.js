@@ -2172,7 +2172,7 @@ $("#settingsBtn").onclick = () => {
     : { label: "Check for updates", run: () => { updateManual = true; ANDROID.updateCheck(); } });
   if (canAskManaged()) items.push({ label: "Delete and rename without Android asking", run: () => { ANDROID.askManageMedia(); toast("Turn on “Allow media management” for AVB Player, then come back"); } });
   if (lib.hidden.length) items.push({ label: `Show removed songs again (${lib.hidden.length})`, run: () => { const n = lib.hidden.length; lib.hidden = []; save("hidden"); renderList(); renderRecList(); toast(`${n} back in the player`); } });
-  if (ANDROID && ANDROID.shareApp) items.push({ label: "Share AVB Player with a friend (WhatsApp, text…)", run: () => ANDROID.shareApp(APK_URL) });
+  if (ANDROID && ANDROID.shareApp) items.push({ label: "Share AVB Player (WhatsApp, text)", run: () => ANDROID.shareApp(APK_URL) });
   else if (/Android/.test(navigator.userAgent)) items.push({ label: "Download the Android app", run: () => { location.href = APK_URL; } });
   if (ANDROID && ANDROID.askDefault) items.push({ label: "Make AVB Player your default player", run: () => ANDROID.askDefault() });
   items.push({ label: ANDROID ? "Add a song from your files (Drive, WhatsApp…)" : "Add music from your files", run: () => $("#files2").click() });

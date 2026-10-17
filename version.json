@@ -1,7 +1,7 @@
 {
- "code": 72,
- "name": "6.2",
+ "code": 73,
+ "name": "6.3",
  "url": "https://angelikavb.github.io/avb-music-player-app/AVB-Player.apk",
- "sha256": "4110d3680e3b9efef92af0f29f3b783074d2a98f2c61d59948321c9599a6081a",
- "notes": "Automatic microphone; one recording-quality list; default player in one question"
+ "sha256": "2fcb76b97236e9611df1e1c2a13b782f2973065b0e94c730d0631e6a7492eb7a",
+ "notes": "Share AVB Player"
 }
