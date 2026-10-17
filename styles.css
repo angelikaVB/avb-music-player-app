@@ -746,3 +746,17 @@ body.hasmini .snack { bottom: calc(76px + env(safe-area-inset-bottom)); }
 /* Tools row: fits large phone fonts */
 .tgrid > * { font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 #speedBtn.on { border-color: #FFE600; color: #FFE600; }
+/* repeat: a loop of two arrows (not the ↺ reset); colored when on */
+.ctl#repeat { color: var(--text3); display: flex; align-items: center; justify-content: center; }
+.ctl#repeat.on { color: #FF8A1E; text-shadow: none; filter: drop-shadow(0 0 6px rgba(255,138,30,.5)); }
+
+/* home play row: cut, shuffle, back, PLAY, forward, repeat; the time on the waveform */
+.htrans { justify-content: space-between; gap: 4px; }
+.hbtn.hplay.gloss { width: 96px; }
+.hbtn.hmode { width: 36px; height: 36px; color: var(--text3); }
+.hbtn.hmode.on { color: #FF8A1E; filter: drop-shadow(0 0 6px rgba(255,138,30,.5)); }
+.ctl#shuffle { display: flex; align-items: center; justify-content: center; color: var(--text3); }
+.ctl#shuffle.on { color: #FF8A1E; filter: drop-shadow(0 0 6px rgba(255,138,30,.5)); }
+.homewave { position: relative; }
+.homewave .htime { position: absolute; top: 6px; right: 8px; z-index: 3; font-size: 12px; color: var(--text3); background: rgba(11,10,31,.6); padding: 2px 8px; border-radius: 999px; font-variant-numeric: tabular-nums; pointer-events: none; }
+.homewave .htime b { color: #fff; font-weight: 700; }
