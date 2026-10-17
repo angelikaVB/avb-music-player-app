@@ -171,12 +171,10 @@
     </div>
 
     <section class="wavecard studio-only">
-      <div class="waveslot" id="npWaveSlot"><canvas id="wave"></canvas></div>
+      <div class="waveslot" id="npWaveSlot"><div class="wavebox" id="waveBox"><canvas id="wave"></canvas><button class="wskip back" id="back10" title="Back 10 seconds"><svg viewBox="0 0 24 24" width="30" height="30" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5.6 8.2A8 8 0 1 1 4 12.5M5.6 8.2V4.2M5.6 8.2h4"/><text x="12" y="15.6" text-anchor="middle" font-size="7.6" font-weight="800" fill="#fff" stroke="none" font-family="Jakarta, sans-serif">10</text></svg></button><button class="wskip fwd" id="fwd10" title="Forward 10 seconds"><svg viewBox="0 0 24 24" width="30" height="30" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M18.4 8.2A8 8 0 1 0 20 12.5M18.4 8.2V4.2M18.4 8.2h-4"/><text x="12" y="15.6" text-anchor="middle" font-size="7.6" font-weight="800" fill="#fff" stroke="none" font-family="Jakarta, sans-serif">10</text></svg></button></div></div>
       <div class="tgrid">
         <button class="mark a" id="markA" title="Set A at the playhead">A</button>
         <button class="mark b" id="markB" title="Set B at the playhead">B</button>
-        <button class="ghost" id="back10">−10s</button>
-        <button class="ghost" id="fwd10">+10s</button>
         <button class="ghost" id="mono" title="Mono check: both speakers play the same sum">Mono</button>
         <select id="speedQuick" class="ghost" title="Speed">
           <option value="0.5">0.5×</option><option value="0.75">0.75×</option><option value="0.9">0.9×</option>

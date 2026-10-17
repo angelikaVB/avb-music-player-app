@@ -713,3 +713,11 @@ body.hasmini .snack { bottom: calc(76px + env(safe-area-inset-bottom)); }
 .hbtn.hplay.gloss { width: 116px; height: 56px; border-radius: 999px !important; }
 .hbtn.hplay.gloss::before { left: 8%; right: 8%; border-radius: 999px; }
 .htrans { gap: 8px; }
+/* ±10 s on the waveform itself */
+.wavebox { position: relative; }
+.wskip { position: absolute; top: 50%; transform: translateY(-40%); width: 42px; height: 42px; border-radius: 50%; border: 0; padding: 0;
+  background: rgba(11,10,31,.55); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); box-shadow: 0 2px 10px rgba(0,0,0,.35);
+  display: flex; align-items: center; justify-content: center; opacity: .9; z-index: 2; }
+.wskip:active { transform: translateY(-40%) scale(.92); background: rgba(255,106,0,.55); }
+.wskip.back { left: 6px; } .wskip.fwd { right: 6px; }
+.tgrid { grid-template-columns: repeat(4, 1fr); }

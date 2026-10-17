@@ -1944,7 +1944,7 @@ const LYR = (() => { const el = $("#tab-lyrics"), anchor = document.createCommen
 function placeWave() {
   const inStudio = !$("#np").hidden && npMode === "studio";
   const slot = inStudio ? $("#npWaveSlot") : $("#homeWave");
-  if (wave.parentElement !== slot) slot.appendChild(wave);
+  const box = $("#waveBox"); if (box.parentElement !== slot) slot.appendChild(box);      // the waveform with its ±10 s buttons
   const show = !!st.id && !!songs[st.id] && !inStudio;
   $("#homeWave").hidden = !show; $("#homeMix").hidden = !show; $("#homeTransport").hidden = !show; $("#homeTitle").hidden = !show;
   $("#cutBar").hidden = !show || !cutMode;
