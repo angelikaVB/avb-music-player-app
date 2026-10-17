@@ -2175,7 +2175,7 @@ $("#settingsBtn").onclick = () => {
   if (ANDROID && ANDROID.shareApp) items.push({ label: "Share AVB Player (WhatsApp, text)", run: () => ANDROID.shareApp(APK_URL) });
   else if (/Android/.test(navigator.userAgent)) items.push({ label: "Download the Android app", run: () => { location.href = APK_URL; } });
   if (ANDROID && ANDROID.askDefault) items.push({ label: "Make AVB Player your default player", run: () => ANDROID.askDefault() });
-  items.push({ label: ANDROID ? "Add a song from your files (Drive, WhatsApp…)" : "Add music from your files", run: () => $("#files2").click() });
+  items.push({ label: ANDROID ? "Open a song from Drive or another app" : "Add music from your files", run: () => $("#files2").click() });
   if (!ANDROID && !$("#installBtn").hidden) items.push({ label: "Install the app on this phone", run: () => $("#installBtn").click() });
   const ver = ANDROID && ANDROID.version ? ANDROID.version() : "";
   sheet(items, ver ? `Settings · AVB Player ${ver}` : "Settings");

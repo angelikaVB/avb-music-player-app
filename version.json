@@ -1,7 +1,7 @@
 {
- "code": 73,
- "name": "6.3",
+ "code": 74,
+ "name": "6.4",
  "url": "https://angelikavb.github.io/avb-music-player-app/AVB-Player.apk",
- "sha256": "2fcb76b97236e9611df1e1c2a13b782f2973065b0e94c730d0631e6a7492eb7a",
- "notes": "Share AVB Player"
+ "sha256": "56714bf164aea38692e58159ccbfe1c27a98c55cc9ad2ca20b1bdabb6f9ccd6d",
+ "notes": "Open a song from Drive or another app"
 }
