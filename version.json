@@ -1,7 +1,7 @@
 {
- "code": 70,
- "name": "6.0",
+ "code": 71,
+ "name": "6.1",
  "url": "https://angelikavb.github.io/avb-music-player-app/AVB-Player.apk",
- "sha256": "a34598bda332c9c72ec67a53d720590cb5c37cfdb035092f69efc94b4b0ed938",
- "notes": "A deleted song leaves nothing behind in the app"
+ "sha256": "e66480bf7df3a9bf520cc30969e12de222c61a45561d6abf42194fb36f7dbc05",
+ "notes": "Default player: one Android question for all kinds of audio"
 }
