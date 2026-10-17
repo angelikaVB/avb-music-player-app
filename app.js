@@ -803,7 +803,7 @@ function renderGroups(key, filter) {
   for (const id of phoneIds) { if (lib.hidden.includes(id) || !songs[id]) continue; const g = (songs[id][key] && !/^<unknown>$/i.test(songs[id][key])) ? songs[id][key] : "Unknown"; groups.set(g, (groups.get(g) || 0) + 1); }
   const rows = [...groups.entries()].filter(([g]) => g.toLowerCase().includes(filter)).sort((a, b) => a[0] === "Unknown" ? 1 : b[0] === "Unknown" ? -1 : a[0].localeCompare(b[0]));
   const el = $("#list");
-  el.innerHTML = rows.map(([g, n]) => `<li class="grouprow" data-g="${encodeURIComponent(g)}"><div class="thumb" style="background:${coverFor(g)}">${g[0].toUpperCase()}</div><div class="n"><div class="name">${g.replace(/</g, "&lt;")}</div><div class="sub">${n} song${n === 1 ? "" : "s"}</div></div></li>`).join("")
+  el.innerHTML = rows.map(([g, n]) => `<li class="grouprow" data-g="${encodeURIComponent(g)}"><div class="n"><div class="name">${g.replace(/</g, "&lt;")}</div><div class="sub">${n} song${n === 1 ? "" : "s"}</div></div></li>`).join("")
     || `<li class="muted">${phoneState === "ok" ? "Nothing here." : "Allow AVB Music Player to see your music first (All music)."}</li>`;
   el.querySelectorAll("li[data-g]").forEach(li => li.onclick = () => { groupBy = key; groupName = decodeURIComponent(li.dataset.g); openDrill("group", "", groupName); });
   $("#storage").textContent = `${rows.length} ${key === "artist" ? "artist" : "album"}${rows.length === 1 ? "" : "s"}`;
@@ -819,7 +819,7 @@ function renderList() {
   ids = ids.filter(id => !isRecording(id) && !String(id).startsWith("r:"));
   ids = ids.filter(id => songs[id] && ((songs[id].name + " " + (songs[id].artist || "") + " " + (songs[id].album || "")).toLowerCase().includes(filter)));
   const el = $("#list");
-  el.innerHTML = ids.map(id => { const s = songs[id]; return `<li data-id="${id}" class="${id === st.id ? "now" : ""}"><div class="thumb" style="background:${coverFor(s.name)}"></div><div class="n"><div class="name">${lib.favorites.includes(id) ? "♥ " : ""}${s.name.replace(/\.[^.]+$/, "")}</div><div class="sub">${subLine(s)}</div></div>${rowEnd(id, "music")}</li>`; }).join("")
+  el.innerHTML = ids.map((id, i) => { const s = songs[id]; return `<li data-id="${id}" class="${id === st.id ? "now" : ""}"><div class="num">${id === st.id ? "♪" : i + 1}</div><div class="n"><div class="name">${lib.favorites.includes(id) ? "♥ " : ""}${s.name.replace(/\.[^.]+$/, "")}</div><div class="sub">${subLine(s)}</div></div>${rowEnd(id, "music")}</li>`; }).join("")
     || `<li class="muted">${emptyText()}</li>`;
   shownIds.music = ids;
   el.querySelectorAll("li[data-id]").forEach(li => {
@@ -1639,7 +1639,7 @@ function renderRecList() {
   const when = t => { if (!t) return ""; const d = new Date(t); return d.toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" }) + ", " + d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" }); };
   const shown = recAll || sel.where === "recs" ? ids : ids.slice(0, 5);
   $("#recSeeAll").hidden = ids.length <= 5 || recAll;
-  el.innerHTML = shown.map(id => { const s = songs[id]; return `<li data-id="${id}" class="${id === st.id ? "now" : ""} ${id === freshTake ? "fresh" : ""}"><div class="thumb rec"><svg viewBox="0 0 24 24" width="22" height="22" fill="#fff"><path d="M9 18V5l11-2v13" fill="none" stroke="#fff" stroke-width="2"/><circle cx="6" cy="18" r="3"/><circle cx="17" cy="16" r="3"/></svg></div><div class="n"><div class="name">${esc(s.name.replace(/\.[^.]+$/, ""))}</div><div class="sub">${[when(s.added), s.duration ? clock(s.duration) : "", s.size > 0 ? (s.size / 1e6).toFixed(1) + " MB" : ""].filter(Boolean).join(" · ")}</div></div>${sel.where === "recs" ? "" : `<button class="rowplay" title="Play">▶</button>`}${rowEnd(id, "recs")}</li>`; }).join("")
+  el.innerHTML = shown.map((id, i) => { const s = songs[id]; return `<li data-id="${id}" class="${id === st.id ? "now" : ""} ${id === freshTake ? "fresh" : ""}"><div class="num">${id === st.id ? "♪" : i + 1}</div><div class="n"><div class="name">${esc(s.name.replace(/\.[^.]+$/, ""))}</div><div class="sub">${[when(s.added), s.duration ? clock(s.duration) : "", s.size > 0 ? (s.size / 1e6).toFixed(1) + " MB" : ""].filter(Boolean).join(" · ")}</div></div>${sel.where === "recs" ? "" : `<button class="rowplay" title="Play">▶</button>`}${rowEnd(id, "recs")}</li>`; }).join("")
     || `<li class="muted">No recordings yet: tap ● Record.</li>`;
   $("#recsInfo").textContent = ids.length ? (ANDROID ? `${ids.length} recording${ids.length === 1 ? "" : "s"} · Recordings/AVB Music Player on your phone` : `${ids.length} recording${ids.length === 1 ? "" : "s"}`) : "";
   shownIds.recs = ids;

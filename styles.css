@@ -533,3 +533,10 @@ body.drill #tab-songs .libhead h2 { margin-top: 10px; }
 body.selecting { padding-bottom: 140px; }
 /* the header is solid: content never shows through it */
 .top { background: rgba(11,10,31,.97); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); }
+/* lists: a track number instead of a placeholder square, tighter rows */
+.list li { padding: 9px 6px; gap: 12px; }
+.list li .num { width: 30px; flex: none; text-align: right; color: var(--text4); font-weight: 700; font-size: 14px; font-variant-numeric: tabular-nums; }
+.list li.now .num { color: #C4B5FD; font-size: 16px; }
+.list li .name { font-size: 15px; }
+.list li .sub { font-size: 12.5px; margin-top: 0; }
+.list li.grouprow { padding: 12px 6px; }
