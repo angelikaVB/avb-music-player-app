@@ -808,7 +808,7 @@ function renderGroups(key, filter) {
     || `<li class="muted">${phoneState === "ok" ? "Nothing here." : "Allow AVB Music Player to see your music first (All music)."}</li>`;
   el.querySelectorAll("li[data-g]").forEach(li => li.onclick = () => { groupBy = key; groupName = decodeURIComponent(li.dataset.g); openDrill("group", "", groupName); });
   $("#storage").textContent = `${rows.length} ${key === "artist" ? "artist" : "album"}${rows.length === 1 ? "" : "s"}`;
-  $("#views").querySelectorAll("button").forEach(b => { b.classList.toggle("on", b.dataset.view === view); b.onclick = () => { view = b.dataset.view; listName = b.dataset.name || ""; if (view === "phone" && phoneState === "denied") loadPhone(true); renderList(); }; });
+  $("#views").querySelectorAll(":scope > button").forEach(b => { b.classList.toggle("on", b.dataset.view === view); b.onclick = () => { view = b.dataset.view; listName = b.dataset.name || ""; if (view === "phone" && phoneState === "denied") loadPhone(true); renderList(); }; });
 }
 function renderList() {
   renderShelves();
@@ -828,8 +828,13 @@ function renderList() {
     wireRow(li, "music");
   });
   el.classList.toggle("selecting", sel.where === "music"); updateSelbar();
-  $("#listTabs").innerHTML = "";                       // playlists are tiles above; they open on their own
-  $("#views").querySelectorAll("button").forEach(b => { b.classList.toggle("on", b.dataset.view === view && (view !== "list" || b.dataset.name === listName)); b.onclick = () => { selEnd(true); if (drill) { drill = null; document.body.classList.remove("drill"); $("#libName").textContent = "Library"; $("#libBack").hidden = true; } view = b.dataset.view; listName = b.dataset.name || ""; if (view === "phone" && phoneState === "denied") loadPhone(true); if (view === "recordings" && ANDROID) loadRecordings(); renderList(); }; });
+  $("#listTabs").innerHTML = `<button data-pl="favorites">♥ Favourites</button>` + lib.playlists.map((p, i) => `<button data-pl="list" data-i="${i}">${esc(p.name)}</button>`).join("") + `<button data-pl="new">＋ Playlist</button>`;
+  $("#views").querySelectorAll(":scope > button").forEach(b => { b.classList.toggle("on", b.dataset.view === view && (view !== "list" || b.dataset.name === listName)); b.onclick = () => { selEnd(true); if (drill) { drill = null; document.body.classList.remove("drill"); $("#libName").textContent = "Library"; $("#libBack").hidden = true; } view = b.dataset.view; listName = b.dataset.name || ""; if (view === "phone" && phoneState === "denied") loadPhone(true); if (view === "recordings" && ANDROID) loadRecordings(); renderList(); }; });
+  $("#listTabs").querySelectorAll("button").forEach(b => b.onclick = () => {
+    if (b.dataset.pl === "new") return newPlaylist();
+    if (b.dataset.pl === "favorites") return openDrill("favorites", "", "Favourites");
+    const p = lib.playlists[+b.dataset.i]; if (p) openDrill("list", p.name, p.name);
+  });
   const n = ids.length;
   if (view === "phone") $("#storage").textContent = phoneState === "ok" ? `${n} song${n === 1 ? "" : "s"} on this phone` : "";
   else if (drill || view === "group") $("#storage").textContent = `${n} song${n === 1 ? "" : "s"}`;
@@ -1881,11 +1886,18 @@ function setMiniPlay(on) {
 }
 let npMode = "listen";
 // one waveform (with pinch zoom, seek, A/B, flags): on the home screen, or in Studio while that is open
+// the Tempo and Key rows live under the home waveform, and go back into Studio's Tempo & Key while it is open
+const MIX_ROWS = ["rowTempo", "rowKey", "rowChange"].map(id => { const el = $("#" + id), a = document.createComment(id); el.before(a); return [el, a]; });
 function placeWave() {
   const inStudio = !$("#np").hidden && npMode === "studio";
   const slot = inStudio ? $("#npWaveSlot") : $("#homeWave");
   if (wave.parentElement !== slot) slot.appendChild(wave);
-  $("#homeWave").hidden = !st.id || !songs[st.id] || inStudio;
+  const show = !!st.id && !!songs[st.id] && !inStudio;
+  $("#homeWave").hidden = !show; $("#homeMix").hidden = !show;
+  for (const [el, anchor] of MIX_ROWS) {
+    if (inStudio) { if (el.previousSibling !== anchor) anchor.after(el); }
+    else if (el.parentElement !== $("#homeMix")) $("#homeMix").appendChild(el);
+  }
   requestAnimationFrame(drawWave);
 }
 function setNpMode(m) {

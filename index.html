@@ -27,6 +27,7 @@
 <!-- MUSIC: the library is the home screen -->
 <main id="page-music" class="page on">
   <section class="homewave" id="homeWave" hidden></section>
+  <section class="homemix" id="homeMix" hidden></section>
   <div class="searchbar"><input type="search" id="filter" placeholder="Search songs, artists, albums"></div>
 
   <section class="hero" id="hero" hidden>
@@ -49,7 +50,7 @@
     <div class="libhead"><h2 id="libTitle"><button class="libback" id="libBack" hidden title="Back to all music">‹</button><span id="libName">Library</span></h2><button class="textbtn" id="selMusic">Select</button></div>
     <nav class="chips" id="views">
       <button data-view="phone" id="viewPhone" hidden>All music</button>
-      <button data-view="queue" class="on">Queue</button>
+      <button data-view="queue" class="on">Up next</button>
       <button data-view="artists" id="viewArtists" hidden>Artists</button>
       <button data-view="albums" id="viewAlbums" hidden>Albums</button>
       <button data-view="recent">Recent</button>
@@ -208,12 +209,12 @@
       </div>
 
       <div class="tab" id="tab-mix">
-        <div class="row"><label>Tempo</label><input type="range" id="speed" min="50" max="150" value="100"><span class="val" id="speedval">100%</span></div>
+        <div class="row" id="rowTempo"><label>Tempo</label><input type="range" id="speed" min="50" max="150" value="100"><span class="val" id="speedval">100%</span></div>
         <div class="row"><label>Target BPM</label><input type="number" id="bpmTarget" step="0.1" min="20" max="400"><span class="val" id="bpmFrom"></span></div>
-        <div class="row"><label>Key</label><button class="ghost" id="keyDown">−</button><span class="val" id="semis">±0 st</span><button class="ghost" id="keyUp">+</button><span class="val" id="keyResult"></span></div>
+        <div class="row" id="rowKey"><label>Key</label><button class="ghost" id="keyDown">−</button><span class="val" id="semis">±0 st</span><button class="ghost" id="keyUp">+</button><span class="val" id="keyResult"></span></div>
         <label class="check"><input type="checkbox" id="keepVoice" checked> Keep the voice's character when the key moves</label>
         <label class="check"><input type="checkbox" id="finer"> Finer engine (slower on a phone)</label>
-        <div class="row"><button class="ghost" id="resetChange">Reset</button><span class="status" id="changeStatus"></span></div>
+        <div class="row" id="rowChange"><button class="ghost" id="resetChange">Reset</button><span class="status" id="changeStatus"></span></div>
         <div class="faint">Rubber Band (GPL) runs in the phone; the song keeps playing as it was until the changed version is ready.</div>
       </div>
 
