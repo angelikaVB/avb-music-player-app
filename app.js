@@ -1897,6 +1897,9 @@ function updateMini() {
   $("#mini").hidden = !show; document.body.classList.toggle("hasmini", !!show);
   if (!st.id || !songs[st.id]) return;
   $("#miniTitle").textContent = $("#title").textContent;
+  // the song's name at the top of the home screen, with its format tag and length
+  $("#hTitle").textContent = $("#title").textContent;
+  $("#hSub").innerHTML = !st.buffer ? (st.loadErr || "Loading…") : subLine({ ...songs[st.id], duration: st.duration || songs[st.id].duration, artist: $("#npArtist").textContent || songs[st.id].artist });
   $("#miniSub").textContent = $("#npArtist").textContent || (isRecording(st.id) ? "Recording" : (st.info && st.info.fmt) || "");
   const dur = st.duration || songs[st.id].duration || 0, fmt = (st.info && st.info.fmt) || fmtOf(songs[st.id].name);
   $("#miniSub").textContent = !st.buffer ? (st.loadErr || "Loading…") : [$("#npArtist").textContent, fmt, dur ? fmtTime(dur) : ""].filter(Boolean).join(" · ");
@@ -1923,7 +1926,7 @@ function placeWave() {
   const slot = inStudio ? $("#npWaveSlot") : $("#homeWave");
   if (wave.parentElement !== slot) slot.appendChild(wave);
   const show = !!st.id && !!songs[st.id] && !inStudio;
-  $("#homeWave").hidden = !show; $("#homeMix").hidden = !show; $("#homeTransport").hidden = !show;
+  $("#homeWave").hidden = !show; $("#homeMix").hidden = !show; $("#homeTransport").hidden = !show; $("#homeTitle").hidden = !show;
   $("#cutBar").hidden = !show || !cutMode;
   $("#homeTools").hidden = !show;
   for (const [el, anchor] of MIX_ROWS) {
