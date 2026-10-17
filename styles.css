@@ -122,3 +122,16 @@ button.install { padding: 6px 10px; font-size: 13px; flex: none; }
 #recList li.now { background: rgba(239, 68, 68, .12); border-radius: 10px; }
 #recList li .thumb.rec { background: radial-gradient(circle at 50% 50%, #EF4444 0 26%, #3f0d1c 28% 100%); }
 #recList li.fresh .name::after { content: "  NEW"; color: #FCA5A5; font-size: 11px; font-weight: 800; }
+
+.lyrhead { margin-top: 0; } .spacer { flex: 1; }
+.lyrics { max-height: 52vh; overflow-y: auto; padding: 4px 2px 12px; font-size: 17px; line-height: 1.55; white-space: pre-wrap;
+  user-select: text; -webkit-user-select: text; scroll-behavior: smooth; }
+.lyrics .l { padding: 2px 6px; border-radius: 8px; color: var(--text2); transition: color .2s, background .2s; }
+.lyrics .l.now { color: #fff; background: rgba(139, 92, 246, .25); font-weight: 700; }
+.lyrics .l.gap { height: .7em; }
+.lyrics .empty { color: var(--text3); font-size: 14px; }
+#lyrText { width: 100%; min-height: 260px; background: var(--bg2); border: 1px solid var(--line2); border-radius: 10px; padding: 10px; color: var(--text); font-size: 15px; line-height: 1.5; }
+
+.player { display: flex; flex-direction: column; gap: 12px; padding: 0 12px; margin-bottom: 12px; }
+.recbig { flex: 1; font-size: 18px; padding: 16px; background: linear-gradient(90deg, #EF4444, #EC4899); }
+#tab-songs .row input[type=search] { flex: 1; min-width: 120px; }

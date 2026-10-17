@@ -17,23 +17,19 @@
   <div class="appname">AVB Music Player</div>
   <button class="install" id="installBtn" hidden>Install app</button>
   <nav class="tabs" id="pages">
-    <button data-page="play" class="on">Play</button>
-    <button data-page="library">Library</button>
+    <button data-page="music" class="on">Music</button>
+    <button data-page="recs">Recordings</button>
   </nav>
 </header>
 
-<main id="page-play" class="page on">
+<!-- the player: one, shared by both pages -->
+<div class="player">
   <section class="card header">
     <div class="cover" id="cover"></div>
     <div class="hcol">
       <div class="hrow"><div class="title" id="title">No song loaded</div><button class="icon" id="heart" title="Favourite">♡</button></div>
       <div class="badges" id="badges"></div>
     </div>
-  </section>
-
-  <section class="startbar" id="startbar">
-    <label class="primary filebtn big">+ Open files<input type="file" id="files2" multiple accept="audio/*,.wav,.flac,.mp3,.ogg,.m4a,.aac,.opus,.aiff,.aif"></label>
-    <button class="ghost rec big" id="recBtn2">● Record</button>
   </section>
 
   <section class="recbar" id="recbar">
@@ -71,23 +67,55 @@
     </div>
     <input type="range" id="seek" min="0" max="1000" value="0" class="seekbar">
   </section>
+</div>
+
+<!-- MUSIC -->
+<main id="page-music" class="page on">
+  <section class="startbar" id="startbar">
+    <label class="primary filebtn big">+ Open files<input type="file" id="files2" multiple accept="audio/*,.wav,.flac,.mp3,.ogg,.m4a,.aac,.opus,.aiff,.aif"></label>
+  </section>
 
   <section class="card">
     <nav class="pills" id="tools">
-      <button data-tab="intel" class="on">Music</button>
-      <button data-tab="recs">Recordings</button>
+      <button data-tab="songs" class="on">Songs</button>
+      <button data-tab="lyrics">Lyrics</button>
+      <button data-tab="intel">Info</button>
       <button data-tab="mix">Tempo &amp; Key</button>
       <button data-tab="save">Save</button>
       <button data-tab="loud">Loudness</button>
       <button data-tab="notes">Notes</button>
     </nav>
 
-    <div class="tab" id="tab-recs">
-      <div class="faint" id="recsInfo"></div>
-      <ul class="list" id="recList"></ul>
+    <div class="tab on" id="tab-songs">
+      <div class="row">
+        <input type="search" id="filter" placeholder="Search songs">
+        <button class="ghost" id="newList">+ Playlist</button>
+        <button class="ghost" id="makeDefault" hidden>Make default player</button>
+      </div>
+      <nav class="pills" id="views">
+        <button data-view="phone" id="viewPhone" hidden>All music</button>
+        <button data-view="queue" class="on">Queue</button>
+        <button data-view="favorites">Favourites</button>
+        <button data-view="recent">Recent</button>
+        <span id="listTabs"></span>
+      </nav>
+      <div class="faint" id="storage"></div>
+      <ul class="list" id="list"></ul>
     </div>
 
-    <div class="tab on" id="tab-intel">
+    <div class="tab" id="tab-lyrics">
+      <div class="row lyrhead">
+        <span class="faint" id="lyrSource"></span>
+        <span class="spacer"></span>
+        <button class="ghost" id="lyrCopy">Copy</button>
+        <button class="ghost" id="lyrEdit">Edit</button>
+      </div>
+      <div class="lyrics" id="lyrics"></div>
+      <textarea id="lyrText" hidden placeholder="Paste or type the lyrics. Lines like [01:23.45] make them follow the song."></textarea>
+      <div class="row end" id="lyrEditBtns" hidden><button class="ghost" id="lyrCancel">Cancel</button><button class="primary" id="lyrSave">Save lyrics</button></div>
+    </div>
+
+    <div class="tab" id="tab-intel">
       <div class="status" id="listen"></div>
       <div class="bigrow">
         <div class="big"><div class="cap">TEMPO</div><div class="bpm" id="bpm">—</div><div class="faint" id="bpmnote"></div></div>
@@ -104,7 +132,7 @@
       <div class="row"><label>Key</label><button class="ghost" id="keyDown">−</button><span class="val" id="semis">±0 st</span><button class="ghost" id="keyUp">+</button><span class="val" id="keyResult"></span></div>
       <label class="check"><input type="checkbox" id="keepVoice" checked> Keep the voice's character when the key moves</label>
       <label class="check"><input type="checkbox" id="finer"> Finer engine (slower on a phone)</label>
-      <div class="row"><button id="applyChange" class="primary">Apply</button><button class="ghost" id="resetChange">Reset</button><span class="status" id="changeStatus"></span></div>
+      <div class="row"><button class="ghost" id="resetChange">Reset</button><span class="status" id="changeStatus"></span></div>
       <div class="faint">Rubber Band (GPL) runs in the phone; the song keeps playing as it was until the changed version is ready.</div>
     </div>
 
@@ -129,25 +157,14 @@
   </section>
 </main>
 
-<main id="page-library" class="page">
+<!-- RECORDINGS -->
+<main id="page-recs" class="page">
+  <section class="startbar" id="recStart">
+    <button class="primary rec big recbig" id="recBtn" title="Record from the microphone or a USB interface">● Record</button>
+  </section>
   <section class="card">
-    <div class="row">
-      <label class="primary filebtn">+ Open files<input type="file" id="files" multiple accept="audio/*,.wav,.flac,.mp3,.ogg,.m4a,.aac,.opus,.aiff,.aif"></label>
-      <button class="ghost rec" id="recBtn" title="Record from the microphone or a USB interface">● Record</button>
-      <button class="ghost" id="newList">+ Playlist</button>
-      <button class="ghost" id="makeDefault" hidden>Make default player</button>
-      <input type="search" id="filter" placeholder="Filter">
-    </div>
-    <nav class="pills" id="views">
-      <button data-view="phone" id="viewPhone" hidden>All music</button>
-      <button data-view="queue" class="on">Queue</button>
-      <button data-view="favorites">Favourites</button>
-      <button data-view="recent">Recent</button>
-      <button data-view="recordings">Recordings</button>
-      <span id="listTabs"></span>
-    </nav>
-    <div class="faint" id="storage"></div>
-    <ul class="list" id="list"></ul>
+    <div class="faint" id="recsInfo"></div>
+    <ul class="list" id="recList"></ul>
   </section>
 </main>
 
