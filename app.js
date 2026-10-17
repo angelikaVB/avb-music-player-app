@@ -839,7 +839,7 @@ function renderList() {
   ids = ids.filter(id => !isRecording(id) && !String(id).startsWith("r:"));
   ids = ids.filter(id => songs[id] && ((songs[id].name + " " + (songs[id].artist || "") + " " + (songs[id].album || "")).toLowerCase().includes(filter)));
   const el = $("#list");
-  el.innerHTML = ids.map((id, i) => { const s = songs[id]; return `<li data-id="${id}" class="${id === st.id ? "now" : ""}"><div class="num">${id === st.id ? "♪" : i + 1}</div><button class="fav${lib.favorites.includes(id) ? " on" : ""}" title="Favourite">${HEART}</button><div class="n"><div class="name">${s.name.replace(/\.[^.]+$/, "")}</div><div class="sub">${subLine(s)}</div></div>${rowEnd(id, "music")}</li>`; }).join("")
+  el.innerHTML = ids.map((id, i) => { const s = songs[id]; return `<li data-id="${id}" class="${id === st.id ? "now" : ""}"><div class="nf"><div class="num">${id === st.id ? "♪" : i + 1}</div><button class="fav${lib.favorites.includes(id) ? " on" : ""}" title="Favourite">${HEART}</button></div><div class="n"><div class="name">${s.name.replace(/\.[^.]+$/, "")}</div><div class="sub">${subLine(s)}</div></div>${rowEnd(id, "music")}</li>`; }).join("")
     || `<li class="muted">${emptyText()}</li>`;
   shownIds.music = ids; el.style.setProperty("--numw", String(ids.length).length + "ch");
   el.querySelectorAll("li[data-id]").forEach(li => {

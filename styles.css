@@ -659,3 +659,7 @@ body.hasmini .snack { bottom: calc(76px + env(safe-area-inset-bottom)); }
 /* numbers never clipped: equal-width digits, a little spare room, nothing overlapping them */
 .list li .num { width: auto; min-width: calc(var(--numw, 2ch) + 3px); overflow: visible; white-space: nowrap; font-feature-settings: "tnum" 1; font-variant-numeric: tabular-nums; }
 .list li .fav { margin: 0 -2px 0 0; }
+/* number and heart side by side with a small gap; the titles still start in one column */
+.list li .nf { display: flex; align-items: center; gap: 3px; flex: none; width: calc(var(--numw, 2ch) + 30px); }
+.list li .nf .num { min-width: 0; width: auto; }
+.list li .nf .fav { width: 24px; margin: 0; }
