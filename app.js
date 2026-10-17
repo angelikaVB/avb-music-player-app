@@ -92,6 +92,7 @@ async function loadSong(id, autoplay = true) {
   st.id = id; st.buffer = null; st.loadErr = ""; st.duration = 0; st.peaks = null;
   if (songs[id]) $("#title").textContent = songs[id].name.replace(/\.[^.]+$/, "");
   $("#npArtist").textContent = ""; setMiniPlay(false);
+  cutMode = false; cutFmt = "";
   updateMini(); placeWave(); renderList(); if ($("#page-recs").classList.contains("on")) renderRecList();
   let rec = null;
   if (songs[id] && songs[id].url) {
@@ -276,6 +277,7 @@ function prevTrack() {
 // ---------------------------------------------------------------- markers & loop
 function syncMarkers() {
   $("#markA").classList.toggle("on", st.a !== null); $("#markB").classList.toggle("on", st.b !== null);
+  updateCut();
   const active = st.loopOn && st.a !== null && st.b !== null;
   send({ cmd: "loop", loop: active ? [Math.round(st.a * st.sr), Math.round(st.b * st.sr)] : null });
   drawWave(); refreshSave();
@@ -329,7 +331,7 @@ function effKey() { const f = fixOf(); return f.key || (st.music && st.music.key
 function refreshMusic() {
   const m = st.music || {}; const sp = +$("#speed").value; const fx = fixOf();
   $("#speedval").textContent = sp + "%"; $("#speedQuick").value = String(sp / 100);
-  { const b0 = effBpm(); $("#speedBpm").textContent = b0 ? `${(b0 * sp / 100).toFixed(1)} BPM` : "— BPM"; }
+  { const b0 = effBpm(); $("#speedBpm").textContent = (b0 ? `${(b0 * sp / 100).toFixed(1)} BPM` : "— BPM") + (sp !== 100 ? ` · ${sp}%` : ""); }
   $("#semis").textContent = st.semis ? `${st.semis > 0 ? "+" : ""}${st.semis} st` : "±0 st";
   $("#tempoReset").classList.toggle("on", sp !== 100); $("#keyReset").classList.toggle("on", !!st.semis);
   const bpm = effBpm();
@@ -847,12 +849,11 @@ function renderList() {
     wireRow(li, "music");
   });
   el.classList.toggle("selecting", sel.where === "music"); updateSelbar();
-  $("#listTabs").innerHTML = `<button data-pl="favorites">♥ Favourites</button>` + lib.playlists.map((p, i) => `<button data-pl="list" data-i="${i}">${esc(p.name)}</button>`).join("") + `<button data-pl="new">＋ Playlist</button>`;
+  $("#listTabs").innerHTML = lib.playlists.map((p, i) => `<button data-pl="list" data-i="${i}" class="${view === "list" && listName === p.name ? "on" : ""}">${esc(p.name)}</button>`).join("") + `<button data-pl="new">＋ Playlist</button>`;
   $("#views").querySelectorAll(":scope > button").forEach(b => { b.classList.toggle("on", b.dataset.view === view && (view !== "list" || b.dataset.name === listName)); b.onclick = () => { selEnd(true); if (drill) { drill = null; document.body.classList.remove("drill"); $("#libName").textContent = "Library"; $("#libBack").hidden = true; } view = b.dataset.view; listName = b.dataset.name || ""; if (view === "phone" && phoneState === "denied") loadPhone(true); if (view === "recordings" && ANDROID) loadRecordings(); renderList(); }; });
   $("#listTabs").querySelectorAll("button").forEach(b => b.onclick = () => {
     if (b.dataset.pl === "new") return newPlaylist();
-    if (b.dataset.pl === "favorites") return openDrill("favorites", "", "Favourites");
-    const p = lib.playlists[+b.dataset.i]; if (p) openDrill("list", p.name, p.name);
+    const p = lib.playlists[+b.dataset.i]; if (p) { selEnd(true); view = "list"; listName = p.name; renderList(); }
   });
   if (ANDROID) $("#viewAdded").hidden = !Object.keys(songs).some(id => !songs[id].url && !isRecording(id));
   const n = ids.length;
@@ -1113,7 +1114,7 @@ function newPlaylist(items = []) {
   ask("New playlist", "", `Playlist ${lib.playlists.length + 1}`, "Create").then(name => { if (!name) return; newPlaylistNamed(name, items); });
 }
 function newPlaylistNamed(name, items) {
-  lib.playlists.push({ name: name.trim(), items: items.slice() }); save("playlists"); openDrill("list", name.trim(), name.trim());
+  lib.playlists.push({ name: name.trim(), items: items.slice() }); save("playlists"); selEnd(true); view = "list"; listName = name.trim(); renderList();
 }
 
 // ---------------------------------------------------------------- lyrics
@@ -1902,12 +1903,12 @@ function updateMini() {
 // the round play / pause icon, and the equaliser moves only while music plays
 function setMiniPlay(on) {
   $("#miniPlay").innerHTML = on
-    ? `<svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="9.5"/><path d="M10 8.5v7M14 8.5v7"/></svg>`
-    : `<svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="#fff" stroke-width="1.8" stroke-linejoin="round"><circle cx="12" cy="12" r="9.5"/><path d="M10 8.3v7.4l6-3.7z"/></svg>`;
+    ? `<svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="#FF7A1A" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9.5"/><path d="M10 8.5v7M14 8.5v7"/></svg>`
+    : `<svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="#FF7A1A" stroke-width="2" stroke-linejoin="round"><circle cx="12" cy="12" r="9.5"/><path d="M10 8.3v7.4l6-3.7z"/></svg>`;
   $("#mini").classList.toggle("playing", !!on);
   $("#hPlay").innerHTML = on
-    ? `<svg viewBox="0 0 24 24" width="30" height="30" fill="#15133A"><rect x="7" y="5.5" width="3.6" height="13" rx="1"/><rect x="13.4" y="5.5" width="3.6" height="13" rx="1"/></svg>`
-    : `<svg viewBox="0 0 24 24" width="30" height="30" fill="#15133A"><path d="M8.5 5.8v12.4L18.5 12z"/></svg>`;
+    ? `<svg viewBox="0 0 24 24" width="30" height="30" fill="#fff"><rect x="7" y="5.5" width="3.6" height="13" rx="1"/><rect x="13.4" y="5.5" width="3.6" height="13" rx="1"/></svg>`
+    : `<svg viewBox="0 0 24 24" width="30" height="30" fill="#fff"><path d="M8.5 5.8v12.4L18.5 12z"/></svg>`;
 }
 let npMode = "listen";
 // one waveform (with pinch zoom, seek, A/B, flags): on the home screen, or in Studio while that is open
@@ -1919,6 +1920,8 @@ function placeWave() {
   if (wave.parentElement !== slot) slot.appendChild(wave);
   const show = !!st.id && !!songs[st.id] && !inStudio;
   $("#homeWave").hidden = !show; $("#homeMix").hidden = !show; $("#homeTransport").hidden = !show;
+  $("#cutBar").hidden = !show || !cutMode;
+  $("#homeTools").hidden = !show;
   for (const [el, anchor] of MIX_ROWS) {
     if (inStudio) { if (el.previousSibling !== anchor) anchor.after(el); }
     else if (el.parentElement !== $("#homeMix")) $("#homeMix").appendChild(el);
@@ -1944,6 +1947,65 @@ $("#npMode").querySelectorAll("button").forEach(b => b.onclick = () => setNpMode
 $("#mini").onclick = e => { if (e.target.closest(".minibtn")) return; openNP(); };
 $("#miniPlay").onclick = e => { e.stopPropagation(); togglePlay(); };   // the bar's buttons never open Now Playing
 $("#miniPrev").onclick = e => { e.stopPropagation(); prevTrack(); };
+// ---- Cut: mark a piece on the home waveform, keep it or remove it, as a new file
+var cutMode = false, cutFmt = "";   // var: syncMarkers can run before this line
+function defaultCutFmt() {
+  // the file's own format: a 24-bit WAV gives a 24-bit WAV, an MP3 an MP3 at (up to) its own rate
+  const f = st.info && st.info.fmt, bits = st.info && st.info.bits;
+  if (bits && (f === "FLAC")) return `flac-${bits > 16 ? 24 : 16}`;
+  if (bits) return `wav-${bits >= 32 ? 32 : bits > 16 ? 24 : 16}`;
+  const kb = sourceKbps() || 320;
+  return "mp3-" + ([320, 256, 192, 128].find(n => n <= kb + 8) || 128);
+}
+const fmtLabel = v => { const o = $("#fmt").querySelector(`option[value="${v}"]`); return o ? o.textContent : v; };
+function updateCut() {
+  if (!$("#cutA")) return;
+  const both = st.a !== null && st.b !== null;
+  $("#cutA").classList.toggle("on", st.a !== null); $("#cutB").classList.toggle("on", st.b !== null);
+  $("#cutLen").textContent = both ? `${fmtTime(st.a)} – ${fmtTime(st.b)}  ·  ${(st.b - st.a).toFixed(1)} s`
+    : st.a !== null ? `Starts at ${fmtTime(st.a)}. Now play or tap to where it ends, then tap End here.` : "Play or tap to where the piece starts, then tap Start here.";
+  $("#cutKeep").disabled = $("#cutRemove").disabled = !both || !!saving; $("#cutLoop").disabled = !both;
+  $("#cutLoop").classList.toggle("on", both && st.loopOn);
+  if (!cutFmt && st.buffer) cutFmt = defaultCutFmt();
+  $("#cutFmt").textContent = cutFmt ? `as ${fmtLabel(cutFmt)} ▾` : "";
+}
+function openCut() {
+  if (!st.buffer) { toast("Load a song first"); return; }
+  cutMode = true; cutFmt = defaultCutFmt(); placeWave(); updateCut();
+}
+function closeCut() { cutMode = false; st.a = st.b = null; st.loopOn = false; syncMarkers(); placeWave(); }
+$("#hCut").onclick = () => cutMode ? closeCut() : openCut();
+// the tools, one tap from the home screen: Now Playing opens on that tool
+$("#homeTools").querySelectorAll("button").forEach(b => b.onclick = () => {
+  const t = b.dataset.tool;
+  openNP(t === "lyrics" ? "listen" : "studio");
+  if (t !== "lyrics") selectTool(t);
+  requestAnimationFrame(() => { const el = t === "lyrics" ? $("#tab-lyrics") : $(".toolsbox"); $("#npScroll").scrollTop = el.offsetTop - 70; });
+});
+$("#cutClose").onclick = closeCut;
+$("#cutA").onclick = () => { if (!st.buffer) return; st.a = st.pos; if (st.b !== null && st.b <= st.a) st.b = null; syncMarkers(); };
+$("#cutB").onclick = () => { if (!st.buffer) return; st.b = st.pos; if (st.a === null) st.a = 0; if (st.a > st.b) [st.a, st.b] = [st.b, st.a]; if (st.b - st.a < 0.05) { st.b = null; toast("The end must come after the start"); } syncMarkers(); };
+$("#cutLoop").onclick = () => { if (st.a === null || st.b === null) return; st.loopOn = !st.loopOn; syncMarkers(); if (st.loopOn) { seek(st.a); if (!st.playing) play(); } };
+$("#cutFmt").onclick = () => {
+  const items = [];
+  for (const o of $("#fmt").querySelectorAll("option")) {
+    const [k, n] = o.value.split("-"), why = saveReason("keep", { kind: k, n: +n });
+    if (why && !why.startsWith("Mark")) continue;                                // above the file's own quality
+    items.push({ label: o.textContent + (o.value === cutFmt ? "  ✓" : ""), run: () => { cutFmt = o.value; updateCut(); } });
+  }
+  sheet(items, "Save the piece as");
+};
+async function cutSave(part) {
+  if (st.a === null || st.b === null || saving) return;
+  $("#part").value = part; $("#fmt").value = cutFmt; refreshSave();
+  const why = saveReason(part, fmtChoice());
+  if (why) { toast(why); return; }
+  const mirror = setInterval(() => { $("#cutStatus").textContent = $("#saveStatus").textContent; }, 300);
+  await saveCopy();
+  clearInterval(mirror); $("#cutStatus").textContent = $("#saveStatus").textContent; updateCut();
+}
+$("#cutKeep").onclick = () => cutSave("keep");
+$("#cutRemove").onclick = () => cutSave("remove");
 // Stop: the music stops and goes back to the start
 function stopPlay() { if (!st.buffer) return; pause(); seek(0); }
 $("#hStop").onclick = stopPlay; $("#npStop").onclick = stopPlay;

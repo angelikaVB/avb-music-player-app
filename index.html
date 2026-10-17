@@ -32,9 +32,32 @@
     <button class="hbtn" id="hPrev" title="Previous"><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="#fff" stroke-width="1.9" stroke-linejoin="round" stroke-linecap="round"><path d="M18 5v14L8 12z"/><path d="M6 5v14"/></svg></button>
     <button class="hbtn hplay" id="hPlay" title="Play / pause"></button>
     <button class="hbtn" id="hStop" title="Stop"><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="#fff" stroke-width="1.9" stroke-linejoin="round" stroke-linecap="round"><rect x="6.5" y="6.5" width="11" height="11" rx="1.5"/></svg></button>
+    <button class="hbtn hcut" id="hCut" title="Cut a piece"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="#fff" stroke-width="1.9" stroke-linecap="round"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M8.6 7.6 20 18M8.6 16.4 20 6"/></svg></button>
     <button class="hbtn" id="hNext" title="Next"><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="#fff" stroke-width="1.9" stroke-linejoin="round" stroke-linecap="round"><path d="M6 5v14l10-7z"/><path d="M18 5v14"/></svg></button>
   </section>
+  <section class="cutbar" id="cutBar" hidden>
+    <div class="cutrow">
+      <button class="cutmark" id="cutA">⟦ Start here</button>
+      <button class="cutmark" id="cutB">End here ⟧</button>
+      <button class="rst" id="cutClose" title="Close Cut">✕</button>
+    </div>
+    <div class="cutinfo" id="cutLen">Play or tap to where the piece starts, then tap Start here.</div>
+    <div class="cutrow">
+      <button class="cutbtn" id="cutLoop">↻ Loop</button>
+      <button class="cutbtn keep" id="cutKeep">Keep piece</button>
+      <button class="cutbtn" id="cutRemove">Remove piece</button>
+    </div>
+    <div class="cutfoot"><button class="textbtn" id="cutFmt"></button><span class="status" id="cutStatus"></span></div>
+  </section>
   <section class="homemix" id="homeMix" hidden></section>
+  <nav class="chips hometools" id="homeTools" hidden>
+    <button data-tool="lyrics">Lyrics</button>
+    <button data-tool="intel">Info</button>
+    <button data-tool="eq">EQ</button>
+    <button data-tool="loud">Loudness</button>
+    <button data-tool="notes">Notes</button>
+    <button data-tool="save">Save copy</button>
+  </nav>
   <div class="searchbar"><input type="search" id="filter" placeholder="Search songs, artists, albums"></div>
 
   <section class="hero" id="hero" hidden>
@@ -58,11 +81,12 @@
     <nav class="chips" id="views">
       <button data-view="phone" id="viewPhone" hidden>All music</button>
       <button data-view="queue" class="on" id="viewQueue">My songs</button>
+      <button data-view="favorites">♥ Favourites</button>
+      <button data-view="recent">Recent</button>
+      <span id="listTabs"></span>
       <button data-view="added" id="viewAdded" hidden>Added</button>
       <button data-view="artists" id="viewArtists" hidden>Artists</button>
       <button data-view="albums" id="viewAlbums" hidden>Albums</button>
-      <button data-view="recent">Recent</button>
-      <span id="listTabs"></span>
     </nav>
     <div class="faint" id="storage"></div>
     <ul class="list" id="list"></ul>
@@ -131,7 +155,7 @@
 <section class="np" id="np" hidden>
   <div class="nptop">
     <button class="npclose" id="npClose" title="Close"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></button>
-    <div class="seg" id="npMode"><button data-mode="listen" class="on">Listen</button><button data-mode="studio">Studio</button></div>
+    <div class="seg" id="npMode"><button data-mode="listen" class="on">Listen</button><button data-mode="studio">Tools</button></div>
     <span class="npreclabel">Recording</span>
     <button class="npicon" id="shareBtn" title="Share this song"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V3M7 8l5-5 5 5M5 13v6a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6"/></svg></button>
   </div>

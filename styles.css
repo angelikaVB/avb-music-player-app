@@ -617,3 +617,27 @@ body.hasmini .snack { bottom: calc(76px + env(safe-area-inset-bottom)); }
 .homemix #rowChange:has(#changeStatus:empty) { display: none; }
 .homemix .ghost { min-width: 36px; height: 34px; padding: 0 10px; }
 #keyResult.moved { color: #F0ABFC; }
+/* play buttons: saturated bright orange */
+.hbtn.hplay, .controls .play { background: #FF6A00; background: radial-gradient(circle at 35% 30%, #FF9A3C, #FF6A00 65%); color: #fff; box-shadow: 0 8px 22px rgba(255,106,0,.45); }
+.controls .play { color: #fff; }
+.rowplay { border-color: #FF7A1A; color: #FF7A1A; }
+.hbtn.hplay, .controls .play { background: #FF6A00; box-shadow: 0 8px 24px rgba(255,106,0,.55); }
+.homemix #speedval { display: none; }
+.homemix .row label { min-width: 40px; }
+
+/* Cut */
+.hbtn.hcut { width: 40px; }
+.cutbar { margin: -4px 0 12px; padding: 12px; border-radius: 16px; background: rgba(255,106,0,.08); box-shadow: inset 0 0 0 1px rgba(255,122,26,.35); }
+.cutrow { display: flex; gap: 8px; align-items: center; }
+.cutrow + .cutrow { margin-top: 8px; }
+.cutmark { flex: 1; height: 40px; border-radius: 12px; border: 1.5px solid rgba(255,255,255,.18); background: transparent; color: #fff; font-weight: 800; font-size: 14px; }
+.cutmark.on { border-color: #FF7A1A; color: #FFB27A; background: rgba(255,122,26,.12); }
+.cutinfo { margin: 8px 2px 0; color: var(--text2); font-size: 13.5px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.cutbtn { flex: 1; height: 42px; border-radius: 12px; border: 0; background: rgba(255,255,255,.08); color: #fff; font-weight: 800; font-size: 13.5px; white-space: nowrap; }
+.cutbtn.keep { background: #FF6A00; }
+.cutbtn.on { background: rgba(255,122,26,.3); }
+.cutbtn:disabled { opacity: .4; }
+.cutfoot { display: flex; align-items: center; gap: 10px; margin-top: 6px; }
+.cutfoot .status { font-size: 12.5px; color: var(--text3); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hometools { margin: 0 -16px 4px; padding: 0 16px; }
+.hometools button { background: rgba(255,255,255,.06); color: var(--text2); font-size: 13px; padding: 7px 13px; }
