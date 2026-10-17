@@ -980,6 +980,8 @@ async function shareMany(ids) {
   } else toast("This browser cannot share several files at once");
   selEnd();
 }
+// a tap outside a menu closes it (and does nothing else)
+$("#shade").addEventListener("click", e => { e.preventDefault(); $("#sheet").classList.remove("on"); });
 function sheet(items, title) {
   const s = $("#sheet");
   s.innerHTML = (title ? `<div class="sheettitle">${title.replace(/</g, "&lt;")}</div>` : "") + items.map((it, i) => `<button class="${it.danger ? "danger" : ""}" data-i="${i}">${it.label}</button>`).join("") + `<button data-i="-1">Cancel</button>`;

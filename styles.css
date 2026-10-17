@@ -546,3 +546,9 @@ body.selecting { padding-bottom: 140px; }
 .list li.now { background: none; }
 .list li.now .num { font-size: 14px; }
 .list li .more { width: 30px; margin-right: -6px; }
+/* the dim backdrop behind a menu: tapping it closes the menu */
+.shade { display: none; position: fixed; inset: 0; z-index: 9; background: rgba(5, 4, 15, .55); }
+#sheet.on ~ .shade { display: block; }
+/* menus: no tall empty strip under Cancel */
+.sheet { padding-bottom: calc(6px + env(safe-area-inset-bottom)); }
+.sheet button:last-child { padding: 12px 10px; margin-top: 2px; }
