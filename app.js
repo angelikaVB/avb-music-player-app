@@ -831,6 +831,7 @@ function renderList() {
   if (view === "artists" || view === "albums") { renderGroups(view === "artists" ? "artist" : "album", filter); return; }
   let ids = view === "group" ? phoneIds.filter(x => !lib.hidden.includes(x) && (songs[x][groupBy] || "Unknown") === groupName)
     : view === "phone" ? phoneIds.filter(x => !lib.hidden.includes(x)) : view === "recordings" ? recordingIds : view === "queue" ? lib.queue : view === "favorites" ? lib.favorites
+    : view === "added" ? Object.keys(songs).filter(id => !songs[id].url && !isRecording(id)).sort((a, b) => (songs[b].added || 0) - (songs[a].added || 0))
     : view === "recent" ? lib.recent : (lib.playlists.find(p => p.name === listName) || { items: [] }).items;
   ids = ids.filter(id => !isRecording(id) && !String(id).startsWith("r:"));
   ids = ids.filter(id => songs[id] && ((songs[id].name + " " + (songs[id].artist || "") + " " + (songs[id].album || "")).toLowerCase().includes(filter)));
@@ -853,8 +854,10 @@ function renderList() {
     if (b.dataset.pl === "favorites") return openDrill("favorites", "", "Favourites");
     const p = lib.playlists[+b.dataset.i]; if (p) openDrill("list", p.name, p.name);
   });
+  if (ANDROID) $("#viewAdded").hidden = !Object.keys(songs).some(id => !songs[id].url && !isRecording(id));
   const n = ids.length;
   if (view === "phone") $("#storage").textContent = phoneState === "ok" ? `${n} song${n === 1 ? "" : "s"} on this phone` : "";
+  else if (view === "added") $("#storage").textContent = `${n} song${n === 1 ? "" : "s"} opened with +, kept in the app`;
   else if (drill || view === "group") $("#storage").textContent = `${n} song${n === 1 ? "" : "s"}`;
   else if (view === "recordings") $("#storage").textContent = ANDROID ? `${n} recording${n === 1 ? "" : "s"} · saved in Recordings/AVB Music Player on your phone` : `${n} recording${n === 1 ? "" : "s"} · kept in the app`;
   else if (!ANDROID && navigator.storage && navigator.storage.estimate) navigator.storage.estimate().then(e => $("#storage").textContent = `${Object.keys(songs).length} songs stored in the app · ${(e.usage / 1e6).toFixed(0)} MB of ${(e.quota / 1e9).toFixed(1)} GB`);
@@ -2346,7 +2349,7 @@ function loadRecordings() {
   recordingIds = phoneEntries(r, "recording", "r:"); renderList(); if ($("#page-recs").classList.contains("on")) renderRecList();
 }
 window.avbPhoneReady = () => { loadPhone(false); loadRecordings(); };
-if (ANDROID) { $("#viewPhone").hidden = false; $("#viewArtists").hidden = false; $("#viewAlbums").hidden = false; setTimeout(() => { loadPhone(true); loadRecordings(); }, 300); }
+if (ANDROID) { $("#viewQueue").hidden = true; if (view === "queue") view = "phone"; $("#viewPhone").hidden = false; $("#viewArtists").hidden = false; $("#viewAlbums").hidden = false; setTimeout(() => { loadPhone(true); loadRecordings(); }, 300); }
 else recordingIds = Object.values(songs).filter(x => x.kind === "recording").sort((a, b) => b.added - a.added).map(x => x.id);
 if (ANDROID && ANDROID.askDefault) { $("#makeDefault").hidden = false; $("#makeDefault").onclick = () => ANDROID.askDefault(); }
 window.avbBack = () => {
