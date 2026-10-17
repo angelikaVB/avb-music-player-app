@@ -2016,7 +2016,8 @@ $("#settingsBtn").onclick = () => {
   if (ANDROID && ANDROID.askDefault) items.push({ label: "Make AVB Player your default player", run: () => ANDROID.askDefault() });
   items.push({ label: ANDROID ? "Add a song from your files (Drive, WhatsApp…)" : "Add music from your files", run: () => $("#files2").click() });
   if (!ANDROID && !$("#installBtn").hidden) items.push({ label: "Install the app on this phone", run: () => $("#installBtn").click() });
-  sheet(items, "Settings");
+  const ver = ANDROID && ANDROID.version ? ANDROID.version() : "";
+  sheet(items, ver ? `Settings · AVB Player ${ver}` : "Settings");
 };
 
 // ---------------------------------------------------------------- home: shelves, mini player, Now Playing
@@ -2563,7 +2564,12 @@ function showInstallHint() {
   const ua = navigator.userAgent;
   const inApp = /; wv\)|FBAN|FBAV|Instagram|Line\/|WhatsApp|GSA\//.test(ua);
   const chrome = /Chrome\//.test(ua) && !/EdgA|SamsungBrowser|OPR|YaBrowser/.test(ua);
-  $("#installText").innerHTML = inApp
+  const ios = /iPhone|iPad|iPod/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1);
+  $("#installText").innerHTML = ios
+    ? (/CriOS|FxiOS|EdgiOS|WhatsApp|FBAN|Instagram/.test(ua)
+        ? "Open this link in <b>Safari</b>, then tap <b>Share</b> (the square with the arrow) → <b>Add to Home Screen</b>."
+        : "Tap <b>Share</b> (the square with the arrow, at the bottom) → <b>Add to Home Screen</b> → <b>Add</b>. AVB Player then opens from its icon.")
+    : inApp
     ? "This page is open inside another app. Tap ⋮ and choose <b>Open in Chrome</b>, then tap <b>Install app</b> at the top."
     : chrome
       ? "You are in the browser. Tap ⋮ (top right) → <b>Install app</b> (or <b>Add to Home screen</b> → <b>Install</b>, not “Create shortcut”). If you made a shortcut before, delete it first."
