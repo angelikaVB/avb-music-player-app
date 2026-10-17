@@ -656,3 +656,6 @@ body.hasmini .snack { bottom: calc(76px + env(safe-area-inset-bottom)); }
 .ft-ogg { background: #34D399; }
 .ft-aif { background: #2DD4BF; }
 .ft-other { background: #94A3B8; }
+/* numbers never clipped: equal-width digits, a little spare room, nothing overlapping them */
+.list li .num { width: auto; min-width: calc(var(--numw, 2ch) + 3px); overflow: visible; white-space: nowrap; font-feature-settings: "tnum" 1; font-variant-numeric: tabular-nums; }
+.list li .fav { margin: 0 -2px 0 0; }
