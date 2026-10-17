@@ -1,4 +1,4 @@
-// AVB Music Player - phone version.  Everything runs on the phone: songs you
+// AVB Player - phone version.  Everything runs on the phone: songs you
 // open are copied into the app's own storage, analyzed in a worker, played by
 // an AudioWorklet, re-timed/re-pitched by Rubber Band in WebAssembly.
 
@@ -146,7 +146,7 @@ async function loadSong(id, autoplay = true) {
   if (st.speed !== 1 || st.semis) applyChange();            // the sliders carry over to the next song
   if (autoplay) play();
   updateMini(); placeWave();
-  if ("mediaSession" in navigator) navigator.mediaSession.metadata = new MediaMetadata({ title: $("#title").textContent, artist: "AVB Music Player" });
+  if ("mediaSession" in navigator) navigator.mediaSession.metadata = new MediaMetadata({ title: $("#title").textContent, artist: "AVB Player" });
   renderList();
 }
 // ---- our own reader for uncompressed files the browser engine refuses
@@ -813,7 +813,7 @@ function subLine(s) {
   return `<span class="ft ft-${kind}">${esc(f)}</span>` + bits.join(" · ");   // no folder: the user does not want "Download" anywhere
 }
 function emptyText() {
-  if (view === "phone") return phoneState === "denied" ? "Allow AVB Music Player to see your music: tap All music again, then Allow."
+  if (view === "phone") return phoneState === "denied" ? "Allow AVB Player to see your music: tap All music again, then Allow."
     : phoneState === "loading" ? "Looking for music on your phone…" : "No music found on this phone.";
   if (view === "recordings") return "No recordings yet: tap ● Record on the Play page.";
   if (view === "queue") return ANDROID ? "Pick songs in All music, or + Open files." : "Open files to start.";
@@ -828,7 +828,7 @@ function renderGroups(key, filter) {
   const rows = [...groups.entries()].filter(([g]) => g.toLowerCase().includes(filter)).sort((a, b) => a[0] === "Unknown" ? 1 : b[0] === "Unknown" ? -1 : a[0].localeCompare(b[0]));
   const el = $("#list");
   el.innerHTML = rows.map(([g, n]) => `<li class="grouprow" data-g="${encodeURIComponent(g)}"><div class="n"><div class="name">${g.replace(/</g, "&lt;")}</div><div class="sub">${n} song${n === 1 ? "" : "s"}</div></div></li>`).join("")
-    || `<li class="muted">${phoneState === "ok" ? "Nothing here." : "Allow AVB Music Player to see your music first (All music)."}</li>`;
+    || `<li class="muted">${phoneState === "ok" ? "Nothing here." : "Allow AVB Player to see your music first (All music)."}</li>`;
   el.querySelectorAll("li[data-g]").forEach(li => li.onclick = () => { groupBy = key; groupName = decodeURIComponent(li.dataset.g); openDrill("group", "", groupName); });
   $("#storage").textContent = `${rows.length} ${key === "artist" ? "artist" : "album"}${rows.length === 1 ? "" : "s"}`;
   $("#views").querySelectorAll(":scope > button").forEach(b => { b.classList.toggle("on", b.dataset.view === view); b.onclick = () => { view = b.dataset.view; listName = b.dataset.name || ""; if (view === "phone" && phoneState === "denied") loadPhone(true); renderList(); }; });
@@ -1093,7 +1093,7 @@ async function removeFromApp(id, quiet) {
   else { await tx("songs", "readwrite", s2 => s2.delete(id)); delete songs[id]; recordingIds = recordingIds.filter(x => x !== id); }
   forget(id);
   renderList(); renderRecList();
-  if (!quiet) toast("Removed from AVB Music Player. The file is still on your phone.");
+  if (!quiet) toast("Removed from AVB Player. The file is still on your phone.");
 }
 let erasing = false;      // forget() inside a delete: the markers go as well
 // deleting a file from the phone: our question first, then Android's own confirmation
@@ -2013,7 +2013,7 @@ $("#settingsBtn").onclick = () => {
   ];
   items.push({ label: "Export all markers and notes (CSV)", run: exportAllMarks });
   if (lib.hidden.length) items.push({ label: `Show removed songs again (${lib.hidden.length})`, run: () => { const n = lib.hidden.length; lib.hidden = []; save("hidden"); renderList(); renderRecList(); toast(`${n} back in the player`); } });
-  if (ANDROID && ANDROID.askDefault) items.push({ label: "Make AVB Music Player your default player", run: () => ANDROID.askDefault() });
+  if (ANDROID && ANDROID.askDefault) items.push({ label: "Make AVB Player your default player", run: () => ANDROID.askDefault() });
   items.push({ label: ANDROID ? "Add a song from your files (Drive, WhatsApp…)" : "Add music from your files", run: () => $("#files2").click() });
   if (!ANDROID && !$("#installBtn").hidden) items.push({ label: "Install the app on this phone", run: () => $("#installBtn").click() });
   sheet(items, "Settings");
@@ -2448,7 +2448,7 @@ function exportAllMarks() {
   const rows = [];
   for (const [id, list] of Object.entries(lib.marks)) for (const m of list) rows.push([songs[id] ? songs[id].name : id.replace(/^[a-z]+[:|]/, ""), m]);
   if (!rows.length) { toast("No markers yet"); return; }
-  saveTextFile(marksCsv(rows), "AVB Music Player - all markers.csv", "text/csv");
+  saveTextFile(marksCsv(rows), "AVB Player - all markers.csv", "text/csv");
 }
 // the snack bar: a short message with one action (Add note, Undo)
 let snackTimer = 0;
@@ -2553,7 +2553,7 @@ if (!ANDROID && "serviceWorker" in navigator && location.protocol !== "file:") n
 const standalone = !!ANDROID || matchMedia("(display-mode: standalone)").matches || navigator.standalone;
 let installEvent = null;
 window.addEventListener("beforeinstallprompt", e => { e.preventDefault(); installEvent = e; $("#installBtn").hidden = false; });
-window.addEventListener("appinstalled", () => { $("#installBtn").hidden = true; $("#installHint").hidden = true; toast("Installed: open AVB Music Player from its icon"); });
+window.addEventListener("appinstalled", () => { $("#installBtn").hidden = true; $("#installHint").hidden = true; toast("Installed: open AVB Player from its icon"); });
 $("#installBtn").onclick = async () => {
   if (installEvent) { installEvent.prompt(); const r = await installEvent.userChoice; if (r.outcome === "accepted") $("#installBtn").hidden = true; installEvent = null; return; }
   showInstallHint();
