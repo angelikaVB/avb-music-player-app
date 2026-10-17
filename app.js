@@ -2707,9 +2707,6 @@ $("#files3").onchange = e => { addFiles([...e.target.files], true); e.target.val
 $("#recBtn").onclick = recordStart; $("#recPause").onclick = recordPause;
 $("#recStop").onclick = () => recordStop(true);
 $("#recCancel").onclick = async () => { const was = rec && rec.paused; if (rec && !was) recordPause(); if (await confirmBox("Throw this take away?", "It has not been saved.", "Discard", "Keep recording")) recordStop(false); else if (rec && !was) recordPause(); };
-// the pinned search sits right under the header, whatever the header's height on this phone
-const setTopH = () => document.documentElement.style.setProperty("--toph", $(".top").offsetHeight + "px");
-setTopH(); window.addEventListener("resize", setTopH);
 // typing a search: the song panel steps aside so the matches show right under the box (the mini player keeps playing)
 $("#filter").oninput = () => { document.body.classList.toggle("searching", !!$("#filter").value.trim()); renderList(); };
 window.addEventListener("resize", () => { drawWave(); drawLoud(); drawEq(); drawRecorder(); drawMeter(); });

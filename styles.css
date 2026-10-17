@@ -831,9 +831,11 @@ body.searching #homeMix, body.searching #homeTools, body.searching #homeLyrics, 
 body:not(.nolyrics) #lyrChip { display: none; }
 body.nolyrics:not(.lyrforce) #homeLyrics { display: none !important; }
 body.nolyrics.lyrforce #lyrChip { background: rgba(255,255,255,.16); color: #fff; }
-/* the search stays pinned under the header while the page scrolls (song panel, list, to the very bottom) */
-#page-music > .searchbar { position: sticky; top: var(--toph, 64px); z-index: 4; margin: 0 -16px; padding: 4px 16px 8px;
-  background: rgba(11,10,31,.97); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); }
+/* header + search: one block pinned to the top (the search shows on the Music page only) */
+.topbar { position: sticky; top: 0; z-index: 5; background: rgba(11,10,31,.97); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); }
+.topbar .top { position: static; background: none; backdrop-filter: none; -webkit-backdrop-filter: none; }
+.topbar .topsearch { padding: 0 16px 8px; }
+body.onrecs .topsearch { display: none; }
 
 /* "Updated to AVB Player x ✓": the bar turns green for a few seconds */
 .updbar.done { background: linear-gradient(90deg, rgba(34,197,94,.30), rgba(25,240,220,.18)); box-shadow: inset 0 0 0 1px rgba(34,197,94,.55); }
@@ -847,3 +849,4 @@ body.nolyrics.lyrforce #lyrChip { background: rgba(255,255,255,.16); color: #fff
 
 /* Pitch: the − and + buttons side by side */
 .pmpair { display: inline-flex; gap: 6px; flex: none; }
+.updbar { position: relative; top: auto; }            /* scrolls with the page: only the header block is pinned */
