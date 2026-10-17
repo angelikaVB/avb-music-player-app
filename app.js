@@ -1565,7 +1565,11 @@ function eqWire() {
   $("#eqG").oninput = e => { const b = band(); const was = eqBandActive(b); b.g = +e.target.value / 10; if (Math.abs(b.g) < 0.15) b.g = 0; eqChanged(was !== eqBandActive(b)); };
   $("#eqQ").oninput = e => { band().q = 0.2 * Math.pow(15 / 0.2, +e.target.value / 1000); eqChanged(false); };
   $("#eqOut").oninput = e => { lib.eq.out = +e.target.value / 10; eqChanged(false); };
-  $("#eqFlat").onclick = () => { lib.eq = EQ_DEFAULT(); eqChanged(true); };
+  $("#eqFlat").onclick = () => {                     // Reset: bands, output and balance back to neutral
+    lib.eq = EQ_DEFAULT(); eqChanged(true);
+    lib.balance = 0; save("balance"); $("#balance").value = 0; $("#balanceV").textContent = "Center"; setBalance();
+    toast("EQ reset");
+  };
   $("#eqPreset").onchange = e => {
     const p = EQ_PRESETS[e.target.value]; e.target.value = ""; if (!p) return;
     lib.eq = EQ_DEFAULT();
