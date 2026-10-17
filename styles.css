@@ -850,3 +850,8 @@ body.onrecs .topsearch { display: none; }
 /* Pitch: the − and + buttons side by side */
 .pmpair { display: inline-flex; gap: 6px; flex: none; }
 .updbar { position: relative; top: auto; }            /* scrolls with the page: only the header block is pinned */
+
+/* Tempo: the word sits small on top of the slider, so the slider gets the row's width (the row stays as tall) */
+.tempocol { flex: 1; min-width: 0; display: flex; flex-direction: column; justify-content: center; gap: 0; }
+#rowTempo .tempocol label { min-width: 0; font-size: 11.5px; line-height: 1; letter-spacing: .02em; margin: 0 0 1px 2px; color: var(--text3); font-weight: 700; }
+#rowTempo .tempocol .tempotrack { flex: none; height: 18px; }

@@ -1,7 +1,7 @@
 {
- "code": 83,
- "name": "7.3",
+ "code": 84,
+ "name": "7.4",
  "url": "https://angelikavb.github.io/avb-music-player-app/AVB-Player.apk",
- "sha256": "53bc2a50cf375242eec850b31e3be66ad250ee731e2bc4d15db4a3cbe989a590",
- "notes": "Update opens Android's normal installer screen"
+ "sha256": "0df559ba58cb6488ca1b423d7e4300183705c6ef94c51f3578ddccbb9c0650cf",
+ "notes": "Wider tempo slider"
 }
