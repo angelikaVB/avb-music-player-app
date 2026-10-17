@@ -49,7 +49,7 @@ async function audio() {
     if (e.data.frame !== undefined) { st.pos = e.data.frame / st.sr; }
     if (e.data.ended) onEnded();
   };
-  node.port.postMessage({ cmd: "volume", volume: lib.volume });
+  setVolume();
   if ("mediaSession" in navigator) {
     navigator.mediaSession.setActionHandler("play", () => togglePlay());
     navigator.mediaSession.setActionHandler("pause", () => togglePlay());
@@ -139,7 +139,7 @@ async function loadSong(id, autoplay = true) {
   if (mkEditing && mkEditing.ctx === songMk) closeMarkEdit();
   $("#notes").value = lib.notes[id] || "";
   renderMarks();
-  readTags(rec.blob, rec.name).catch(() => ({})).then(tags => { if (st.id !== id) return; st.tags = tags; if (tags.artist) $("#npArtist").textContent = tags.artist; if (tags.title && !lib.renamed[id]) $("#title").textContent = tags.title; showCover(id, tags); updateMini(); findLyrics(id, rec, tags); });
+  readTags(rec.blob, rec.name).catch(() => ({})).then(tags => { if (st.id !== id) return; st.tags = tags; if (tags.artist) $("#npArtist").textContent = tags.artist; if (tags.title && !lib.renamed[id]) $("#title").textContent = tags.title; showCover(id, tags); updateMini(); mediaReport(); findLyrics(id, rec, tags); });
   if (!isRecording(id)) { lib.recent = [id, ...lib.recent.filter(x => x !== id)].slice(0, 60); save("recent"); }
   if ($("#page-recs").classList.contains("on")) renderRecList();
   analyse();
@@ -147,6 +147,7 @@ async function loadSong(id, autoplay = true) {
   if (autoplay) play();
   updateMini(); placeWave();
   if ("mediaSession" in navigator) navigator.mediaSession.metadata = new MediaMetadata({ title: $("#title").textContent, artist: "AVB Player" });
+  mediaReport();
   renderList();
 }
 // ---- our own reader for uncompressed files the browser engine refuses
@@ -243,13 +244,54 @@ async function sniffHeader(blob, name) {
 
 // ---------------------------------------------------------------- transport
 const ANDROID = window.AVBAndroid || null;
-function play() { if (!st.buffer) return; audio().then(() => { send({ cmd: "play" }); st.playing = true; setMiniPlay(true); if (ANDROID) ANDROID.playing(true); if (navigator.mediaSession) navigator.mediaSession.playbackState = "playing"; }); }
-function pause() { send({ cmd: "pause" }); st.playing = false; setMiniPlay(false); if (ANDROID) ANDROID.playing(false); if (navigator.mediaSession) navigator.mediaSession.playbackState = "paused"; }
+function play() {
+  if (!st.buffer) return;
+  // the phone's audio first: other music apps pause; during a call Android says no
+  if (ANDROID && ANDROID.mediaFocus && !ANDROID.mediaFocus()) { toast("A call is using the audio. Play again after it."); return; }
+  audio().then(() => { send({ cmd: "play" }); st.playing = true; setMiniPlay(true); if (ANDROID) ANDROID.playing(true); if (navigator.mediaSession) navigator.mediaSession.playbackState = "playing"; mediaReport(); });
+}
+function pause() { send({ cmd: "pause" }); st.playing = false; setMiniPlay(false); if (ANDROID) ANDROID.playing(false); if (navigator.mediaSession) navigator.mediaSession.playbackState = "paused"; mediaReport(); }
+// ---- the phone's side of playing (Android app): lock screen, notification, headset / car buttons, audio focus
+let mediaTimer = 0, duck = 1;
+function mediaReport() {
+  if (!ANDROID || !ANDROID.mediaState) return;
+  clearTimeout(mediaTimer);
+  const s0 = st.id && songs[st.id];
+  try {
+    ANDROID.mediaState(JSON.stringify({
+      playing: !!st.playing, loaded: !!s0, id: st.id || "",
+      title: s0 ? $("#title").textContent : "", artist: s0 ? ($("#npArtist").textContent || "") : "",
+      album: (st.tags && st.tags.album) || (s0 && s0.album) || "",
+      duration: st.buffer ? st.duration : 0, position: st.pos || 0, speed: 1,
+      shuffle: !!lib.shuffle, repeat: lib.repeat || "off",
+    }));
+  } catch (_) { }
+}
+const mediaReportSoon = (ms = 300) => { clearTimeout(mediaTimer); mediaTimer = setTimeout(mediaReport, ms); };
+setInterval(() => { if (st.playing) mediaReport(); }, 15000);          // keeps the lock screen's clock honest
+const setVolume = () => { if (node) node.port.postMessage({ cmd: "volume", volume: lib.volume * duck }); };
+// what Android asks of the page (MediaHub.page)
+window.avbMedia = (cmd, arg) => {
+  if (cmd === "play") { if (!st.playing && (st.buffer || lib.queue.length)) togglePlay(); }
+  else if (cmd === "pause") {
+    if (arg === "device") { duck = 0; setVolume(); }                // silent at once: never out of the phone's speaker
+    if (st.playing) pause();
+    if (arg === "device") { setTimeout(() => { duck = 1; setVolume(); }, 400); toast("Paused: the headphones or speaker disconnected"); }
+  }
+  else if (cmd === "next") nextTrack(false);
+  else if (cmd === "prev") prevTrack();
+  else if (cmd === "seek") { seek(+arg); mediaReport(); }
+  else if (cmd === "shuffle") $("#shuffle").click();
+  else if (cmd === "repeat") $("#repeat").click();
+  else if (cmd === "duck") { duck = +arg || 0.25; setVolume(); }       // a navigation prompt
+  else if (cmd === "unduck") { duck = 1; setVolume(); }
+};
 function togglePlay() { if (!st.buffer) { if (lib.queue.length) playIndex(Math.max(0, lib.index), true); else $("#files2").click(); return; } st.playing ? pause() : play(); }
-function seek(t) { if (!st.buffer) return; t = Math.max(0, Math.min(st.duration, t)); st.pos = t; send({ cmd: "seek", frame: Math.round(t * st.sr) }); drawWave();
+function seek(t) { if (!st.buffer) return; t = Math.max(0, Math.min(st.duration, t)); st.pos = t; send({ cmd: "seek", frame: Math.round(t * st.sr) }); drawWave(); mediaReportSoon();
   $("#miniProg").style.width = (t / st.duration * 100) + "%"; $("#tnow").textContent = fmtTime(t); $("#hNow").textContent = fmtTime(t); $("#seek").value = Math.round(t / st.duration * 1000); }
 function onEnded() {
   st.playing = false; setMiniPlay(false); if (ANDROID) ANDROID.playing(false);
+  mediaReportSoon(1500);                                 // the next song usually starts before this reports "stopped"
   if (lib.repeat === "one") { seek(0); play(); } else if (!isRecording(st.id)) nextTrack(true);
 }
 // choosing a song only loads it: playing is the user's ▶ (autoplay only when the music was already going)
@@ -1118,7 +1160,7 @@ function forget(id) {
   if (erasing && lib.marks[id]) { delete lib.marks[id]; save("marks"); }      // kept when only removed from the app
   lib.index = st.id && lib.queue.includes(st.id) ? lib.queue.indexOf(st.id) : -1;
   for (const k of ["queue", "index", "favorites", "recent", "playlists", "notes", "lyrics"]) save(k);
-  if (st.id === id) { pause(); send({ cmd: "unload" }); st.buffer = null; st.id = null; st.peaks = null; $("#title").textContent = "No song loaded"; $("#badges").innerHTML = ""; drawWave(); closeNP(); }
+  if (st.id === id) { pause(); send({ cmd: "unload" }); st.buffer = null; st.id = null; st.peaks = null; mediaReport(); $("#title").textContent = "No song loaded"; $("#badges").innerHTML = ""; drawWave(); closeNP(); }
 }
 async function removeFromApp(id, quiet) {
   if (!songs[id]) return;
@@ -1368,6 +1410,9 @@ async function showCover(id, tags) {
     if (b64) blob = await (await fetch("data:image/jpeg;base64," + b64)).blob();
   }
   if (st.id !== id) return;
+  if (blob && blob === (tags && tags.picture) && ANDROID && ANDROID.mediaArt && blob.size < 4e6) {
+    const fr = new FileReader(); fr.onload = () => { if (st.id === id) ANDROID.mediaArt(id, String(fr.result).split(",")[1] || ""); }; fr.readAsDataURL(blob);
+  }
   if (blob) { coverUrl = URL.createObjectURL(blob); el.style.background = `center / cover no-repeat url("${coverUrl}")`; el.classList.add("art"); }
   else { el.style.background = coverFor(songs[id] ? songs[id].name : ""); el.classList.remove("art"); }
 }
@@ -2340,7 +2385,7 @@ $("#back10").onclick = () => seek(st.pos - 10); $("#fwd10").onclick = () => seek
 $("#markA").onclick = () => markButton("A"); $("#markB").onclick = () => markButton("B");
 const REPEAT_SVG = one => `<svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><path d="M7 7h10v3l4-4-4-4v3H5v6h2V7zm10 10H7v-3l-4 4 4 4v-3h12v-6h-2v4z"/>${one ? `<text x="12" y="15.2" text-anchor="middle" font-size="8" font-weight="800" font-family="Jakarta, sans-serif">1</text>` : ""}</svg>`;
 const setRepeatUi = () => { for (const b of [$("#repeat"), $("#hRepeat")]) { b.innerHTML = REPEAT_SVG(lib.repeat === "one"); b.classList.toggle("on", lib.repeat !== "off"); b.title = { off: "Repeat: off", all: "Repeat: all", one: "Repeat: this song" }[lib.repeat]; } };
-$("#repeat").onclick = $("#hRepeat").onclick = () => { lib.repeat = { off: "all", all: "one", one: "off" }[lib.repeat]; save("repeat"); setRepeatUi(); toast({ off: "Repeat off", all: "Repeat all", one: "Repeat this song" }[lib.repeat]); };
+$("#repeat").onclick = $("#hRepeat").onclick = () => { lib.repeat = { off: "all", all: "one", one: "off" }[lib.repeat]; save("repeat"); setRepeatUi(); mediaReport(); toast({ off: "Repeat off", all: "Repeat all", one: "Repeat this song" }[lib.repeat]); };
 setRepeatUi();
 $("#seek").oninput = e => seek(+e.target.value / 1000 * st.duration);
 $("#heart").onclick = () => toggleFav(st.id);
@@ -2348,7 +2393,7 @@ $("#npMore").onclick = () => { if (st.id && songs[st.id]) songMenu(st.id); };
 $("#shareBtn").onclick = () => shareSong();
 const SHUFFLE_SVG = `<svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><path d="M10.59 9.17 5.41 4 4 5.41l5.17 5.17 1.42-1.41zM14.5 4l2.04 2.04L4 18.59 5.41 20 17.96 7.46 20 9.5V4h-5.5zm.33 9.41-1.41 1.41 3.13 3.13L14.5 20H20v-5.5l-2.04 2.04-3.13-3.13z"/></svg>`;
 const setShuffleUi = () => { for (const b of [$("#shuffle"), $("#hShuffle")]) { b.innerHTML = SHUFFLE_SVG; b.classList.toggle("on", !!lib.shuffle); } };
-$("#shuffle").onclick = $("#hShuffle").onclick = () => { lib.shuffle = !lib.shuffle; save("shuffle"); setShuffleUi(); toast(lib.shuffle ? "Shuffle on" : "Shuffle off"); };
+$("#shuffle").onclick = $("#hShuffle").onclick = () => { lib.shuffle = !lib.shuffle; save("shuffle"); setShuffleUi(); mediaReport(); toast(lib.shuffle ? "Shuffle on" : "Shuffle off"); };
 setShuffleUi();
 $("#mono").onclick = () => { lib.mono = !lib.mono; $("#mono").classList.toggle("on", lib.mono); if (ctx && eqOut) buildOutputStage(); toast(lib.mono ? "Mono check: both speakers play the same sum" : "Stereo again"); };
 const balText = v => v === 0 ? "Center" : v < 0 ? `L ${-v}` : `R ${v}`;
