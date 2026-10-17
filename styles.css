@@ -790,3 +790,11 @@ body.hasmini .snack { bottom: calc(76px + env(safe-area-inset-bottom)); }
 /* lines already sung stay lit in soft orange; the line being sung glows */
 .lyrics .l.past { color: rgba(255,154,74,.78); }
 .lyrics .l.now { background: linear-gradient(90deg, rgba(255,122,26,.18), rgba(255,122,26,.04)); box-shadow: inset 3px 0 0 #FF7A1A; border-radius: 8px; padding-left: 8px; }
+
+/* lyrics fold away to their header line */
+.lyrfold { width: 30px; height: 30px; margin: 0 -4px 0 -6px; border: 0; border-radius: 50%; background: none; color: var(--text2); display: flex; align-items: center; justify-content: center; flex: none; cursor: pointer; }
+.lyrfold svg { transition: transform .2s; }
+.lyrblock.folded .lyrfold svg { transform: rotate(-90deg); }
+#lyrTitle { cursor: pointer; }
+.lyrblock.folded .lyrics, .lyrblock.folded .lyrhandle, .lyrblock.folded #lyrSyncBar, .lyrblock.folded #lyrSync, .lyrblock.folded #lyrCopy, .lyrblock.folded #lyrEdit, .lyrblock.folded #lyrText, .lyrblock.folded #lyrEditBtns { display: none !important; }
+.lyrblock.nolyr .lyrfold { display: none; }

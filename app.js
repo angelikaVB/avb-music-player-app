@@ -20,7 +20,7 @@ const songGet = id => new Promise((ok, no) => { const t = db.transaction("songs"
 
 const lib = {
   queue: await kvGet("queue", []), index: await kvGet("index", -1), favorites: await kvGet("favorites", []),
-  recent: await kvGet("recent", []), playlists: await kvGet("playlists", []), notes: await kvGet("notes", {}), lyrics: await kvGet("lyrics", {}), eq: await kvGet("eq", null), lyrH: await kvGet("lyrH", 300), mkOpen: await kvGet("mkOpen", true), mkCat: await kvGet("mkCat", "idea"), recInput: await kvGet("recInput", ""), recFmt: await kvGet("recFmt", { sr: 48000, bits: 24 }), shuffle: await kvGet("shuffle", false), mono: false,
+  recent: await kvGet("recent", []), playlists: await kvGet("playlists", []), notes: await kvGet("notes", {}), lyrics: await kvGet("lyrics", {}), eq: await kvGet("eq", null), lyrH: await kvGet("lyrH", 300), lyrFold: await kvGet("lyrFold", false), mkOpen: await kvGet("mkOpen", true), mkCat: await kvGet("mkCat", "idea"), recInput: await kvGet("recInput", ""), recFmt: await kvGet("recFmt", { sr: 48000, bits: 24 }), shuffle: await kvGet("shuffle", false), mono: false,
   balance: await kvGet("balance", 0), fix: await kvGet("fix", {}), marks: await kvGet("marks", {}), hidden: await kvGet("hidden", []),
   repeat: await kvGet("repeat", "off"), volume: await kvGet("volume", 1), keepVoice: await kvGet("keepVoice", true),
 };
@@ -1161,7 +1161,7 @@ function showLyrics(text, source, id) {
   }
   const none = !lyr.text.trim();
   $("#tab-lyrics").classList.toggle("nolyr", none);                // no lyrics: one slim line
-  $("#lyrSource").textContent = none ? (source === "searching" ? "Looking…" : "No lyrics found") : ({ mine: "Your lyrics", file: "From the file", lrclib: "From LRCLIB (online)" }[source] || "");
+  $("#lyrSource").textContent = none ? (source === "searching" ? "Looking…" : "No lyrics found") : ({ mine: "Your lyrics", file: "From the file", lrclib: "From LRCLIB (online)" }[source] || "") + (none || lyr.timed ? "" : " · not timed");
   $("#lyrSync").hidden = !lyr.text.trim() || lyr.timed;            // no times yet: tap along once to time them
   $("#lyrCopy").disabled = !lyr.text.trim();
 }
@@ -1179,13 +1179,19 @@ async function findLyrics(id, rec, preTags) {
   let tags = {};
   if (preTags) tags = preTags; else try { tags = await readTags(rec.blob, rec.name); } catch (err) { why.push("Could not read the file's tags: " + (err && err.message || err)); }
   if (st.id !== id) return;
-  if (tags.lyrics && tags.lyrics.trim()) { showLyrics(tags.lyrics.replace(/(\\r)?\\n/g, "\n"), "file", id); openLyricsTab(); return; }   // some tools write line breaks as the text \n
-  why.push(`Inside the file (${fmtOf(rec.name)}): no lyrics.`);
+  // file lyrics with times: done; without times: shown now, but a timed version is looked for online
+  let filePlain = null;
+  if (tags.lyrics && tags.lyrics.trim()) {
+    const text = tags.lyrics.replace(/(\\r)?\\n/g, "\n");                 // some tools write line breaks as the text \n
+    showLyrics(text, "file", id); openLyricsTab();
+    if (parseLrc(text).timed) return;
+    filePlain = text;
+  } else why.push(`Inside the file (${fmtOf(rec.name)}): no lyrics.`);
   const guess = tagTitleArtist(rec.name);
   const unknown = a => !a || /^<?unknown>?$/i.test(a.trim());
   const title = tags.title || songs[id]?.title || guess.title;
   const artistRaw = tags.artist || songs[id]?.artist || guess.artist, artist = unknown(artistRaw) ? "" : artistRaw;
-  const done = () => { if (st.id === id) { showLyrics("", "none", id); lyr.why = why; } };
+  const done = () => { if (st.id === id && !filePlain) { showLyrics("", "none", id); lyr.why = why; } };
   if (isRecording(id)) { why.push("Recordings are not looked up online."); return done(); }
   if (!navigator.onLine) { why.push("Online search skipped: the phone is offline."); return done(); }
   if (!title) { why.push("Online search skipped: the song has no title."); return done(); }
@@ -1200,14 +1206,17 @@ async function findLyrics(id, rec, preTags) {
     const fits = x => x && (x.syncedLyrics || x.plainLyrics) && (!dur() || !x.duration || Math.abs(x.duration - dur()) <= 4);
     let d = r.ok ? await r.json() : null;
     let seen = d && (d.syncedLyrics || d.plainLyrics) ? 1 : 0;
-    if (!fits(d)) {
+    if (!fits(d) || !d.syncedLyrics) {
+      // a timed version of the same length beats an untimed one
       r = await fetch("https://lrclib.net/api/search?" + new URLSearchParams({ q: `${artist} ${title}`.trim() }));
-      const list = r.ok ? await r.json() : [];
-      seen += (list || []).filter(x => x.syncedLyrics || x.plainLyrics).length;
-      d = (list || []).find(fits) || null;
+      const list = (r.ok ? await r.json() : null) || [];
+      seen += list.filter(x => x.syncedLyrics || x.plainLyrics).length;
+      d = list.find(x => fits(x) && x.syncedLyrics) || (fits(d) ? d : null) || list.find(fits) || null;
     }
     if (st.id !== id) return;
-    if (d && (d.syncedLyrics || d.plainLyrics)) { showLyrics(d.syncedLyrics || d.plainLyrics, "lrclib", id); openLyricsTab(); return; }
+    if (d && d.syncedLyrics) { showLyrics(d.syncedLyrics, "lrclib", id); openLyricsTab(); return; }
+    if (filePlain) return;                                               // no timed version online: the file's own stay
+    if (d && d.plainLyrics) { showLyrics(d.plainLyrics, "lrclib", id); openLyricsTab(); return; }
     why.push(`Online (LRCLIB) for “${title}”${artist ? " by " + artist : ""}: ` + (seen ? `${seen} result${seen === 1 ? "" : "s"}, none the same length as this song (${fmtTime(dur())}).` : "nothing found."));
   } catch (err) { why.push("Online search failed: " + (err && err.message || err)); }
   done();
@@ -1248,6 +1257,10 @@ $("#syncNext").onclick = () => { const s = syncing; if (!s || s.n >= s.idx.lengt
 $("#syncUndo").onclick = () => { const s = syncing; if (!s || !s.n) return; s.n--; s.times.length = s.n; seek(Math.max(0, (s.times[s.n - 1] ?? 0))); syncShow(); };
 $("#syncSave").onclick = () => syncEnd(true);
 $("#syncCancel").onclick = () => syncEnd(false);
+// fold the lyrics down to their one-line header (remembered), tap again to open them
+const setLyrFold = () => $("#tab-lyrics").classList.toggle("folded", !!lib.lyrFold);
+$("#lyrFold").onclick = $("#lyrTitle").onclick = () => { if (syncing) return; lib.lyrFold = !lib.lyrFold; save("lyrFold"); setLyrFold(); };
+setLyrFold();
 // drag the handle under the lyrics to make the box taller or shorter
 (function lyricsHandle() {
   const h = $("#lyrHandle"), box = $("#lyrics");
