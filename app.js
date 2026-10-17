@@ -160,7 +160,7 @@ function togglePlay() { if (!st.buffer) { if (lib.queue.length) playIndex(Math.m
 function seek(t) { if (!st.buffer) return; t = Math.max(0, Math.min(st.duration, t)); st.pos = t; send({ cmd: "seek", frame: Math.round(t * st.sr) }); drawWave(); }
 function onEnded() {
   st.playing = false; $("#play").textContent = "▶"; if (ANDROID) ANDROID.playing(false);
-  if (lib.repeat === "one") { seek(0); play(); } else nextTrack(true);
+  if (lib.repeat === "one") { seek(0); play(); } else if (!isRecording(st.id)) nextTrack(true);
 }
 function playIndex(i) { if (i < 0 || i >= lib.queue.length) return; lib.index = i; save("index"); loadSong(lib.queue[i]); }
 function nextTrack(auto) {
@@ -595,17 +595,40 @@ let rec = null;
 async function recordStart() {
   if (rec) return;
   if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { toast("This device cannot record here"); return; }
+  if (st.playing) pause();
   let stream;
   try {
     stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false, channelCount: 2 } });
-  } catch (err) { toast("Microphone not allowed: " + (err && err.message || err)); return; }
-  await audio();
-  if (st.playing) pause();
-  const src = ctx.createMediaStreamSource(stream);
-  const nch = Math.max(1, Math.min(2, src.channelCount || 1));
-  const tap = new AudioWorkletNode(ctx, "avb-tap", { numberOfInputs: 1, numberOfOutputs: 0, channelCount: nch, channelCountMode: "explicit" });
-  rec = { stream, src, tap, chunks: [], nch, frames: 0, peak: 0, clip: 0, paused: false, started: Date.now(), peaks: [], sr: ctx.sampleRate };
-  const BLOCK = Math.round(ctx.sampleRate * 0.02);           // one waveform column per 20 ms
+  } catch (err) {
+    if (err && err.name === "NotAllowedError") { toast("Microphone not allowed: " + (err.message || err.name)); return; }
+    try { stream = await navigator.mediaDevices.getUserMedia({ audio: true }); }         // the phone refused the stereo / raw settings
+    catch (err2) { toast("The microphone did not start: " + (err2 && (err2.message || err2.name) || err2)); return; }
+  }
+  // its own audio engine for this take (closed on stop), so a second take never attaches to a spent one
+  let rctx;
+  try {
+    rctx = new (window.AudioContext || window.webkitAudioContext)({ latencyHint: "interactive" });
+    await rctx.audioWorklet.addModule("player-worklet.js");
+    if (rctx.state === "suspended") await rctx.resume();
+  } catch (err) {
+    stream.getTracks().forEach(t => t.stop());
+    toast("Recording could not start: " + (err && err.message || err)); return;
+  }
+  let src, tap, nch;
+  try {
+    src = rctx.createMediaStreamSource(stream);
+    nch = Math.max(1, Math.min(2, src.channelCount || 1));
+    tap = new AudioWorkletNode(rctx, "avb-tap", { numberOfInputs: 1, numberOfOutputs: 0, channelCount: nch, channelCountMode: "explicit" });
+  } catch (err) {
+    stream.getTracks().forEach(t => t.stop()); rctx.close().catch(() => { });
+    toast("No sound is coming from the microphone: " + (err && err.message || err)); return;
+  }
+  rec = { stream, src, tap, rctx, chunks: [], nch, frames: 0, peak: 0, clip: 0, paused: false, started: Date.now(), peaks: [], sr: rctx.sampleRate };
+  const mine = rec;
+  setTimeout(() => {                                          // nothing arriving: say so instead of "recording" silence
+    if (rec === mine && !mine.paused && mine.frames === 0) { recordStop(false); toast("No sound is coming from the microphone. Close other apps that use it, then try again."); }
+  }, 3000);
+  const BLOCK = Math.round(rctx.sampleRate * 0.02);          // one waveform column per 20 ms
   let acc = 0, mn = 0, mx = 0;
   tap.port.onmessage = e => {
     const r = rec;
@@ -626,7 +649,7 @@ async function recordStart() {
   showPage("play");
   $("#recbar").classList.add("on"); $("#recbar").classList.remove("paused");
   $("#recLabel").textContent = "REC"; $("#recPause").textContent = "❚❚ Pause";
-  $("#recInfo").textContent = `${(ctx.sampleRate / 1000).toFixed(1).replace(".0", "")} kHz · ${nch === 1 ? "mono" : "stereo"} · saved as a 24-bit WAV`;
+  $("#recInfo").textContent = `${(rctx.sampleRate / 1000).toFixed(1).replace(".0", "")} kHz · ${nch === 1 ? "mono" : "stereo"} · saved as a 24-bit WAV`;
   $("#startbar").style.display = "none";
   window.scrollTo({ top: 0, behavior: "smooth" });
 }
@@ -641,7 +664,9 @@ function recordPause() {
 async function recordStop(keep) {
   if (!rec) return;
   const r = rec; rec = null;
-  r.src.disconnect(); r.tap.disconnect(); r.stream.getTracks().forEach(t => t.stop());
+  try { r.src.disconnect(); r.tap.disconnect(); r.tap.port.onmessage = null; } catch (_) { }
+  r.stream.getTracks().forEach(t => t.stop());
+  r.rctx.close().catch(() => { });
   $("#recbar").classList.remove("on"); $("#startbar").style.display = "";
   drawWave();
   if (!keep || !r.frames) { if (keep) toast("Nothing was recorded"); return; }
@@ -755,6 +780,8 @@ requestAnimationFrame(tick);
 
 function fmtTime(s) { s = Math.max(0, s || 0); const m = Math.floor(s / 60); return `${m}:${String(Math.floor(s % 60)).padStart(2, "0")}`; }
 let toastTimer = 0;
+window.addEventListener("error", e => toast("Something went wrong: " + (e.message || e.error || "unknown")));
+window.addEventListener("unhandledrejection", e => toast("Something went wrong: " + (e.reason && (e.reason.message || e.reason) || "unknown")));
 function toast(t) { const e = $("#toast"); e.textContent = t; e.classList.add("on"); clearTimeout(toastTimer); toastTimer = setTimeout(() => e.classList.remove("on"), 3500); }
 
 renderList(); drawWave(); refreshSave();
