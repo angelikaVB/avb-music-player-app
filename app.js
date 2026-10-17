@@ -805,7 +805,7 @@ function renderGroups(key, filter) {
   const el = $("#list");
   el.innerHTML = rows.map(([g, n]) => `<li class="grouprow" data-g="${encodeURIComponent(g)}"><div class="thumb" style="background:${coverFor(g)}">${g[0].toUpperCase()}</div><div class="n"><div class="name">${g.replace(/</g, "&lt;")}</div><div class="sub">${n} song${n === 1 ? "" : "s"}</div></div></li>`).join("")
     || `<li class="muted">${phoneState === "ok" ? "Nothing here." : "Allow AVB Music Player to see your music first (All music)."}</li>`;
-  el.querySelectorAll("li[data-g]").forEach(li => li.onclick = () => { groupBy = key; groupName = decodeURIComponent(li.dataset.g); view = "group"; renderList(); });
+  el.querySelectorAll("li[data-g]").forEach(li => li.onclick = () => { groupBy = key; groupName = decodeURIComponent(li.dataset.g); openDrill("group", "", groupName); });
   $("#storage").textContent = `${rows.length} ${key === "artist" ? "artist" : "album"}${rows.length === 1 ? "" : "s"}`;
   $("#views").querySelectorAll("button").forEach(b => { b.classList.toggle("on", b.dataset.view === view); b.onclick = () => { view = b.dataset.view; listName = b.dataset.name || ""; if (view === "phone" && phoneState === "denied") loadPhone(true); renderList(); }; });
 }
@@ -827,11 +827,11 @@ function renderList() {
     wireRow(li, "music");
   });
   el.classList.toggle("selecting", sel.where === "music"); updateSelbar();
-  $("#listTabs").innerHTML = lib.playlists.map(p => `<button data-view="list" data-name="${p.name}" class="${view === "list" && listName === p.name ? "on" : ""}">${p.name}</button>`).join("");
-  $("#views").querySelectorAll("button").forEach(b => { b.classList.toggle("on", b.dataset.view === view && (view !== "list" || b.dataset.name === listName)); b.onclick = () => { selEnd(true); view = b.dataset.view; listName = b.dataset.name || ""; if (view === "phone" && phoneState === "denied") loadPhone(true); if (view === "recordings" && ANDROID) loadRecordings(); renderList(); }; });
+  $("#listTabs").innerHTML = "";                       // playlists are tiles above; they open on their own
+  $("#views").querySelectorAll("button").forEach(b => { b.classList.toggle("on", b.dataset.view === view && (view !== "list" || b.dataset.name === listName)); b.onclick = () => { selEnd(true); if (drill) { drill = null; document.body.classList.remove("drill"); $("#libName").textContent = "Library"; $("#libBack").hidden = true; } view = b.dataset.view; listName = b.dataset.name || ""; if (view === "phone" && phoneState === "denied") loadPhone(true); if (view === "recordings" && ANDROID) loadRecordings(); renderList(); }; });
   const n = ids.length;
   if (view === "phone") $("#storage").textContent = phoneState === "ok" ? `${n} song${n === 1 ? "" : "s"} on this phone` : "";
-  else if (view === "group") $("#storage").textContent = `${groupName} · ${n} song${n === 1 ? "" : "s"}`;
+  else if (drill || view === "group") $("#storage").textContent = `${n} song${n === 1 ? "" : "s"}`;
   else if (view === "recordings") $("#storage").textContent = ANDROID ? `${n} recording${n === 1 ? "" : "s"} · saved in Recordings/AVB Music Player on your phone` : `${n} recording${n === 1 ? "" : "s"} · kept in the app`;
   else if (!ANDROID && navigator.storage && navigator.storage.estimate) navigator.storage.estimate().then(e => $("#storage").textContent = `${Object.keys(songs).length} songs stored in the app · ${(e.usage / 1e6).toFixed(0)} MB of ${(e.quota / 1e9).toFixed(1)} GB`);
   else $("#storage").textContent = "";
@@ -1040,7 +1040,7 @@ function newPlaylist(items = []) {
   ask("New playlist", "", `Playlist ${lib.playlists.length + 1}`, "Create").then(name => { if (!name) return; newPlaylistNamed(name, items); });
 }
 function newPlaylistNamed(name, items) {
-  lib.playlists.push({ name: name.trim(), items: items.slice() }); save("playlists"); view = "list"; listName = name.trim(); renderList();
+  lib.playlists.push({ name: name.trim(), items: items.slice() }); save("playlists"); openDrill("list", name.trim(), name.trim());
 }
 
 // ---------------------------------------------------------------- lyrics
@@ -1783,9 +1783,29 @@ function renderShelves() {
   const lists = [{ key: "favorites", name: "Favourites", n: lib.favorites.length, cls: "fav" }, ...lib.playlists.map(p => ({ key: "list", name: p.name, n: p.items.length }))];
   $("#listTiles").innerHTML = lists.map(p => `<button class="tile" data-view="${p.key}" data-name="${esc(p.name)}"><div class="art ${p.cls || ""}" style="${p.cls ? "" : "background:" + coverFor(p.name)}"><span>${p.cls ? "♥" : esc(p.name[0] || "♪").toUpperCase()}</span></div><div class="tname">${esc(p.name)}</div><div class="tsub">${p.n} song${p.n === 1 ? "" : "s"}</div></button>`).join("")
     + `<button class="tile" id="newList"><div class="art add"><span>+</span></div><div class="tname">New playlist</div><div class="tsub">&nbsp;</div></button>`;
-  $("#listTiles").querySelectorAll(".tile[data-view]").forEach(t => t.onclick = () => { selEnd(true); view = t.dataset.view; listName = t.dataset.view === "list" ? t.dataset.name : ""; renderList(); $("#tab-songs").scrollIntoView({ behavior: "smooth" }); });
+  $("#listTiles").querySelectorAll(".tile[data-view]").forEach(t => t.onclick = () => openDrill(t.dataset.view, t.dataset.view === "list" ? t.dataset.name : "", t.dataset.view === "favorites" ? "Favourites" : t.dataset.name));
   $("#newList").onclick = () => newPlaylist();
 }
+// a playlist, Favourites, an artist or an album opens on its own; Back returns to all music
+let drill = null;
+const homeView = () => ANDROID ? "phone" : "queue";
+function openDrill(v, name, title) {
+  selEnd(true);
+  drill = { from: view === "group" ? homeView() : (view === "artists" || view === "albums" ? view : homeView()) };
+  view = v; listName = name || "";
+  document.body.classList.add("drill");
+  $("#libName").textContent = title; $("#libBack").hidden = false;
+  renderList(); window.scrollTo({ top: 0 });
+}
+function closeDrill() {
+  if (!drill) return false;
+  view = drill.from; listName = ""; drill = null;
+  document.body.classList.remove("drill");
+  $("#libName").textContent = "Library"; $("#libBack").hidden = true;
+  renderList(); window.scrollTo({ top: 0 });
+  return true;
+}
+$("#libBack").onclick = closeDrill;
 function updateMini() {
   const show = !!st.id && songs[st.id] && $("#np").hidden && !rec && !sel.where;
   $("#mini").hidden = !show; document.body.classList.toggle("hasmini", !!show);
@@ -2201,6 +2221,7 @@ window.avbBack = () => {
   if (!$("#mkPop").hidden) { hideMarkPop(); return true; }
   if (sel.where) { selEnd(); return true; }
   if (!$("#np").hidden && !rec) { closeNP(); return true; }
+  if ($("#page-music").classList.contains("on") && closeDrill()) return true;
   if (!$("#installHint").hidden) { $("#installHint").hidden = true; return true; }
   if ($("#page-recs").classList.contains("on")) { showPage("music"); return true; }
   return false;

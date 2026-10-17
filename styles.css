@@ -516,3 +516,9 @@ html { overscroll-behavior-y: none; }
 .tabs button { font-size: 20px; flex: none; }
 .top { gap: 10px; }
 @media (max-width: 400px) { .top .logo { display: none; } }
+/* a playlist / Favourites / artist / album on its own */
+body.drill #recentShelf, body.drill #listShelf, body.drill #views, body.drill .searchbar { display: none; }
+body.drill #tab-songs .libhead h2 { margin-top: 10px; }
+#libTitle { display: flex; align-items: center; gap: 4px; min-width: 0; }
+#libName { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.libback { border: 0; background: rgba(255,255,255,.08); color: #fff; width: 36px; height: 36px; border-radius: 50%; font-size: 26px; line-height: 1; padding: 0 0 4px; margin-right: 6px; flex: none; }
