@@ -1159,7 +1159,9 @@ function showLyrics(text, source, id) {
     lyr.wordTimes = lyricWordTimes();
     if (lyr.timed) el.querySelectorAll(".l[data-i]").forEach(d => d.onclick = () => { const t = lyr.lines[+d.dataset.i].t; if (t != null) seek(t); });
   }
-  $("#lyrSource").textContent = { mine: "Your lyrics", file: "From the file", lrclib: "From LRCLIB (online)", searching: "", none: "" }[source] || "";
+  const none = !lyr.text.trim();
+  $("#tab-lyrics").classList.toggle("nolyr", none);                // no lyrics: one slim line
+  $("#lyrSource").textContent = none ? (source === "searching" ? "Looking…" : "No lyrics found") : ({ mine: "Your lyrics", file: "From the file", lrclib: "From LRCLIB (online)" }[source] || "");
   $("#lyrSync").hidden = !lyr.text.trim() || lyr.timed;            // no times yet: tap along once to time them
   $("#lyrCopy").disabled = !lyr.text.trim();
 }
