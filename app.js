@@ -1172,32 +1172,45 @@ function tagTitleArtist(name) {
   return m ? { artist: m[1], title: m[2] } : { artist: "", title: stem };
 }
 async function findLyrics(id, rec, preTags) {
+  // every step is noted, so a tap on "No lyrics found" can say what was tried
+  const why = [];
   showLyrics("", "searching", id);
   if (lib.lyrics[id]) { showLyrics(lib.lyrics[id], "mine", id); openLyricsTab(); return; }
   let tags = {};
-  if (preTags) tags = preTags; else try { tags = await readTags(rec.blob, rec.name); } catch (_) { }
+  if (preTags) tags = preTags; else try { tags = await readTags(rec.blob, rec.name); } catch (err) { why.push("Could not read the file's tags: " + (err && err.message || err)); }
   if (st.id !== id) return;
   if (tags.lyrics && tags.lyrics.trim()) { showLyrics(tags.lyrics.replace(/(\\r)?\\n/g, "\n"), "file", id); openLyricsTab(); return; }   // some tools write line breaks as the text \n
+  why.push(`Inside the file (${fmtOf(rec.name)}): no lyrics.`);
   const guess = tagTitleArtist(rec.name);
-  const title = tags.title || songs[id]?.title || guess.title, artist = tags.artist || songs[id]?.artist || guess.artist;
-  if (!navigator.onLine || isRecording(id) || !title || /^<unknown>$/i.test(artist || "") || (songs[id]?.duration && songs[id].duration < 30)) { showLyrics("", "none", id); return; }
+  const unknown = a => !a || /^<?unknown>?$/i.test(a.trim());
+  const title = tags.title || songs[id]?.title || guess.title;
+  const artistRaw = tags.artist || songs[id]?.artist || guess.artist, artist = unknown(artistRaw) ? "" : artistRaw;
+  const done = () => { if (st.id === id) { showLyrics("", "none", id); lyr.why = why; } };
+  if (isRecording(id)) { why.push("Recordings are not looked up online."); return done(); }
+  if (!navigator.onLine) { why.push("Online search skipped: the phone is offline."); return done(); }
+  if (!title) { why.push("Online search skipped: the song has no title."); return done(); }
+  const dur0 = songs[id]?.duration || st.duration || 0;
+  if (dur0 && dur0 < 30) { why.push("Online search skipped: shorter than 30 seconds."); return done(); }
   try {
     const q = new URLSearchParams({ track_name: title });
-    if (artist && !/unknown/i.test(artist)) q.set("artist_name", artist);
+    if (artist) q.set("artist_name", artist);
     let r = await fetch("https://lrclib.net/api/get?" + q, { headers: { "Accept": "application/json" } });
     // only lyrics for a song of the same length: a name alone matches the wrong songs
     const dur = () => (st.id === id && st.duration) || songs[id]?.duration || 0;
     const fits = x => x && (x.syncedLyrics || x.plainLyrics) && (!dur() || !x.duration || Math.abs(x.duration - dur()) <= 4);
     let d = r.ok ? await r.json() : null;
+    let seen = d && (d.syncedLyrics || d.plainLyrics) ? 1 : 0;
     if (!fits(d)) {
-      r = await fetch("https://lrclib.net/api/search?" + new URLSearchParams({ q: `${artist || ""} ${title}`.trim() }));
+      r = await fetch("https://lrclib.net/api/search?" + new URLSearchParams({ q: `${artist} ${title}`.trim() }));
       const list = r.ok ? await r.json() : [];
+      seen += (list || []).filter(x => x.syncedLyrics || x.plainLyrics).length;
       d = (list || []).find(fits) || null;
     }
     if (st.id !== id) return;
-    if (d && (d.syncedLyrics || d.plainLyrics)) { showLyrics(d.syncedLyrics || d.plainLyrics, "lrclib", id); openLyricsTab(); }
-    else showLyrics("", "none", id);
-  } catch (_) { if (st.id === id) showLyrics("", "none", id); }
+    if (d && (d.syncedLyrics || d.plainLyrics)) { showLyrics(d.syncedLyrics || d.plainLyrics, "lrclib", id); openLyricsTab(); return; }
+    why.push(`Online (LRCLIB) for “${title}”${artist ? " by " + artist : ""}: ` + (seen ? `${seen} result${seen === 1 ? "" : "s"}, none the same length as this song (${fmtTime(dur())}).` : "nothing found."));
+  } catch (err) { why.push("Online search failed: " + (err && err.message || err)); }
+  done();
 }
 function openLyricsTab() { /* lyrics live under the controls in Now Playing → Listen */ }
 let syncing = null;
@@ -1230,6 +1243,7 @@ function syncEnd(saveIt) {
 }
 const lrcTime = t => `${String(Math.floor(t / 60)).padStart(2, "0")}:${(t % 60).toFixed(2).padStart(5, "0")}`;
 $("#lyrSync").onclick = syncStart;
+$("#lyrSource").onclick = () => { if ($("#tab-lyrics").classList.contains("nolyr") && lyr.why && lyr.why.length) confirmBox("Why no lyrics", lyr.why.join("\n") + "\n\nTap Edit to paste them; they stay with the song.", "OK", ""); };
 $("#syncNext").onclick = () => { const s = syncing; if (!s || s.n >= s.idx.length) return; s.times[s.n] = Math.max(0, st.pos - 0.1); s.n++; syncShow(); };
 $("#syncUndo").onclick = () => { const s = syncing; if (!s || !s.n) return; s.n--; s.times.length = s.n; seek(Math.max(0, (s.times[s.n - 1] ?? 0))); syncShow(); };
 $("#syncSave").onclick = () => syncEnd(true);
@@ -1716,6 +1730,7 @@ function ask(title, text, value, yes = "Save", no = "Cancel", withInput = true) 
     const d = $("#dialog"), inp = $("#dlgInput");
     $("#dlgTitle").textContent = title; $("#dlgText").textContent = text || ""; $("#dlgText").hidden = !text;
     $("#dlgYes").textContent = yes; $("#dlgNo").textContent = no; inp.value = value || ""; inp.hidden = !withInput;
+    $("#dlgNo").hidden = !no;
     $("#dlgYes").classList.toggle("danger", /^(Delete|Discard)/.test(yes));
     d.hidden = false;
     if (withInput) setTimeout(() => { inp.focus(); inp.select(); }, 50);
