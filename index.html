@@ -28,12 +28,12 @@
 <main id="page-music" class="page on">
   <section class="homewave" id="homeWave" hidden></section>
   <section class="htrans" id="homeTransport" hidden>
-    <span class="htime"><b id="hNow">0:00</b> / <span id="hDur">0:00</span></span>
-    <button class="hbtn" id="hPrev" title="Previous"><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="#fff" stroke-width="1.9" stroke-linejoin="round" stroke-linecap="round"><path d="M18 5v14L8 12z"/><path d="M6 5v14"/></svg></button>
-    <button class="hbtn hplay" id="hPlay" title="Play / pause"></button>
-    <button class="hbtn" id="hStop" title="Stop"><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="#fff" stroke-width="1.9" stroke-linejoin="round" stroke-linecap="round"><rect x="6.5" y="6.5" width="11" height="11" rx="1.5"/></svg></button>
     <button class="hbtn hcut" id="hCut" title="Cut a piece"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="#fff" stroke-width="1.9" stroke-linecap="round"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M8.6 7.6 20 18M8.6 16.4 20 6"/></svg></button>
-    <button class="hbtn" id="hNext" title="Next"><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="#fff" stroke-width="1.9" stroke-linejoin="round" stroke-linecap="round"><path d="M6 5v14l10-7z"/><path d="M18 5v14"/></svg></button>
+    <span class="htime"><b id="hNow">0:00</b> / <span id="hDur">0:00</span></span>
+    <button class="hbtn gloss" id="hPrev" title="Previous"><svg viewBox="0 0 24 24" width="22" height="22" fill="#fff"><path d="M18.5 5.5v13L9 12z"/><rect x="5.5" y="5.5" width="2.6" height="13" rx="1"/></svg></button>
+    <button class="hbtn hplay gloss" id="hPlay" title="Play / pause"></button>
+    <button class="hbtn" id="hStop" title="Stop"><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="#fff" stroke-width="1.9" stroke-linejoin="round" stroke-linecap="round"><rect x="6.5" y="6.5" width="11" height="11" rx="1.5"/></svg></button>
+    <button class="hbtn gloss" id="hNext" title="Next"><svg viewBox="0 0 24 24" width="22" height="22" fill="#fff"><path d="M5.5 5.5v13L15 12z"/><rect x="15.9" y="5.5" width="2.6" height="13" rx="1"/></svg></button>
   </section>
   <section class="cutbar" id="cutBar" hidden>
     <div class="cutrow">
@@ -144,9 +144,9 @@
 <div class="mini" id="mini" hidden>
   <div class="minieq" id="miniEq"><span></span><span></span><span></span><span></span><span></span></div>
   <div class="minitext"><div class="minititle" id="miniTitle"></div><div class="minisub" id="miniSub"></div></div>
-  <button class="minibtn" id="miniPrev" title="Previous"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="#fff" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round"><path d="M18 5v14L8 12z"/><path d="M6 5v14"/></svg></button>
-  <button class="minibtn" id="miniPlay" title="Play / pause"></button>
-  <button class="minibtn" id="miniNext" title="Next"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="#fff" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round"><path d="M6 5v14l10-7z"/><path d="M18 5v14"/></svg></button>
+  <button class="minibtn gloss" id="miniPrev" title="Previous"><svg viewBox="0 0 24 24" width="17" height="17" fill="#fff"><path d="M18.5 5.5v13L9 12z"/><rect x="5.5" y="5.5" width="2.6" height="13" rx="1"/></svg></button>
+  <button class="minibtn gloss mplay" id="miniPlay" title="Play / pause"></button>
+  <button class="minibtn gloss" id="miniNext" title="Next"><svg viewBox="0 0 24 24" width="17" height="17" fill="#fff"><path d="M5.5 5.5v13L15 12z"/><rect x="15.9" y="5.5" width="2.6" height="13" rx="1"/></svg></button>
   <div class="miniprog"><div id="miniProg"></div></div>
 </div>
 
@@ -189,10 +189,10 @@
       <div class="times"><span id="tnow">0:00</span><span id="tdur">0:00</span></div>
       <div class="controls">
         <button class="ctl" id="shuffle" title="Shuffle">⤮</button>
-        <button class="ctl big" id="prev" title="Previous">⏮</button>
-        <button class="play" id="play" title="Play / pause">▶</button>
+        <button class="ctl big gloss" id="prev" title="Previous"><svg viewBox="0 0 24 24" width="26" height="26" fill="#fff"><path d="M18.5 5.5v13L9 12z"/><rect x="5.5" y="5.5" width="2.6" height="13" rx="1"/></svg></button>
+        <button class="play gloss" id="play" title="Play / pause">▶</button>
         <button class="ctl" id="npStop" title="Stop">■</button>
-        <button class="ctl big" id="next" title="Next">⏭</button>
+        <button class="ctl big gloss" id="next" title="Next"><svg viewBox="0 0 24 24" width="26" height="26" fill="#fff"><path d="M5.5 5.5v13L15 12z"/><rect x="15.9" y="5.5" width="2.6" height="13" rx="1"/></svg></button>
         <button class="ctl" id="repeat" title="Repeat">↻</button>
       </div>
     </section>

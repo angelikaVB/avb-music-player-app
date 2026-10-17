@@ -243,13 +243,13 @@ async function sniffHeader(blob, name) {
 
 // ---------------------------------------------------------------- transport
 const ANDROID = window.AVBAndroid || null;
-function play() { if (!st.buffer) return; audio().then(() => { send({ cmd: "play" }); st.playing = true; $("#play").textContent = "❚❚"; setMiniPlay(true); if (ANDROID) ANDROID.playing(true); if (navigator.mediaSession) navigator.mediaSession.playbackState = "playing"; }); }
-function pause() { send({ cmd: "pause" }); st.playing = false; $("#play").textContent = "▶"; setMiniPlay(false); if (ANDROID) ANDROID.playing(false); if (navigator.mediaSession) navigator.mediaSession.playbackState = "paused"; }
+function play() { if (!st.buffer) return; audio().then(() => { send({ cmd: "play" }); st.playing = true; setMiniPlay(true); if (ANDROID) ANDROID.playing(true); if (navigator.mediaSession) navigator.mediaSession.playbackState = "playing"; }); }
+function pause() { send({ cmd: "pause" }); st.playing = false; setMiniPlay(false); if (ANDROID) ANDROID.playing(false); if (navigator.mediaSession) navigator.mediaSession.playbackState = "paused"; }
 function togglePlay() { if (!st.buffer) { if (lib.queue.length) playIndex(Math.max(0, lib.index), true); else $("#files2").click(); return; } st.playing ? pause() : play(); }
 function seek(t) { if (!st.buffer) return; t = Math.max(0, Math.min(st.duration, t)); st.pos = t; send({ cmd: "seek", frame: Math.round(t * st.sr) }); drawWave();
   $("#miniProg").style.width = (t / st.duration * 100) + "%"; $("#tnow").textContent = fmtTime(t); $("#hNow").textContent = fmtTime(t); $("#seek").value = Math.round(t / st.duration * 1000); }
 function onEnded() {
-  st.playing = false; $("#play").textContent = "▶"; setMiniPlay(false); if (ANDROID) ANDROID.playing(false);
+  st.playing = false; setMiniPlay(false); if (ANDROID) ANDROID.playing(false);
   if (lib.repeat === "one") { seek(0); play(); } else if (!isRecording(st.id)) nextTrack(true);
 }
 // choosing a song only loads it: playing is the user's ▶ (autoplay only when the music was already going)
@@ -1905,14 +1905,15 @@ function updateMini() {
 }
 // the round play / pause icon, and the equaliser moves only while music plays
 function setMiniPlay(on) {
-  $("#miniPlay").innerHTML = on
-    ? `<svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="#FF7A1A" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9.5"/><path d="M10 8.5v7M14 8.5v7"/></svg>`
-    : `<svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="#FF7A1A" stroke-width="2" stroke-linejoin="round"><circle cx="12" cy="12" r="9.5"/><path d="M10 8.3v7.4l6-3.7z"/></svg>`;
+  // white icons on the glossy orange balls
+  const pause = w => `<svg viewBox="0 0 24 24" width="${w}" height="${w}" fill="#fff"><rect x="6.5" y="5" width="4" height="14" rx="1.2"/><rect x="13.5" y="5" width="4" height="14" rx="1.2"/></svg>`;
+  const playI = w => `<svg viewBox="0 0 24 24" width="${w}" height="${w}" fill="#fff"><path d="M8 5.2v13.6L19 12z"/></svg>`;
+  $("#miniPlay").innerHTML = on ? pause(18) : playI(18);
+  $("#hPlay").innerHTML = on ? pause(28) : playI(28);
+  $("#play").innerHTML = on ? pause(32) : playI(32);
   $("#mini").classList.toggle("playing", !!on);
-  $("#hPlay").innerHTML = on
-    ? `<svg viewBox="0 0 24 24" width="30" height="30" fill="#fff"><rect x="7" y="5.5" width="3.6" height="13" rx="1"/><rect x="13.4" y="5.5" width="3.6" height="13" rx="1"/></svg>`
-    : `<svg viewBox="0 0 24 24" width="30" height="30" fill="#fff"><path d="M8.5 5.8v12.4L18.5 12z"/></svg>`;
 }
+
 let npMode = "listen";
 // one waveform (with pinch zoom, seek, A/B, flags): on the home screen, or in Studio while that is open
 // the Tempo and Key rows live under the home waveform, and go back into Studio's Tempo & Key while it is open
