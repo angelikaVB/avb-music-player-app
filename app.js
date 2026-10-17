@@ -1534,6 +1534,11 @@ function drawEq() {
   const g = c.createLinearGradient(0, 0, w, 0); RUN.forEach((col, i) => g.addColorStop(i / 5, col));
   c.strokeStyle = lib.eq.on ? g : "#6C6996"; c.lineWidth = 2.5; c.beginPath();
   r.total.forEach((v, i) => { const xx = i / (N - 1) * w, yy = y(Math.max(-EQ_DB, Math.min(EQ_DB, v))); i ? c.lineTo(xx, yy) : c.moveTo(xx, yy); }); c.stroke();
+  // the drawn line, kept faintly after the fit to compare with
+  if (eqGhost && !eqStroke) {
+    c.setLineDash([5, 5]); c.strokeStyle = "rgba(255,255,255,.55)"; c.lineWidth = 1.6; c.beginPath();
+    eqGhost.forEach((p, i) => { const xx = eqX(p.f, w), yy = y(p.g); i ? c.lineTo(xx, yy) : c.moveTo(xx, yy); }); c.stroke(); c.setLineDash([]);
+  }
   // the line being drawn
   if (eqStroke && eqStroke.length > 1) {
     c.strokeStyle = "#fff"; c.lineWidth = 3; c.lineJoin = c.lineCap = "round"; c.shadowColor = "#FF8A1E"; c.shadowBlur = 8;
@@ -1551,6 +1556,25 @@ function drawEq() {
   });
 }
 const fmtHz = f => f >= 1000 ? (f / 1000).toFixed(f >= 10000 ? 1 : 2).replace(/\.?0+$/, "") + " kHz" : Math.round(f) + " Hz";
+// what the selected band does, in plain words, while it moves
+function eqDescribe(b) {
+  const hz = fmtHz(b.f);
+  if (!b.on && (b.type === "highpass" || b.type === "lowpass")) return `${b.label} is off. Turn it on to ${b.type === "highpass" ? "remove rumble below a frequency" : "soften everything above a frequency"}.`;
+  if (b.type === "highpass") return `Removing everything below ${hz}: ${b.f < 60 ? "rumble and handling noise go, the music stays" : b.f < 150 ? "rumble goes and the bass gets lighter" : "the bass thins out: sounds smaller, like a radio"}.`;
+  if (b.type === "lowpass") return `Removing everything above ${hz}: ${b.f > 14000 ? "hiss softens, barely changes the music" : b.f > 6000 ? "darker and softer, less sparkle" : "muffled, like through a wall"}.`;
+  const g = b.g, f = b.f;
+  if (!b.on || Math.abs(g) < 0.2) return `${b.label} at ${hz}: no change. Drag up to boost, down to cut.`;
+  const up = g > 0, amt = `${up ? "+" : ""}${g.toFixed(1)} dB`;
+  const region = f < 60 ? ["sub-bass: the rumble you feel", "more weight and rumble; too much sounds boomy", "less rumble, tighter low end"]
+    : f < 250 ? ["bass: kick drum and bass guitar", "warmer, punchier low end; too much sounds boomy", "leaner, less boom"]
+    : f < 500 ? ["low mids: body of voices and guitars", "fuller body; too much sounds muddy", "clears mud, cleaner mix"]
+    : f < 2000 ? ["mids: the core of most instruments", "more presence of the core sound; too much sounds boxy or honky", "less boxy, more open"]
+    : f < 5000 ? ["upper mids: vocal clarity and bite", "vocals and leads come forward and cut through; too much sounds harsh", "smoother, less harsh, vocals sit back"]
+    : f < 10000 ? ["brilliance: crisp detail, the 's' of singing", "crisper and brighter; too much sounds sharp on 's'", "softer, less sibilance"]
+    : ["air: sparkle and openness", "airier, more sparkle; too much adds hiss", "darker, smoother top"];
+  const eff = up ? region[1] : region[2];
+  return `${up ? "Boosting" : "Cutting"} ${hz} (${amt}), the ${region[0].replace(":", " ·")}. ${eff[0].toUpperCase() + eff.slice(1)}.`;
+}
 function fillEqEdit() {
   const b = lib.eq.bands[eqSel], cut = b.type === "highpass" || b.type === "lowpass";
   $("#eqBands").innerHTML = lib.eq.bands.map((x, i) => `<button data-i="${i}" class="${i === eqSel ? "sel" : ""} ${x.on ? "" : "off"}" style="color:${EQ_COLOURS[i]}">${i + 1} ${x.label}</button>`).join("");
@@ -1563,6 +1587,7 @@ function fillEqEdit() {
   $("#eqQ").value = Math.round(Math.log(b.q / 0.2) / Math.log(15 / 0.2) * 1000); $("#eqQv").textContent = b.q.toFixed(2);
   $("#eqOut").value = Math.round(lib.eq.out * 10); $("#eqOutv").textContent = (lib.eq.out > 0 ? "+" : "") + lib.eq.out.toFixed(1) + " dB";
   $("#eqOn").checked = lib.eq.on;
+  $("#eqHint").textContent = lib.eq.on ? eqDescribe(b) : "EQ is off: the song plays as it is.";
 }
 function eqWire() {
   const band = () => lib.eq.bands[eqSel];
@@ -1573,7 +1598,7 @@ function eqWire() {
   $("#eqQ").oninput = e => { band().q = 0.2 * Math.pow(15 / 0.2, +e.target.value / 1000); eqChanged(false); };
   $("#eqOut").oninput = e => { lib.eq.out = +e.target.value / 10; eqChanged(false); };
   $("#eqFlat").onclick = () => {                     // Reset: bands, output and balance back to neutral
-    lib.eq = EQ_DEFAULT(); eqChanged(true);
+    lib.eq = EQ_DEFAULT(); eqGhost = null; eqChanged(true);
     lib.balance = 0; save("balance"); $("#balance").value = 0; $("#balanceV").textContent = "Center"; setBalance();
     toast("EQ reset");
   };
@@ -1597,7 +1622,7 @@ function eqWire() {
     let best = -1, bd = 1e9;
     lib.eq.bands.forEach((b, i) => { const cut = b.type === "highpass" || b.type === "lowpass"; const d = Math.hypot(eqX(b.f, w) - x, y(cut ? 0 : b.g) - yy); if (d < bd) { bd = d; best = i; } });
     if (best < 0 || bd > 40) return;
-    eqSel = best; dragging = { w, h }; try { cv.setPointerCapture(e.pointerId); } catch (_) { }
+    eqSel = best; dragging = { w, h }; eqGhost = null; try { cv.setPointerCapture(e.pointerId); } catch (_) { }
     if (!lib.eq.bands[best].on) { lib.eq.bands[best].on = true; eqChanged(true); } else { fillEqEdit(); drawEq(); }
   });
   cv.addEventListener("pointermove", e => {
@@ -1615,31 +1640,71 @@ function eqWire() {
   };
   cv.addEventListener("pointerup", up); cv.addEventListener("pointercancel", up);
 }
-let eqDrawMode = false, eqStroke = null;
-// fit the six tone bands (low shelf, four bells, air shelf) to the drawn line
+var eqDrawMode = false, eqStroke = null;
+// fit the six tone bands (low shelf, four bells, air shelf) to the drawn line: the same
+// biquad math as the player (RBJ / Web Audio), searched band by band until the whole
+// curve sits as close to the line as six smooth bands allow
+function biquadDb(type, f0, g, q, f, fs) {
+  const A = Math.pow(10, g / 40), w0 = 2 * Math.PI * f0 / fs, cw = Math.cos(w0), sw = Math.sin(w0);
+  let b0, b1, b2, a0, a1, a2;
+  if (type === "peaking") {
+    const al = sw / (2 * q); b0 = 1 + al * A; b1 = -2 * cw; b2 = 1 - al * A; a0 = 1 + al / A; a1 = -2 * cw; a2 = 1 - al / A;
+  } else {
+    const al = sw / 2 * Math.SQRT2, sA = 2 * Math.sqrt(A) * al;
+    if (type === "lowshelf") { b0 = A * ((A + 1) - (A - 1) * cw + sA); b1 = 2 * A * ((A - 1) - (A + 1) * cw); b2 = A * ((A + 1) - (A - 1) * cw - sA); a0 = (A + 1) + (A - 1) * cw + sA; a1 = -2 * ((A - 1) + (A + 1) * cw); a2 = (A + 1) + (A - 1) * cw - sA; }
+    else { b0 = A * ((A + 1) + (A - 1) * cw + sA); b1 = -2 * A * ((A - 1) + (A + 1) * cw); b2 = A * ((A + 1) + (A - 1) * cw - sA); a0 = (A + 1) - (A - 1) * cw + sA; a1 = 2 * ((A - 1) - (A + 1) * cw); a2 = (A + 1) - (A - 1) * cw - sA; }
+  }
+  const w = 2 * Math.PI * f / fs, c1 = Math.cos(w), s1 = Math.sin(w), c2 = Math.cos(2 * w), s2 = Math.sin(2 * w);
+  const nr = b0 + b1 * c1 + b2 * c2, ni = -(b1 * s1 + b2 * s2), dr = a0 + a1 * c1 + a2 * c2, di = -(a1 * s1 + a2 * s2);
+  return 10 * Math.log10((nr * nr + ni * ni) / Math.max(1e-20, dr * dr + di * di));
+}
+var eqGhost = null;                  // the drawn line, kept faintly over the curve (as frequency / dB)
 function fitEqToLine(pts, w, h) {
   const dbAt = yy => Math.max(-EQ_DB, Math.min(EQ_DB, (h / 2 - yy) / (h / 2 - 14) * EQ_DB));
   const line = pts.map(p => ({ f: eqF(p.x, w), g: dbAt(p.y) })).sort((a, b) => a.f - b.f);
   const fLo = line[0].f, fHi = line[line.length - 1].f;
-  const target = f => {                                        // the line's gain at f (0 dB outside it)
+  const target = f => {
     if (f < fLo || f > fHi) return 0;
     let i = 0; while (i < line.length - 1 && line[i + 1].f < f) i++;
     const a = line[i], b = line[Math.min(line.length - 1, i + 1)];
     const t = b.f === a.f ? 0 : Math.log(f / a.f) / Math.log(b.f / a.f);
     return a.g + (b.g - a.g) * Math.max(0, Math.min(1, t));
   };
-  const keep = lib.eq.bands;
-  const plan = [[1, 90, 0.71], [2, 230, 1.1], [3, 650, 1.1], [4, 1700, 1.1], [5, 4300, 1.1], [6, 10500, 0.71]];
-  for (const [i, f, q] of plan) Object.assign(keep[i], { f, q, g: target(f), on: true });
-  // a few rounds: compare the EQ's real curve with the line and nudge each band
-  const fs = Float32Array.from(plan, p => p[1]);
-  for (let round = 0; round < 14; round++) {
-    const r = eqResponse(fs);
-    plan.forEach(([i], k) => { const b = keep[i]; b.g = Math.max(-EQ_DB, Math.min(EQ_DB, b.g + 0.6 * (target(fs[k]) - (r.total[k] - (lib.eq.on ? lib.eq.out : 0))))); });
+  const fs = (ctx && ctx.sampleRate) || 48000;
+  const N = 80, grid = [], want = [], weight = [];
+  for (let i = 0; i < N; i++) { const f = EQ_MIN * Math.pow(EQ_MAX / EQ_MIN, (i + 0.5) / N); grid.push(f); want.push(target(f)); weight.push(f >= fLo && f <= fHi ? 1 : 0.25); }
+  // bands 1..6: [type, f, g, q], with the range each may move in
+  const P = [["lowshelf", 90, 0, .71, 25, 500], ["peaking", 220, 0, 1, 35, 18000], ["peaking", 650, 0, 1, 35, 18000],
+             ["peaking", 1700, 0, 1, 35, 18000], ["peaking", 4300, 0, 1, 35, 18000], ["highshelf", 10000, 0, .71, 1500, 18000]]
+    .map(([type, f, g, q, lo, hi]) => ({ type, f, g: target(f), q, lo, hi }));
+  const err = () => {
+    let e = 0;
+    for (let j = 0; j < N; j++) { let r = 0; for (const b of P) r += biquadDb(b.type, b.f, b.g, b.q, grid[j], fs); const d = r - want[j]; e += weight[j] * d * d; }
+    return e;
+  };
+  // search: nudge each band's frequency, gain and width while the error drops; smaller steps when stuck
+  let best = err(), step = { f: 0.25, g: 3, q: 0.35 };
+  for (let round = 0; round < 90 && step.g > 0.05; round++) {
+    let improved = false;
+    for (const b of P) for (const k of ["g", "f", "q"]) {
+      if (k === "q" && b.type !== "peaking") continue;
+      for (const dir of [1, -1]) {
+        const old = b[k];
+        if (k === "f") b.f = Math.max(b.lo, Math.min(b.hi, b.f * Math.pow(2, dir * step.f)));
+        else if (k === "g") b.g = Math.max(-EQ_DB, Math.min(EQ_DB, b.g + dir * step.g));
+        else b.q = Math.max(0.3, Math.min(6, b.q * Math.pow(2, dir * step.q)));
+        const e = err();
+        if (e < best - 1e-6) { best = e; improved = true; } else b[k] = old;
+      }
+    }
+    if (!improved) { step.f /= 2; step.g /= 2; step.q /= 2; }
   }
-  for (const [i] of plan) { const b = keep[i]; b.g = Math.round(b.g * 10) / 10; if (Math.abs(b.g) < 0.2) b.g = 0; }
+  P.forEach((p, k) => Object.assign(lib.eq.bands[k + 1], { f: Math.round(p.f), g: Math.abs(p.g) < 0.2 ? 0 : Math.round(p.g * 10) / 10, q: Math.round(p.q * 100) / 100, on: true }));
   lib.eq.on = true; eqDrawMode = false; $("#eqDraw").classList.remove("on");
-  eqChanged(true); toast("The EQ follows your line. Drag a dot to fine-tune.");
+  eqGhost = line.filter((_, i) => i % 2 === 0 || i === line.length - 1);
+  eqChanged(true);
+  const rms = Math.sqrt(best / weight.reduce((a, x) => a + x, 0));
+  toast(rms < 1 ? "The EQ follows your line. Drag a dot to fine-tune." : `As close as six bands can get (about ${rms.toFixed(1)} dB off). Drag a dot to fine-tune.`);
 }
 eqWire();
 
@@ -2598,4 +2663,4 @@ if (demo && ["localhost", "127.0.0.1"].includes(location.hostname)) {
   const f = new File([blob], decodeURIComponent(demo.split("/").pop()), { type: blob.type, lastModified: 1 });
   await addFiles([f]);
 }
-window.avb = { st, lib, songMk, recMk, addMarker, editMarker, marksCsv, marksText, shareSong, loadSong, applyChange, saveCopy, seek, play, pause, markButton, loopRange };
+window.avb = { st, lib, eqResponse: f => eqResponse(f), fitEqToLine: (p, w, h) => fitEqToLine(p, w, h), songMk, recMk, addMarker, editMarker, marksCsv, marksText, shareSong, loadSong, applyChange, saveCopy, seek, play, pause, markButton, loopRange };

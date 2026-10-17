@@ -773,3 +773,5 @@ body.hasmini .snack { bottom: calc(76px + env(safe-area-inset-bottom)); }
 .lyrblock.nolyr .lyrics, .lyrblock.nolyr .lyrhandle, .lyrblock.nolyr #lyrCopy, .lyrblock.nolyr #lyrSync { display: none !important; }
 .lyrblock.nolyr .lyrhead h3 { font-size: 15px; }
 .lyrblock.nolyr #lyrSource { font-size: 13px; }
+/* what the moving band does, in words */
+.eqhint { min-height: 38px; margin: 4px 0 2px; padding: 8px 12px; border-radius: 12px; background: rgba(255,138,30,.08); color: #FFD3A8; font-size: 13.5px; font-weight: 600; line-height: 1.35; }
