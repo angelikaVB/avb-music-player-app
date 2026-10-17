@@ -798,3 +798,17 @@ body.hasmini .snack { bottom: calc(76px + env(safe-area-inset-bottom)); }
 #lyrTitle { cursor: pointer; }
 .lyrblock.folded .lyrics, .lyrblock.folded .lyrhandle, .lyrblock.folded #lyrSyncBar, .lyrblock.folded #lyrSync, .lyrblock.folded #lyrCopy, .lyrblock.folded #lyrEdit, .lyrblock.folded #lyrText, .lyrblock.folded #lyrEditBtns { display: none !important; }
 .lyrblock.nolyr .lyrfold { display: none; }
+
+/* the bottom player's progress line can be dragged: a taller touch strip over it, a thumb while dragging */
+.miniseek { position: absolute; left: 4px; right: 4px; bottom: env(safe-area-inset-bottom); height: 18px; z-index: 3; touch-action: none; cursor: pointer; }
+.mini.seeking .miniprog { height: 6px; bottom: calc(5px + env(safe-area-inset-bottom)); overflow: visible; background: rgba(255,255,255,.22); }
+.mini.seeking .miniprog div { position: relative; }
+.mini.seeking .miniprog div::after { content: ""; position: absolute; right: -8px; top: 50%; width: 16px; height: 16px; margin-top: -8px; border-radius: 50%; background: #fff; box-shadow: 0 0 10px rgba(236,72,153,.8); }
+
+/* full-screen player: heart and the ⋯ menu (every operation) to the right of the name */
+.nphead .hrow { padding: 0 86px; }
+.nphead .hrow .heart { right: 44px; }
+.nphead .hrow .npmore { position: absolute; right: 0; top: -4px; }
+.np.studio .nphead .hrow { padding: 0 86px 0 0; }
+.nphead .hrow { padding: 0 80px; }
+.nphead .hrow #title { white-space: normal; text-overflow: clip; text-align: center; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; overflow-wrap: anywhere; line-height: 1.15; }

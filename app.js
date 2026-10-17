@@ -21,7 +21,7 @@ const songGet = id => new Promise((ok, no) => { const t = db.transaction("songs"
 const lib = {
   queue: await kvGet("queue", []), index: await kvGet("index", -1), favorites: await kvGet("favorites", []),
   recent: await kvGet("recent", []), playlists: await kvGet("playlists", []), notes: await kvGet("notes", {}), lyrics: await kvGet("lyrics", {}), eq: await kvGet("eq", null), lyrH: await kvGet("lyrH", 300), lyrFold: await kvGet("lyrFold", false), mkOpen: await kvGet("mkOpen", true), mkCat: await kvGet("mkCat", "idea"), recInput: await kvGet("recInput", ""), recFmt: await kvGet("recFmt", { sr: 48000, bits: 24 }), shuffle: await kvGet("shuffle", false), mono: false,
-  balance: await kvGet("balance", 0), fix: await kvGet("fix", {}), marks: await kvGet("marks", {}), hidden: await kvGet("hidden", []),
+  balance: await kvGet("balance", 0), fix: await kvGet("fix", {}), marks: await kvGet("marks", {}), hidden: await kvGet("hidden", []), renamed: await kvGet("renamed", {}),
   repeat: await kvGet("repeat", "off"), volume: await kvGet("volume", 1), keepVoice: await kvGet("keepVoice", true),
 };
 const save = k => kvSet(k, lib[k]);
@@ -139,7 +139,7 @@ async function loadSong(id, autoplay = true) {
   if (mkEditing && mkEditing.ctx === songMk) closeMarkEdit();
   $("#notes").value = lib.notes[id] || "";
   renderMarks();
-  readTags(rec.blob, rec.name).catch(() => ({})).then(tags => { if (st.id !== id) return; st.tags = tags; if (tags.artist) $("#npArtist").textContent = tags.artist; if (tags.title) $("#title").textContent = tags.title; showCover(id, tags); updateMini(); findLyrics(id, rec, tags); });
+  readTags(rec.blob, rec.name).catch(() => ({})).then(tags => { if (st.id !== id) return; st.tags = tags; if (tags.artist) $("#npArtist").textContent = tags.artist; if (tags.title && !lib.renamed[id]) $("#title").textContent = tags.title; showCover(id, tags); updateMini(); findLyrics(id, rec, tags); });
   if (!isRecording(id)) { lib.recent = [id, ...lib.recent.filter(x => x !== id)].slice(0, 60); save("recent"); }
   if ($("#page-recs").classList.contains("on")) renderRecList();
   analyse();
@@ -959,6 +959,7 @@ $("#selMore").onclick = () => {
   const n = ids.length, word = sel.where === "recs" ? (n === 1 ? "recording" : "recordings") : (n === 1 ? "song" : "songs");
   const allFav = ids.every(id => lib.favorites.includes(id));
   const items = [{ label: `Share ${n} ${word}`, run: () => shareMany(ids) }];
+  if (n === 1) items.push({ label: "Rename", run: () => { selEnd(true); renameSong(ids[0]); } });
   if (sel.where === "music") {
     items.push({ label: allFav ? "Remove from favorites" : "Add to favorites", run: () => {
       if (allFav) lib.favorites = lib.favorites.filter(x => !ids.includes(x)); else lib.favorites = [...ids.filter(x => !lib.favorites.includes(x)), ...lib.favorites];
@@ -1062,7 +1063,7 @@ function songMenu(id) {
   ];
   if (view === "queue") items.push({ label: "Remove from queue", run: () => { const i = lib.queue.indexOf(id); if (i >= 0) { lib.queue.splice(i, 1); if (i < lib.index) lib.index--; else if (i === lib.index) lib.index = -1; } save("queue"); save("index"); renderList(); } });
   if (view === "list") items.push({ label: "Remove from this playlist", run: () => { const p = lib.playlists.find(p => p.name === listName); p.items = p.items.filter(x => x !== id); save("playlists"); renderList(); } });
-  items.unshift({ label: "Share", run: () => shareSong(id) });
+  items.unshift({ label: "Share", run: () => shareSong(id) }, { label: "Rename", run: () => renameSong(id) });
   const rec = isRecording(id);
   const twin = phoneTwin(id);                         // the phone file behind an app copy, when it can be found
   if (!rec || (ANDROID && songs[id] && songs[id].url)) items.push({ label: "Remove from player (the file stays on your phone)", run: () => removeFromApp(id) });
@@ -1074,6 +1075,35 @@ function songMenu(id) {
   const s0 = songs[id];
   sheet(items, s0 ? s0.name.replace(/\.[^.]+$/, "") : "");
 }
+// rename a song or recording: a phone file is renamed on the phone itself (Android may ask first
+// for files other apps made); a copy kept in the app is renamed in the app; the extension stays
+const renameWaiters = {};
+let renameToken = 0;
+window.avbRenamed = (token, name) => { const f = renameWaiters[token]; delete renameWaiters[token]; if (f) f(name || ""); };
+async function renameSong(id) {
+  const s0 = songs[id]; if (!s0) return;
+  const ext = (s0.name.match(/\.[^.]+$/) || [""])[0], stem = s0.name.slice(0, s0.name.length - ext.length);
+  let v = await ask(isRecording(id) ? "Rename recording" : "Rename song", "", stem, "Rename");
+  if (v == null) return;
+  v = v.replace(/[\/:*?"<>|\u0000-\u001f]/g, " ").replace(/\s+/g, " ").trim().replace(/[. ]+$/, "");
+  if (!v || v === stem) return;
+  let name = v + ext;
+  if (/^[mr]:/.test(id) && ANDROID) {
+    if (!ANDROID.renamePhone) { toast("Update AVB Player to rename files on the phone"); return; }
+    const token = ++renameToken;
+    const done = new Promise(r => renameWaiters[token] = r);
+    ANDROID.renamePhone(id.slice(2), name, token);
+    name = await done;
+    if (!name) { toast("Not renamed"); return; }
+  } else {
+    await tx("songs", "readwrite", store => { const g = store.get(id); g.onsuccess = () => { if (g.result) { g.result.name = name; store.put(g.result); } }; return g; });
+  }
+  s0.name = name;
+  lib.renamed[id] = true; save("renamed");
+  if (st.id === id) { st.name = name; $("#title").textContent = name.replace(/\.[^.]+$/, ""); updateMini(); }
+  renderList(); renderRecList();
+  toast(`Renamed to “${name.replace(/\.[^.]+$/, "")}”`);
+}
 // an app copy (opened through + Open files / Share) and the same file in All music: same name and size
 function phoneTwin(id) {
   const s0 = songs[id]; if (!s0 || s0.url) return null;
@@ -1081,7 +1111,7 @@ function phoneTwin(id) {
 }
 function forget(id) {
   lib.queue = lib.queue.filter(x => x !== id); lib.favorites = lib.favorites.filter(x => x !== id); lib.recent = lib.recent.filter(x => x !== id);
-  lib.playlists.forEach(p => p.items = p.items.filter(x => x !== id)); delete lib.notes[id]; delete lib.lyrics[id];
+  lib.playlists.forEach(p => p.items = p.items.filter(x => x !== id)); delete lib.notes[id]; delete lib.lyrics[id]; if (lib.renamed[id]) { delete lib.renamed[id]; save("renamed"); }
   if (erasing && lib.marks[id]) { delete lib.marks[id]; save("marks"); }      // kept when only removed from the app
   lib.index = st.id && lib.queue.includes(st.id) ? lib.queue.indexOf(st.id) : -1;
   for (const k of ["queue", "index", "favorites", "recent", "playlists", "notes", "lyrics"]) save(k);
@@ -2192,6 +2222,24 @@ function closeNP() { $("#np").hidden = true; document.body.classList.remove("npo
 $("#npClose").onclick = closeNP;
 $("#npMode").querySelectorAll("button").forEach(b => b.onclick = () => setNpMode(b.dataset.mode));
 $("#mini").onclick = e => { if (e.target.closest(".minibtn")) return; openNP(); };
+// drag along the bottom player's progress line to move forward or back; the song jumps on release
+var miniSeeking = false;
+(function miniSeek() {
+  const z = $("#miniSeek"); let t = 0;
+  const at = e => { const r = $(".miniprog").getBoundingClientRect(); return Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)) * (st.duration || 0); };
+  const show = () => { $("#miniProg").style.width = (t / st.duration * 100) + "%"; $("#miniSub").textContent = `${fmtTime(t)} / ${fmtTime(st.duration)}`; };
+  z.addEventListener("pointerdown", e => {
+    if (!st.buffer || !st.duration) return;
+    e.stopPropagation(); e.preventDefault();
+    miniSeeking = true; $("#mini").classList.add("seeking");
+    try { z.setPointerCapture(e.pointerId); } catch (_) { }
+    t = at(e); show();
+  });
+  z.addEventListener("pointermove", e => { if (!miniSeeking) return; t = at(e); show(); });
+  const up = () => { if (!miniSeeking) return; miniSeeking = false; seek(t); $("#mini").classList.remove("seeking"); updateMini(); };
+  z.addEventListener("pointerup", up); z.addEventListener("pointercancel", up);
+  z.addEventListener("click", e => e.stopPropagation());        // a drag never opens the player
+})();
 $("#miniPlay").onclick = e => { e.stopPropagation(); togglePlay(); };   // the bar's buttons never open Now Playing
 $("#miniPrev").onclick = e => { e.stopPropagation(); prevTrack(); };
 // ---- Cut: mark a piece on the home waveform, keep it or remove it, as a new file
@@ -2282,6 +2330,7 @@ $("#repeat").onclick = $("#hRepeat").onclick = () => { lib.repeat = { off: "all"
 setRepeatUi();
 $("#seek").oninput = e => seek(+e.target.value / 1000 * st.duration);
 $("#heart").onclick = () => toggleFav(st.id);
+$("#npMore").onclick = () => { if (st.id && songs[st.id]) songMenu(st.id); };
 $("#shareBtn").onclick = () => shareSong();
 const SHUFFLE_SVG = `<svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><path d="M10.59 9.17 5.41 4 4 5.41l5.17 5.17 1.42-1.41zM14.5 4l2.04 2.04L4 18.59 5.41 20 17.96 7.46 20 9.5V4h-5.5zm.33 9.41-1.41 1.41 3.13 3.13L14.5 20H20v-5.5l-2.04 2.04-3.13-3.13z"/></svg>`;
 const setShuffleUi = () => { for (const b of [$("#shuffle"), $("#hShuffle")]) { b.innerHTML = SHUFFLE_SVG; b.classList.toggle("on", !!lib.shuffle); } };
@@ -2560,7 +2609,7 @@ function tick(now) {
       if (quiet && !rec.warned) { rec.warned = true; if (navigator.vibrate) try { navigator.vibrate([60, 60, 60]); } catch (_) { } }
     }
   } else if (st.buffer && st.playing && now - lastDraw > 40) {
-    lastDraw = now; $("#tnow").textContent = fmtTime(st.pos); $("#hNow").textContent = fmtTime(st.pos); $("#miniProg").style.width = (st.pos / st.duration * 100) + "%"; lyricsTick(st.pos); if ($("#tab-eq").classList.contains("on")) drawEq(); $("#seek").value = Math.round(st.pos / st.duration * 1000); drawWave();
+    lastDraw = now; $("#tnow").textContent = fmtTime(st.pos); $("#hNow").textContent = fmtTime(st.pos); if (!miniSeeking) $("#miniProg").style.width = (st.pos / st.duration * 100) + "%"; lyricsTick(st.pos); if ($("#tab-eq").classList.contains("on")) drawEq(); $("#seek").value = Math.round(st.pos / st.duration * 1000); drawWave();
     if ($("#tab-loud").classList.contains("on")) drawLoud();
     const i = st.sections.findIndex(s => st.pos >= s.start && st.pos < s.end);
     document.querySelectorAll(".sec").forEach((d, k) => d.classList.toggle("now", k === i));
