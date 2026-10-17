@@ -705,3 +705,7 @@ body.hasmini .snack { bottom: calc(76px + env(safe-area-inset-bottom)); }
 .homelyrics { margin: 0 0 12px; }
 .homelyrics .lyrblock { margin-top: 0; }
 .homelyrics .lyrics { max-height: 300px; overflow-y: auto; font-size: 17px; scroll-behavior: smooth; }
+.hometitle .hbpm { color: #19F0DC; font-weight: 800; }
+.hometitle .hbpm.moved { color: #FFE600; }
+/* the song's name at the top: lighter weight, its own color */
+.hometitle .htname { font-weight: 600; color: #C4B5FD; letter-spacing: -.01em; font-size: 18.5px; }

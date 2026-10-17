@@ -334,7 +334,8 @@ function refreshMusic() {
   const m = st.music || {}; const sp = +$("#speed").value; const fx = fixOf();
   $("#speedval").textContent = sp + "%"; $("#speedQuick").value = String(sp / 100);
   { const b0 = effBpm(); $("#speedBpm").textContent = (b0 ? `${(b0 * sp / 100).toFixed(1)} BPM` : "— BPM") + (sp !== 100 ? ` · ${sp}%` : ""); }
-  $("#speedBpm").classList.toggle("moved", sp !== 100);              // the song's own tempo teal, a changed one yellow
+  $("#speedBpm").classList.toggle("moved", sp !== 100);
+  fillHomeSub();              // the song's own tempo teal, a changed one yellow
   $("#semis").textContent = st.semis ? `${st.semis > 0 ? "+" : ""}${st.semis} st` : "±0 st";
   $("#tempoReset").classList.toggle("on", sp !== 100); $("#keyReset").classList.toggle("on", !!st.semis);
   const bpm = effBpm();
@@ -1898,6 +1899,18 @@ function closeDrill() {
   return true;
 }
 $("#libBack").onclick = closeDrill;
+// under the song's name: format tag, artist, length, BPM (teal = the song's own, yellow = changed), size
+function fillHomeSub() {
+  if (!st.id || !songs[st.id]) return;
+  if (!st.buffer) { $("#hSub").textContent = st.loadErr || "Loading…"; return; }
+  const s0 = songs[st.id], f = fmtOf(s0.name), sp = +$("#speed").value, b = effBpm();
+  const kind = { WAV: "wav", MP3: "mp3", FLAC: "flac", M4A: "m4a", AAC: "m4a", MP4: "m4a", OGG: "ogg", OPUS: "ogg", AIFF: "aif", AIF: "aif", AIFC: "aif" }[f] || "other";
+  const artist = $("#npArtist").textContent || (s0.artist && !/unknown/i.test(s0.artist) ? s0.artist : "");
+  const parts = [artist && esc(artist), fmtTime(st.duration || s0.duration || 0),
+    b ? `<b class="hbpm${sp !== 100 ? " moved" : ""}">${(b * sp / 100).toFixed(1)} BPM</b>` : "",
+    s0.size > 0 ? (s0.size / 1e6).toFixed(1) + " MB" : ""].filter(Boolean);
+  $("#hSub").innerHTML = `<span class="ft ft-${kind}">${esc(f)}</span>` + parts.join(" · ");
+}
 function updateMini() {
   const show = !!st.id && songs[st.id] && $("#np").hidden && !rec && !sel.where;
   $("#mini").hidden = !show; document.body.classList.toggle("hasmini", !!show);
@@ -1905,7 +1918,7 @@ function updateMini() {
   $("#miniTitle").textContent = $("#title").textContent;
   // the song's name at the top of the home screen, with its format tag and length
   $("#hTitle").textContent = $("#title").textContent;
-  $("#hSub").innerHTML = !st.buffer ? (st.loadErr || "Loading…") : subLine({ ...songs[st.id], duration: st.duration || songs[st.id].duration, artist: $("#npArtist").textContent || songs[st.id].artist });
+  fillHomeSub();
   $("#miniSub").textContent = $("#npArtist").textContent || (isRecording(st.id) ? "Recording" : (st.info && st.info.fmt) || "");
   const dur = st.duration || songs[st.id].duration || 0, fmt = (st.info && st.info.fmt) || fmtOf(songs[st.id].name);
   $("#miniSub").textContent = !st.buffer ? (st.loadErr || "Loading…") : [$("#npArtist").textContent, fmt, dur ? fmtTime(dur) : ""].filter(Boolean).join(" · ");
