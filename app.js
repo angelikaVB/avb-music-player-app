@@ -2164,22 +2164,22 @@ if (lib.recInput && navigator.mediaDevices && navigator.mediaDevices.enumerateDe
 }).catch(() => { });
 // settings
 $("#settingsBtn").onclick = () => {
-  const items = [
-  ];
-  items.push({ label: "Save all markers and notes (spreadsheet in Downloads)", run: exportAllMarks });
-  if (ANDROID && ANDROID.updateCheck) items.push(updateInfo
-    ? { label: `Update to AVB Player ${updateInfo.name}`, run: startUpdate }
-    : { label: "Check for updates", run: () => { updateManual = true; ANDROID.updateCheck(); } });
-  if (canAskManaged()) items.push({ label: "Delete and rename without Android asking", run: () => { ANDROID.askManageMedia(); toast("Turn on “Allow media management” for AVB Player, then come back"); } });
-  if (lib.hidden.length) items.push({ label: `Show removed songs again (${lib.hidden.length})`, run: () => { const n = lib.hidden.length; lib.hidden = []; save("hidden"); renderList(); renderRecList(); toast(`${n} back in the player`); } });
-  if (ANDROID && ANDROID.shareApp) items.push({ label: "Share AVB Player (WhatsApp, text)", run: () => ANDROID.shareApp(APK_URL) });
-  else if (/Android/.test(navigator.userAgent)) items.push({ label: "Download the Android app", run: () => { location.href = APK_URL; } });
-  if (ANDROID && ANDROID.askDefault) items.push({ label: "Make AVB Player your default player", run: () => ANDROID.askDefault() });
+  // the user's order: Home screen, default player, share, updates, open a song, markers and notes; then the rest
+  const items = [];
   if (ANDROID && ANDROID.addToHome) items.push({ label: "Add AVB Player to the Home screen", run: () => {
     if (!ANDROID.addToHome()) toast("This home screen does not allow it: long-press AVB Player in the apps list and drag it to the Home screen");
   } });
+  else if (!ANDROID && !$("#installBtn").hidden) items.push({ label: "Install the app on this phone", run: () => $("#installBtn").click() });
+  if (ANDROID && ANDROID.askDefault) items.push({ label: "Make AVB Player your default player", run: () => ANDROID.askDefault() });
+  if (ANDROID && ANDROID.shareApp) items.push({ label: "Share AVB Player (WhatsApp, text)", run: () => ANDROID.shareApp(APK_URL) });
+  else if (/Android/.test(navigator.userAgent)) items.push({ label: "Download the Android app", run: () => { location.href = APK_URL; } });
+  if (ANDROID && ANDROID.updateCheck) items.push(updateInfo
+    ? { label: `Update to AVB Player ${updateInfo.name}`, run: startUpdate }
+    : { label: "Check for updates", run: () => { updateManual = true; ANDROID.updateCheck(); } });
   items.push({ label: ANDROID ? "Open a song from Drive or another app" : "Add music from your files", run: () => $("#files2").click() });
-  if (!ANDROID && !$("#installBtn").hidden) items.push({ label: "Install the app on this phone", run: () => $("#installBtn").click() });
+  items.push({ label: "Save the markers and notes of every song in one spreadsheet (to Downloads)", run: exportAllMarks });
+  if (canAskManaged()) items.push({ label: "Delete and rename without Android asking", run: () => { ANDROID.askManageMedia(); toast("Turn on “Allow media management” for AVB Player, then come back"); } });
+  if (lib.hidden.length) items.push({ label: `Show removed songs again (${lib.hidden.length})`, run: () => { const n = lib.hidden.length; lib.hidden = []; save("hidden"); renderList(); renderRecList(); toast(`${n} back in the player`); } });
   const ver = ANDROID && ANDROID.version ? ANDROID.version() : "";
   sheet(items, ver ? `Settings · AVB Player ${ver}` : "Settings");
 };
