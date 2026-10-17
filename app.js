@@ -331,6 +331,7 @@ function refreshMusic() {
   $("#speedval").textContent = sp + "%"; $("#speedQuick").value = String(sp / 100);
   { const b0 = effBpm(); $("#speedBpm").textContent = b0 ? `${(b0 * sp / 100).toFixed(1)} BPM` : "— BPM"; }
   $("#semis").textContent = st.semis ? `${st.semis > 0 ? "+" : ""}${st.semis} st` : "±0 st";
+  $("#tempoReset").classList.toggle("on", sp !== 100); $("#keyReset").classList.toggle("on", !!st.semis);
   const bpm = effBpm();
   $("#bpm").textContent = bpm ? (bpm * sp / 100).toFixed(1) : "—";
   $("#bpmnote").textContent = bpm ? (sp !== 100 ? `${bpm.toFixed(1)} as recorded, at ${sp}%` : fx.bpm ? (fx.bpmHow === "tap" ? "tapped by you" : "set by you") : `beat ${m.confidence || ""}`) : "";
@@ -341,7 +342,8 @@ function refreshMusic() {
   if (key0) {
     const k = st.semis ? shiftKey(key0, st.semis) : key0;
     $("#key").textContent = k; $("#keynote").textContent = `${CAMELOT[k] || ""}  ·  ${fx.key ? "set by you" : "certainty " + Math.round((m.keyConfidence || 0) * 100) + "%"}`;
-    $("#keyResult").textContent = st.semis ? `${key0} → ${k}` : key0;
+    $("#keyResult").textContent = k; $("#keyResult").title = st.semis ? `${key0} → ${k}` : key0;   // the key it plays in now
+    $("#keyResult").classList.toggle("moved", !!st.semis);
   } else { $("#key").textContent = "—"; $("#keynote").textContent = ""; $("#keyResult").textContent = ""; }
   fillStats();
 }
@@ -2194,6 +2196,9 @@ $("#keyDown").onclick = () => { st.semis = Math.max(-12, st.semis - 1); refreshM
 $("#keyUp").onclick = () => { st.semis = Math.min(12, st.semis + 1); refreshMusic(); changeSoon(); };
 
 $("#resetChange").onclick = () => { st.semis = 0; $("#speed").value = 100; applyChange(); refreshMusic(); refreshSave(); };
+// a reset for each: the tempo alone, the key alone
+$("#tempoReset").onclick = () => { if (+$("#speed").value === 100) return; $("#speed").value = 100; refreshMusic(); changeSoon(); };
+$("#keyReset").onclick = () => { if (!st.semis) return; st.semis = 0; refreshMusic(); changeSoon(); };
 $("#keepVoice").checked = lib.keepVoice; $("#keepVoice").onchange = e => { lib.keepVoice = e.target.checked; save("keepVoice"); if (st.semis) changeSoon(50); };
 $("#finer").onchange = () => { if (st.speed !== 1 || st.semis) changeSoon(50); };
 $("#part").onchange = refreshSave; $("#fmt").onchange = refreshSave; $("#saveBtn").onclick = saveCopy;

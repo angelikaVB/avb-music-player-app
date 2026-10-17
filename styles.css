@@ -607,3 +607,13 @@ body.hasmini .snack { bottom: calc(76px + env(safe-area-inset-bottom)); }
 #rowTempo input[type=range] { min-width: 0; }
 #rowTempo #speedval { min-width: 44px; text-align: right; }
 .bpmchip { border: 0; background: rgba(249,115,22,.16); color: #FDBA74; font-weight: 800; font-size: 13px; border-radius: 999px; padding: 6px 10px; white-space: nowrap; font-variant-numeric: tabular-nums; flex: none; }
+/* a reset at the end of each row; the shared Reset row only in Studio */
+.rst { width: 32px; height: 32px; border-radius: 50%; border: 0; background: none; color: var(--text4); display: flex; align-items: center; justify-content: center; padding: 0; flex: none; margin-left: auto; }
+.rst.on { color: #fff; background: rgba(255,255,255,.1); }
+#rowKey { flex-wrap: nowrap; }
+#rowKey #keyResult { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.homemix #rowChange #resetChange { display: none; }
+.homemix #rowChange { margin: 0; min-height: 0; }
+.homemix #rowChange:has(#changeStatus:empty) { display: none; }
+.homemix .ghost { min-width: 36px; height: 34px; padding: 0 10px; }
+#keyResult.moved { color: #F0ABFC; }
