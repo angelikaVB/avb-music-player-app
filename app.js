@@ -1177,7 +1177,7 @@ async function findLyrics(id, rec, preTags) {
   let tags = {};
   if (preTags) tags = preTags; else try { tags = await readTags(rec.blob, rec.name); } catch (_) { }
   if (st.id !== id) return;
-  if (tags.lyrics && tags.lyrics.trim()) { showLyrics(tags.lyrics, "file", id); openLyricsTab(); return; }
+  if (tags.lyrics && tags.lyrics.trim()) { showLyrics(tags.lyrics.replace(/(\\r)?\\n/g, "\n"), "file", id); openLyricsTab(); return; }   // some tools write line breaks as the text \n
   const guess = tagTitleArtist(rec.name);
   const title = tags.title || songs[id]?.title || guess.title, artist = tags.artist || songs[id]?.artist || guess.artist;
   if (!navigator.onLine || isRecording(id) || !title || /^<unknown>$/i.test(artist || "") || (songs[id]?.duration && songs[id].duration < 30)) { showLyrics("", "none", id); return; }
@@ -1326,7 +1326,7 @@ function id3(view, base) {
     if (fid === "USLT") { const k = afterTerm(body, 4); out.lyrics = dec(body.subarray(k), enc).replace(/\0+$/, ""); }
     else if (fid === "TIT2") out.title = dec(body.subarray(1), enc).replace(/\0+$/, "");
     else if (fid === "TPE1") out.artist = dec(body.subarray(1), enc).replace(/\0+$/, "");
-    else if (fid === "TXXX") { const k = afterTerm(body, 1); const key = dec(body.subarray(1, k - zero), enc).toUpperCase(); if (/LYRICS/.test(key) && !out.lyrics) out.lyrics = dec(body.subarray(k), enc).replace(/\0+$/, ""); }
+    else if (fid === "TXXX") { const k = afterTerm(body, 1); const key = dec(body.subarray(1, k - zero), enc).toUpperCase(); if (/LYRIC|USLT|SYLT/.test(key) && !out.lyrics) out.lyrics = dec(body.subarray(k), enc).replace(/\0+$/, ""); }
     p += 10 + fs;
   }
   return out;
@@ -1342,7 +1342,7 @@ function vorbis(u8, start) {
     const kv = new TextDecoder().decode(u8.subarray(start + p, start + p + len)); p += len;
     const eq = kv.indexOf("="); if (eq < 0) continue;
     const k = kv.slice(0, eq).toUpperCase(), v = kv.slice(eq + 1);
-    if ((k === "LYRICS" || k === "UNSYNCEDLYRICS" || k === "UNSYNCED LYRICS") && !out.lyrics) out.lyrics = v;
+    if (/LYRIC|USLT/.test(k) && !out.lyrics) out.lyrics = v;          // LYRICS, UNSYNCEDLYRICS, UNSYNCED LYRICS, USLT …
     if (k === "TITLE") out.title = v; if (k === "ARTIST") out.artist = v;
   }
   return out;
@@ -2013,6 +2013,8 @@ $("#settingsBtn").onclick = () => {
   ];
   items.push({ label: "Export all markers and notes (CSV)", run: exportAllMarks });
   if (lib.hidden.length) items.push({ label: `Show removed songs again (${lib.hidden.length})`, run: () => { const n = lib.hidden.length; lib.hidden = []; save("hidden"); renderList(); renderRecList(); toast(`${n} back in the player`); } });
+  if (ANDROID && ANDROID.shareApp) items.push({ label: "Share AVB Player with a friend (WhatsApp, text…)", run: () => ANDROID.shareApp(APK_URL) });
+  else if (/Android/.test(navigator.userAgent)) items.push({ label: "Download the Android app", run: () => { location.href = APK_URL; } });
   if (ANDROID && ANDROID.askDefault) items.push({ label: "Make AVB Player your default player", run: () => ANDROID.askDefault() });
   items.push({ label: ANDROID ? "Add a song from your files (Drive, WhatsApp…)" : "Add music from your files", run: () => $("#files2").click() });
   if (!ANDROID && !$("#installBtn").hidden) items.push({ label: "Install the app on this phone", run: () => $("#installBtn").click() });
@@ -2560,6 +2562,7 @@ $("#installBtn").onclick = async () => {
   showInstallHint();
 };
 $("#installClose").onclick = () => { $("#installHint").hidden = true; sessionStorage.setItem("hintClosed", "1"); };
+const APK_URL = "https://angelikavb.github.io/avb-music-player-app/AVB-Player.apk";   // always the newest Android app
 function showInstallHint() {
   const ua = navigator.userAgent;
   const inApp = /; wv\)|FBAN|FBAV|Instagram|Line\/|WhatsApp|GSA\//.test(ua);
