@@ -4,7 +4,8 @@ The same player as an installable web app for Android (and any modern
 browser).  Nothing leaves the phone: songs you open are copied into the
 app's own storage, analysed on the phone, and played by the browser's audio
 engine.  Tempo and key changes run Rubber Band (GPL) compiled to
-WebAssembly, in `vendor/` with its licence.
+WebAssembly; MP3 copies use LAME (lamejs, LGPL; lame.sourceforge.net). Both are in `vendor/`
+with their licences. FLAC copies use the app's own encoder (encode-worker.js).
 
 ## Install on Android
 

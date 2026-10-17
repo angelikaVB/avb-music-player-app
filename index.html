@@ -81,6 +81,7 @@
       <button data-tab="lyrics">Lyrics</button>
       <button data-tab="intel">Info</button>
       <button data-tab="mix">Tempo &amp; Key</button>
+      <button data-tab="eq">EQ</button>
       <button data-tab="save">Save</button>
       <button data-tab="loud">Loudness</button>
       <button data-tab="notes">Notes</button>
@@ -136,14 +137,48 @@
       <div class="faint">Rubber Band (GPL) runs in the phone; the song keeps playing as it was until the changed version is ready.</div>
     </div>
 
+    <div class="tab" id="tab-eq">
+      <div class="row">
+        <label class="check eqon"><input type="checkbox" id="eqOn" checked> EQ on</label>
+        <select id="eqPreset" class="ghost">
+          <option value="">Presets…</option>
+          <option value="flat">Flat</option><option value="vocal">Vocal clarity</option><option value="bass">More bass</option>
+          <option value="boomy">Less boomy</option><option value="warm">Warm</option><option value="bright">Bright</option>
+          <option value="scoop">Mid scoop</option><option value="harsh">Less harsh</option><option value="phone">Telephone</option>
+        </select>
+        <button class="ghost" id="eqFlat">Flat</button>
+      </div>
+      <canvas id="eqCurve"></canvas>
+      <div class="eqbands" id="eqBands"></div>
+      <div class="eqedit" id="eqEdit">
+        <div class="row"><b id="eqName"></b><label class="check" id="eqBandOnWrap"><input type="checkbox" id="eqBandOn"> on</label></div>
+        <div class="row"><label>Frequency</label><input type="range" id="eqF" min="0" max="1000"><span class="val" id="eqFv"></span></div>
+        <div class="row" id="eqGrow"><label>Gain</label><input type="range" id="eqG" min="-180" max="180"><span class="val" id="eqGv"></span></div>
+        <div class="row"><label>Width (Q)</label><input type="range" id="eqQ" min="0" max="1000"><span class="val" id="eqQv"></span></div>
+      </div>
+      <div class="row"><label>Output</label><input type="range" id="eqOut" min="-120" max="120"><span class="val" id="eqOutv"></span></div>
+      <div class="faint">Drag a dot on the curve: sideways = frequency, up/down = gain. Changes are live; Save a copy can include the EQ (its name then says “EQ”).</div>
+    </div>
+
     <div class="tab" id="tab-save">
-      <div class="row"><label>Part</label>
-        <select id="part"><option value="whole">Whole song</option><option value="keep">A–B piece</option><option value="remove">Cut A–B out</option></select></div>
+      <div class="row"><label>What</label>
+        <select id="part"><option value="whole">Whole song</option><option value="keep">Only the piece I marked</option><option value="remove">Song without the piece I marked</option></select></div>
+      <div class="faint" id="partHint">To mark a piece: play to where it starts and tap <b>A</b>, then to where it ends and tap <b>B</b> (under the player).</div>
       <div class="row"><label>Format</label>
-        <select id="fmt"><option value="16">WAV 16-bit</option><option value="24">WAV 24-bit</option><option value="32">WAV 32-bit float</option></select></div>
+        <select id="fmt">
+          <optgroup label="WAV">
+            <option value="wav-16">WAV 16-bit</option><option value="wav-24">WAV 24-bit</option><option value="wav-32">WAV 32-bit float</option>
+          </optgroup>
+          <optgroup label="FLAC (lossless, smaller)">
+            <option value="flac-16">FLAC 16-bit</option><option value="flac-24">FLAC 24-bit</option>
+          </optgroup>
+          <optgroup label="MP3">
+            <option value="mp3-320">MP3 320 kbps</option><option value="mp3-256">MP3 256 kbps</option><option value="mp3-192">MP3 192 kbps</option><option value="mp3-128">MP3 128 kbps</option>
+          </optgroup>
+        </select></div>
       <div class="faint" id="saveName"></div>
       <div class="row"><button id="saveBtn" class="primary">Save a copy</button><span class="status" id="saveStatus"></span></div>
-      <div class="faint">Never above the file's own bit depth. The copy goes to your phone's Downloads. A tempo/key change is rendered into it.</div>
+      <div class="faint">Never above the file's own quality. The copy goes to your phone's Downloads, at the song's own sample rate. A tempo/key change is rendered into it.</div>
     </div>
 
     <div class="tab" id="tab-loud">

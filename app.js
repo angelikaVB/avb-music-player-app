@@ -20,7 +20,7 @@ const songGet = id => new Promise((ok, no) => { const t = db.transaction("songs"
 
 const lib = {
   queue: await kvGet("queue", []), index: await kvGet("index", -1), favorites: await kvGet("favorites", []),
-  recent: await kvGet("recent", []), playlists: await kvGet("playlists", []), notes: await kvGet("notes", {}), lyrics: await kvGet("lyrics", {}), hidden: await kvGet("hidden", []),
+  recent: await kvGet("recent", []), playlists: await kvGet("playlists", []), notes: await kvGet("notes", {}), lyrics: await kvGet("lyrics", {}), eq: await kvGet("eq", null), hidden: await kvGet("hidden", []),
   repeat: await kvGet("repeat", "off"), volume: await kvGet("volume", 1), keepVoice: await kvGet("keepVoice", true),
 };
 const save = k => kvSet(k, lib[k]);
@@ -43,7 +43,7 @@ async function audio() {
   ctx = new (window.AudioContext || window.webkitAudioContext)({ latencyHint: "playback" });
   await ctx.audioWorklet.addModule("player-worklet.js");
   node = new AudioWorkletNode(ctx, "avb-player", { outputChannelCount: [2] });
-  node.connect(ctx.destination);
+  buildEqChain();
   node.port.onmessage = e => {
     if (e.data.frame !== undefined) { st.pos = e.data.frame / st.sr; }
     if (e.data.ended) onEnded();
@@ -442,46 +442,94 @@ function drawLoud() {
 }
 
 // ---------------------------------------------------------------- save a copy
-function refreshSave() {
-  const part = $("#part").value, bits = +$("#fmt").value;
-  const ok = !!st.buffer && (part === "whole" || (st.a !== null && st.b !== null));
-  let reason = "";
-  if (st.buffer && part !== "whole" && (st.a === null || st.b === null)) reason = "Set A and B first.";
-  if (st.buffer && st.info.bits && bits > st.info.bits && !(bits === 32 && st.info.bits === 32)) reason = `Higher than this file's ${st.info.bits}-bit: it would only make the file bigger.`;
-  if (st.buffer && !st.info.bits && bits > 16) reason = `${st.info.fmt} is compressed, so copies stop at 16-bit.`;
-  if (st.buffer && part === "whole" && !st.changed && st.speed === 1 && !st.semis && st.info.fmt === "WAV" && st.info.bits === bits) reason = "This would be an identical copy.";
-  $("#saveBtn").disabled = !ok || !!reason;
-  $("#saveName").textContent = st.buffer ? (reason || "Saves as  " + saveName(part, bits)) : "";
+// the copy's format: "wav-16", "flac-24", "mp3-320" ...
+const fmtChoice = () => { const [kind, n] = $("#fmt").value.split("-"); return { kind, n: +n }; };
+function sourceKbps() { return st.info && st.duration ? st.info.size * 8 / st.duration / 1000 : 0; }
+function saveReason(part, f) {
+  if (!st.buffer) return "";
+  if (part !== "whole" && (st.a === null || st.b === null)) return "Mark the piece first: tap A where it starts and B where it ends.";
+  const changed = part !== "whole" || st.speed !== 1 || !!st.semis;
+  const lossless = !!st.info.bits;
+  if (f.kind === "wav" || f.kind === "flac") {
+    if (!lossless && f.n > 16) return `${st.info.fmt} is compressed, so lossless copies stop at 16-bit.`;
+    if (lossless && f.n > st.info.bits && !(f.n === 32 && st.info.bits === 32)) return `Higher than this file's ${st.info.bits}-bit: it would only make the file bigger.`;
+    if (!changed && st.info.fmt === f.kind.toUpperCase() && st.info.bits === f.n) return "This would be an identical copy.";
+    return "";
+  }
+  if (!lossless) {
+    const kb = sourceKbps();
+    if (kb && f.n > kb + 8) return `Higher than this file's ${Math.round(kb)} kbps: it would only make the file bigger.`;
+    if (!changed && st.info.fmt === "MP3" && kb && Math.abs(f.n - kb) <= 8) return "Re-encoding this MP3 at its own bitrate would only lose quality.";
+  }
+  return "";
 }
-function saveName(part, bits) {
+function refreshSave() {
+  const part = $("#part").value, f = fmtChoice();
+  $("#partHint").hidden = part === "whole";
+  // grey out the formats the rules do not allow for this song
+  for (const o of $("#fmt").querySelectorAll("option")) { const [k, n] = o.value.split("-"); o.disabled = !!st.buffer && !!saveReason("whole", { kind: k, n: +n }) && !saveReason(part, { kind: k, n: +n }).startsWith("Mark"); }
+  const reason = saveReason(part, f);
+  $("#saveBtn").disabled = !st.buffer || !!reason || !!saving;
+  $("#saveName").textContent = st.buffer ? (reason || "Saves as  " + saveName(part, f)) : "";
+}
+function saveName(part, f) {
   const stem = st.name.replace(/\.[^.]+$/, ""); const tags = [];
   const clock = (t, up) => { const s = up ? Math.ceil(t - 1e-6) : Math.floor(t + 1e-6); return `${Math.floor(s / 60)}.${String(s % 60).padStart(2, "0")}`; };
   if (part !== "whole" && st.a !== null && st.b !== null) tags.push((part === "remove" ? "without " : "") + `${clock(st.a)}–${clock(st.b, true)}`);
   const bpm = (st.music && st.music.bpm || 0) * st.bpmScale;
   if (st.speed !== 1) tags.push(bpm ? `${(bpm * st.speed).toFixed(1).replace(/\.0$/, "")} BPM` : `${Math.round(st.speed * 100)}% speed`);
   if (st.semis) { tags.push(`${st.semis > 0 ? "+" : ""}${st.semis} st`); if (!$("#keepVoice").checked) tags.push("voice shifted"); }
-  if (!st.info.bits || bits !== st.info.bits) tags.push(bits === 32 ? "32-bit float" : `${bits}-bit`);
-  return `${stem}${tags.length ? ` (${tags.join(", ")})` : ""}.wav`;
+  if (eqActive()) tags.push("EQ");
+  if (f.kind === "mp3") tags.push(`${f.n} kbps`);
+  else if (!st.info.bits || f.n !== st.info.bits) tags.push(f.n === 32 ? "32-bit float" : `${f.n}-bit`);
+  return `${stem}${tags.length ? ` (${tags.join(", ")})` : ""}.${f.kind}`;
 }
+let saving = null;
 async function saveCopy() {
-  if (!st.buffer) return;
-  const part = $("#part").value, bits = +$("#fmt").value;
-  let chans = channelsOf(st.buffer); const sr = st.sr;
+  if (!st.buffer || saving) return;
+  const part = $("#part").value, f = fmtChoice();
+  if (saveReason(part, f)) return;
+  let chans = channelsOf(st.buffer); let sr = st.sr;
   if (part !== "whole") chans = applySpan(chans, sr, part);
   const t0 = performance.now(); const status = $("#saveStatus");
-  const clock = setInterval(() => status.textContent = `Saving… ${((performance.now() - t0) / 1000).toFixed(0)} s`, 500);
+  let stage = "Preparing";
+  saving = true; refreshSave();
+  const clock = setInterval(() => status.textContent = `${stage}… ${((performance.now() - t0) / 1000).toFixed(0)} s`, 500);
   try {
-    if (st.speed !== 1 || st.semis) chans = await renderOnce(chans, sr);
+    if (st.speed !== 1 || st.semis) { stage = "Changing tempo / key"; chans = await renderOnce(chans, sr); }
+    if (eqActive()) { stage = "Applying the EQ"; chans = await renderEq(chans, sr); }
+    // back to the song's own sample rate (the phone plays everything at its own rate)
+    if (st.info.rate && st.info.rate !== sr) { stage = "Back to " + (st.info.rate / 1000).toFixed(1).replace(".0", "") + " kHz"; chans = await resample(chans, sr, st.info.rate); sr = st.info.rate; }
     let peak = 0; for (const c of chans) for (let i = 0; i < c.length; i++) peak = Math.max(peak, Math.abs(c[i]));
     let note = "";
-    if (peak > 1 && bits !== 32) { const g = 0.989 / peak; for (const c of chans) for (let i = 0; i < c.length; i++) c[i] *= g; note = ` · lowered ${(20 * Math.log10(g)).toFixed(1)} dB so it does not clip`; }
-    const blob = wavBlob(chans, sr, bits);
-    const name = saveName(part, bits);
+    if (peak > 1 && !(f.kind === "wav" && f.n === 32)) { const g = 0.989 / peak; for (const c of chans) for (let i = 0; i < c.length; i++) c[i] *= g; note = ` · lowered ${(20 * Math.log10(g)).toFixed(1)} dB so it does not clip`; }
+    stage = f.kind === "mp3" ? "Encoding MP3" : f.kind === "flac" ? "Encoding FLAC" : "Writing WAV";
+    const { bytes, mime } = await encode(chans, sr, f);
+    const blob = new Blob([bytes], { type: mime });
+    const name = saveName(part, f);
+    stage = "Saving";
     if (ANDROID) await androidSave(blob, name);
     else { const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = name; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 60000); }
-    status.textContent = `Saved ${name} (${(blob.size / 1e6).toFixed(1)} MB)${note}`; toast("Saved to Downloads: " + name);
+    status.textContent = `Saved ${name} (${(blob.size / 1e6).toFixed(1)} MB, ${((performance.now() - t0) / 1000).toFixed(0)} s)${note}`; toast("Saved to Downloads: " + name);
   } catch (err) { status.textContent = "Save failed: " + (err && err.message || err); }
-  clearInterval(clock);
+  clearInterval(clock); saving = null; refreshSave();
+}
+function encode(chans, sr, f) {
+  return new Promise((ok, no) => {
+    const w = new Worker("encode-worker.js");
+    w.onmessage = e => { if (e.data.progress !== undefined) return; w.terminate(); e.data.error ? no(new Error(e.data.error)) : ok(e.data); };
+    w.onerror = e => { w.terminate(); no(new Error(e.message || "the encoder failed")); };
+    w.postMessage({ channels: chans, sampleRate: sr, format: f.kind, bits: f.n, kbps: f.n }, chans.map(c => c.buffer));
+  });
+}
+async function resample(chans, from, to) {
+  const n = Math.round(chans[0].length * to / from);
+  const off = new OfflineAudioContext(chans.length, n, to);
+  const buf = off.createBuffer(chans.length, chans[0].length, from);
+  chans.forEach((c, i) => buf.copyToChannel(c, i));
+  const src = off.createBufferSource(); src.buffer = buf; src.connect(off.destination); src.start();
+  const out = await off.startRendering();
+  return channelsOf(out);
 }
 async function androidSave(blob, name, where = "downloads") {
   const id = ANDROID.saveBegin(name, blob.type || "audio/wav", where);
@@ -847,6 +895,190 @@ async function readTags(blob, name) {
   return {};
 }
 
+// ---------------------------------------------------------------- EQ
+// Eight bands: low cut, low shelf, four bells, air shelf, high cut; plus an
+// output level.  Biquads in the live chain; the same chain renders copies.
+const EQ_COLOURS = ["#94A3B8", "#3B82F6", "#22D3EE", "#8B5CF6", "#D946EF", "#EC4899", "#F97316", "#94A3B8"];
+const EQ_DEFAULT = () => ({ on: true, out: 0, bands: [
+  { label: "Low cut", type: "highpass", f: 30, g: 0, q: 0.71, on: false },
+  { label: "Low", type: "lowshelf", f: 100, g: 0, q: 0.71, on: true },
+  { label: "Low-mid", type: "peaking", f: 250, g: 0, q: 1, on: true },
+  { label: "Mid", type: "peaking", f: 800, g: 0, q: 1, on: true },
+  { label: "Upper-mid", type: "peaking", f: 2500, g: 0, q: 1, on: true },
+  { label: "Presence", type: "peaking", f: 5000, g: 0, q: 1, on: true },
+  { label: "Air", type: "highshelf", f: 10000, g: 0, q: 0.71, on: true },
+  { label: "High cut", type: "lowpass", f: 18000, g: 0, q: 0.71, on: false },
+] });
+if (!lib.eq || !lib.eq.bands || lib.eq.bands.length !== 8) lib.eq = EQ_DEFAULT();
+const EQ_PRESETS = {
+  flat: [],
+  vocal: [[0, { on: true, f: 80 }], [2, { g: -2, f: 250, q: 1 }], [4, { g: 3, f: 3000, q: 0.9 }], [6, { g: 2, f: 11000 }]],
+  bass: [[1, { g: 5, f: 100 }], [2, { g: -1, f: 300 }]],
+  boomy: [[0, { on: true, f: 40 }], [2, { g: -4, f: 220, q: 1.2 }]],
+  warm: [[1, { g: 2.5, f: 150 }], [6, { g: -2.5, f: 8000 }]],
+  bright: [[5, { g: 2, f: 5000 }], [6, { g: 4, f: 9000 }]],
+  scoop: [[3, { g: -3.5, f: 700, q: 0.8 }]],
+  harsh: [[4, { g: -3, f: 3200, q: 1.4 }], [5, { g: -2, f: 6500, q: 2 }]],
+  phone: [[0, { on: true, f: 300 }], [7, { on: true, f: 3400 }], [4, { g: 4, f: 1500, q: 0.7 }]],
+};
+let eqNodes = [], eqOut = null, eqAnalyser = null, eqSel = 4;
+const eqBandActive = b => b.on && ((b.type === "highpass" || b.type === "lowpass") || Math.abs(b.g) > 0.05);
+function eqActive() { return lib.eq.on && (lib.eq.bands.some(eqBandActive) || Math.abs(lib.eq.out) > 0.05); }
+function setBiquad(n, b, ctxt) {
+  n.type = b.type;
+  const t = ctxt.currentTime;
+  n.frequency.setTargetAtTime(b.f, t, 0.01); n.Q.setTargetAtTime(b.q, t, 0.01);
+  n.gain.setTargetAtTime(b.on ? b.g : 0, t, 0.01);
+}
+function makeChain(c, input, output) {
+  // only the bands that do something are in the chain
+  let last = input;
+  for (const b of lib.eq.bands) { if (!lib.eq.on || !eqBandActive(b)) continue; const n = c.createBiquadFilter(); n.type = b.type; n.frequency.value = b.f; n.Q.value = b.q; n.gain.value = b.g; last.connect(n); last = n; }
+  const g = c.createGain(); g.gain.value = lib.eq.on ? Math.pow(10, lib.eq.out / 20) : 1;
+  last.connect(g); g.connect(output);
+}
+function buildEqChain() {
+  if (!ctx || !node) return;
+  try { node.disconnect(); } catch (_) { }
+  eqNodes.forEach(n => { try { n.disconnect(); } catch (_) { } });
+  if (eqOut) try { eqOut.disconnect(); } catch (_) { }
+  eqNodes = lib.eq.bands.map(b => { const n = ctx.createBiquadFilter(); setBiquad(n, b, ctx); return n; });
+  eqOut = ctx.createGain();
+  eqAnalyser = eqAnalyser || ctx.createAnalyser(); eqAnalyser.fftSize = 4096; eqAnalyser.smoothingTimeConstant = 0.8;
+  let last = node;
+  if (lib.eq.on) for (const n of eqNodes) { last.connect(n); last = n; }
+  last.connect(eqOut); eqOut.gain.value = lib.eq.on ? Math.pow(10, lib.eq.out / 20) : 1;
+  eqOut.connect(ctx.destination); eqOut.connect(eqAnalyser);
+}
+function eqChanged(rebuild) {
+  save("eq");
+  if (ctx && node) {
+    if (rebuild || eqNodes.length !== 8) buildEqChain();
+    else { lib.eq.bands.forEach((b, i) => setBiquad(eqNodes[i], b, ctx)); eqOut.gain.setTargetAtTime(lib.eq.on ? Math.pow(10, lib.eq.out / 20) : 1, ctx.currentTime, 0.01); }
+  }
+  drawEq(); fillEqEdit(); refreshSave();
+}
+async function renderEq(chans, sr) {
+  const off = new OfflineAudioContext(chans.length, chans[0].length, sr);
+  const buf = off.createBuffer(chans.length, chans[0].length, sr);
+  chans.forEach((c, i) => buf.copyToChannel(c, i));
+  const src = off.createBufferSource(); src.buffer = buf;
+  makeChain(off, src, off.destination); src.start();
+  return channelsOf(await off.startRendering());
+}
+// response: the product of every band's curve, from a scratch context when the player has not started
+let eqScratch = null;
+function eqResponse(freqs) {
+  const c = ctx || (eqScratch = eqScratch || new OfflineAudioContext(1, 1, 48000));
+  const mag = new Float32Array(freqs.length).fill(1), m = new Float32Array(freqs.length), ph = new Float32Array(freqs.length);
+  const each = [];
+  for (const b of lib.eq.bands) {
+    const n = c.createBiquadFilter(); n.type = b.type; n.frequency.value = b.f; n.Q.value = b.q; n.gain.value = b.g;
+    n.getFrequencyResponse(freqs, m, ph);
+    const db = Float32Array.from(m, v => 20 * Math.log10(Math.max(v, 1e-6)));
+    each.push(db);
+    if (lib.eq.on && eqBandActive(b)) for (let i = 0; i < freqs.length; i++) mag[i] *= m[i];
+  }
+  const total = Float32Array.from(mag, v => 20 * Math.log10(Math.max(v, 1e-6)) + (lib.eq.on ? lib.eq.out : 0));
+  return { total, each };
+}
+const EQ_MIN = 20, EQ_MAX = 20000, EQ_DB = 18;
+const eqX = (f, w) => Math.log(f / EQ_MIN) / Math.log(EQ_MAX / EQ_MIN) * w;
+const eqF = (x, w) => EQ_MIN * Math.pow(EQ_MAX / EQ_MIN, Math.max(0, Math.min(1, x / w)));
+function drawEq() {
+  const cv = $("#eqCurve"); if (!cv || !$("#tab-eq").classList.contains("on")) return;
+  const dpr = sizeCanvas(cv), w = cv.width / dpr, h = cv.height / dpr, c = cv.getContext("2d");
+  c.setTransform(dpr, 0, 0, dpr, 0, 0); c.fillStyle = "#0E0D26"; c.fillRect(0, 0, w, h);
+  const y = db => h / 2 - db / EQ_DB * (h / 2 - 14);
+  // the music's spectrum behind the curve
+  if (eqAnalyser && st.playing) {
+    const bins = new Float32Array(eqAnalyser.frequencyBinCount); eqAnalyser.getFloatFrequencyData(bins);
+    const nyq = ctx.sampleRate / 2;
+    c.beginPath(); c.moveTo(0, h);
+    for (let x = 0; x < w; x += 2) { const f = eqF(x, w), i = Math.min(bins.length - 1, Math.round(f / nyq * bins.length)); const v = Math.max(0, (bins[i] + 100) / 80); c.lineTo(x, h - v * (h - 10)); }
+    c.lineTo(w, h); c.closePath(); c.fillStyle = "rgba(139,92,246,.18)"; c.fill();
+  }
+  // grid
+  c.strokeStyle = "#232250"; c.lineWidth = 1; c.fillStyle = "#6C6996"; c.font = "10px system-ui"; c.textAlign = "center";
+  for (const f of [50, 100, 200, 500, 1000, 2000, 5000, 10000]) { const x = eqX(f, w); c.beginPath(); c.moveTo(x, 0); c.lineTo(x, h); c.stroke(); c.fillText(f >= 1000 ? f / 1000 + "k" : f, x, h - 3); }
+  c.textAlign = "left";
+  for (const db of [-12, -6, 0, 6, 12]) { c.strokeStyle = db === 0 ? "#34336B" : "#1b1a42"; c.beginPath(); c.moveTo(0, y(db)); c.lineTo(w, y(db)); c.stroke(); c.fillText((db > 0 ? "+" : "") + db, 3, y(db) - 2); }
+  // curve
+  const N = Math.max(64, Math.floor(w / 2)), freqs = new Float32Array(N);
+  for (let i = 0; i < N; i++) freqs[i] = eqF(i / (N - 1) * w, w);
+  const r = eqResponse(freqs);
+  const sel = lib.eq.bands[eqSel];
+  if (sel.on || sel.type === "highpass" || sel.type === "lowpass") {      // the selected band's own shape, faint
+    c.strokeStyle = EQ_COLOURS[eqSel] + "88"; c.lineWidth = 1.5; c.beginPath();
+    r.each[eqSel].forEach((v, i) => { const xx = i / (N - 1) * w, yy = y(Math.max(-EQ_DB, Math.min(EQ_DB, v))); i ? c.lineTo(xx, yy) : c.moveTo(xx, yy); }); c.stroke();
+  }
+  const g = c.createLinearGradient(0, 0, w, 0); RUN.forEach((col, i) => g.addColorStop(i / 5, col));
+  c.strokeStyle = lib.eq.on ? g : "#6C6996"; c.lineWidth = 2.5; c.beginPath();
+  r.total.forEach((v, i) => { const xx = i / (N - 1) * w, yy = y(Math.max(-EQ_DB, Math.min(EQ_DB, v))); i ? c.lineTo(xx, yy) : c.moveTo(xx, yy); }); c.stroke();
+  // band dots
+  lib.eq.bands.forEach((b, i) => {
+    const cut = b.type === "highpass" || b.type === "lowpass";
+    const xx = eqX(b.f, w), yy = y(cut ? 0 : b.g);
+    c.globalAlpha = b.on ? 1 : 0.35;
+    c.beginPath(); c.arc(xx, yy, i === eqSel ? 9 : 7, 0, Math.PI * 2); c.fillStyle = EQ_COLOURS[i]; c.fill();
+    if (i === eqSel) { c.strokeStyle = "#fff"; c.lineWidth = 2; c.stroke(); }
+    c.fillStyle = "#fff"; c.font = "700 9px system-ui"; c.textAlign = "center"; c.fillText(String(i + 1), xx, yy + 3);
+    c.globalAlpha = 1;
+  });
+}
+const fmtHz = f => f >= 1000 ? (f / 1000).toFixed(f >= 10000 ? 1 : 2).replace(/\.?0+$/, "") + " kHz" : Math.round(f) + " Hz";
+function fillEqEdit() {
+  const b = lib.eq.bands[eqSel], cut = b.type === "highpass" || b.type === "lowpass";
+  $("#eqBands").innerHTML = lib.eq.bands.map((x, i) => `<button data-i="${i}" class="${i === eqSel ? "sel" : ""} ${x.on ? "" : "off"}" style="color:${EQ_COLOURS[i]}">${i + 1} ${x.label}</button>`).join("");
+  $("#eqBands").querySelectorAll("button").forEach(bt => bt.onclick = () => { eqSel = +bt.dataset.i; fillEqEdit(); drawEq(); });
+  $("#eqName").textContent = `${eqSel + 1} · ${b.label}`; $("#eqName").style.color = EQ_COLOURS[eqSel];
+  $("#eqBandOn").checked = b.on;
+  $("#eqF").value = Math.round(Math.log(b.f / EQ_MIN) / Math.log(EQ_MAX / EQ_MIN) * 1000); $("#eqFv").textContent = fmtHz(b.f);
+  $("#eqGrow").hidden = cut;
+  $("#eqG").value = Math.round(b.g * 10); $("#eqGv").textContent = (b.g > 0 ? "+" : "") + b.g.toFixed(1) + " dB";
+  $("#eqQ").value = Math.round(Math.log(b.q / 0.2) / Math.log(15 / 0.2) * 1000); $("#eqQv").textContent = b.q.toFixed(2);
+  $("#eqOut").value = Math.round(lib.eq.out * 10); $("#eqOutv").textContent = (lib.eq.out > 0 ? "+" : "") + lib.eq.out.toFixed(1) + " dB";
+  $("#eqOn").checked = lib.eq.on;
+}
+function eqWire() {
+  const band = () => lib.eq.bands[eqSel];
+  $("#eqOn").onchange = e => { lib.eq.on = e.target.checked; eqChanged(true); };
+  $("#eqBandOn").onchange = e => { band().on = e.target.checked; eqChanged(true); };
+  $("#eqF").oninput = e => { band().f = EQ_MIN * Math.pow(EQ_MAX / EQ_MIN, +e.target.value / 1000); eqChanged(false); };
+  $("#eqG").oninput = e => { const b = band(); const was = eqBandActive(b); b.g = +e.target.value / 10; if (Math.abs(b.g) < 0.15) b.g = 0; eqChanged(was !== eqBandActive(b)); };
+  $("#eqQ").oninput = e => { band().q = 0.2 * Math.pow(15 / 0.2, +e.target.value / 1000); eqChanged(false); };
+  $("#eqOut").oninput = e => { lib.eq.out = +e.target.value / 10; eqChanged(false); };
+  $("#eqFlat").onclick = () => { lib.eq = EQ_DEFAULT(); eqChanged(true); };
+  $("#eqPreset").onchange = e => {
+    const p = EQ_PRESETS[e.target.value]; e.target.value = ""; if (!p) return;
+    lib.eq = EQ_DEFAULT();
+    for (const [i, v] of p) Object.assign(lib.eq.bands[i], v);
+    eqChanged(true);
+  };
+  // drag the dots on the curve
+  const cv = $("#eqCurve"); let dragging = null;
+  cv.addEventListener("pointerdown", e => {
+    const r = cv.getBoundingClientRect(), x = e.clientX - r.left, yy = e.clientY - r.top, w = r.width, h = r.height;
+    const y = db => h / 2 - db / EQ_DB * (h / 2 - 14);
+    let best = -1, bd = 1e9;
+    lib.eq.bands.forEach((b, i) => { const cut = b.type === "highpass" || b.type === "lowpass"; const d = Math.hypot(eqX(b.f, w) - x, y(cut ? 0 : b.g) - yy); if (d < bd) { bd = d; best = i; } });
+    if (best < 0 || bd > 40) return;
+    eqSel = best; dragging = { w, h }; try { cv.setPointerCapture(e.pointerId); } catch (_) { }
+    if (!lib.eq.bands[best].on) { lib.eq.bands[best].on = true; eqChanged(true); } else { fillEqEdit(); drawEq(); }
+  });
+  cv.addEventListener("pointermove", e => {
+    if (!dragging) return;
+    const r = cv.getBoundingClientRect(), x = e.clientX - r.left, yy = e.clientY - r.top, { w, h } = dragging;
+    const b = lib.eq.bands[eqSel]; const was = eqBandActive(b);
+    b.f = Math.round(eqF(x, w));
+    if (!(b.type === "highpass" || b.type === "lowpass")) { b.g = Math.max(-EQ_DB, Math.min(EQ_DB, (h / 2 - yy) / (h / 2 - 14) * EQ_DB)); b.g = Math.round(b.g * 10) / 10; if (Math.abs(b.g) < 0.2) b.g = 0; }
+    eqChanged(was !== eqBandActive(b));
+  });
+  const up = () => { dragging = null; };
+  cv.addEventListener("pointerup", up); cv.addEventListener("pointercancel", up);
+}
+eqWire();
+
 // ---------------------------------------------------------------- dialogs
 // An in-page question with a text field (window.prompt is not available
 // inside the Android app, and this one matches the player).
@@ -993,6 +1225,7 @@ function selectTool(name) {
   $("#tools").querySelectorAll("button").forEach(x => x.classList.toggle("on", x.dataset.tab === name));
   document.querySelectorAll(".tab").forEach(t => t.classList.toggle("on", t.id === "tab-" + name));
   if (name === "loud") drawLoud();
+  if (name === "eq") { fillEqEdit(); drawEq(); }
 }
 function renderRecList() {
   const el = $("#recList");
@@ -1079,7 +1312,7 @@ $("#recBtn").onclick = recordStart; $("#recPause").onclick = recordPause;
 $("#recStop").onclick = () => recordStop(true);
 $("#recCancel").onclick = async () => { const was = rec && rec.paused; if (rec && !was) recordPause(); if (await confirmBox("Throw this take away?", "It has not been saved.", "Discard", "Keep recording")) recordStop(false); else if (rec && !was) recordPause(); };
 $("#filter").oninput = renderList;
-window.addEventListener("resize", () => { drawWave(); drawLoud(); });
+window.addEventListener("resize", () => { drawWave(); drawLoud(); drawEq(); });
 document.addEventListener("keydown", e => { if (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA") return; if (e.code === "Space") { e.preventDefault(); togglePlay(); } if (e.key === "ArrowLeft") seek(st.pos - 5); if (e.key === "ArrowRight") seek(st.pos + 5); });
 
 // clock
@@ -1093,7 +1326,7 @@ function tick(now) {
     $("#recPeak").textContent = "peak " + (20 * Math.log10(rec.peak + 1e-6)).toFixed(1) + " dB" + (rec.clip ? " · CLIP" : "");
     $("#recTime").textContent = fmtTime(rec.frames / rec.sr);
   } else if (st.buffer && st.playing && now - lastDraw > 40) {
-    lastDraw = now; $("#tnow").textContent = fmtTime(st.pos); lyricsTick(st.pos); $("#seek").value = Math.round(st.pos / st.duration * 1000); drawWave();
+    lastDraw = now; $("#tnow").textContent = fmtTime(st.pos); lyricsTick(st.pos); if ($("#tab-eq").classList.contains("on")) drawEq(); $("#seek").value = Math.round(st.pos / st.duration * 1000); drawWave();
     if ($("#tab-loud").classList.contains("on")) drawLoud();
     const i = st.sections.findIndex(s => st.pos >= s.start && st.pos < s.end);
     document.querySelectorAll(".sec").forEach((d, k) => d.classList.toggle("now", k === i));
