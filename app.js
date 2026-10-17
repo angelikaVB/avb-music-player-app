@@ -357,7 +357,7 @@ async function applyChange() {
     if (e.data.error) { $("#changeStatus").textContent = "Could not change it: " + e.data.error; return; }
     send({ cmd: "swap", channels: e.data.channels, speed: e.data.speed });
     st.changed = true;
-    $("#changeStatus").textContent = `Playing the changed version (${((performance.now() - t0) / 1000).toFixed(0)} s)`;
+    $("#changeStatus").textContent = "";
     refreshMusic(); refreshSave();
   };
   w.postMessage({ channels: chans, sampleRate: st.sr, speed, semitones: semis, keepVoice, finer }, chans.map(c => c.buffer));
@@ -372,6 +372,7 @@ const CAMELOT = { "C major": "8B", "G major": "9B", "D major": "10B", "A major":
 const fixOf = () => (st.id && lib.fix[st.id]) || {};
 function effBpm() { const f = fixOf(); return f.bpm || ((st.music && st.music.bpm || 0) * st.bpmScale); }
 function effKey() { const f = fixOf(); return f.key || (st.music && st.music.key) || ""; }
+// (the teal circle in the tempo slider marks the original tempo once it has moved; tap it to go back)
 function refreshMusic() {
   const m = st.music || {}; const sp = +$("#speed").value; const fx = fixOf();
   $("#speedval").textContent = sp + "%"; $("#speedBtn").textContent = `${+(sp / 100).toFixed(2)}×`; $("#speedBtn").classList.toggle("on", sp !== 100);
@@ -379,7 +380,7 @@ function refreshMusic() {
   $("#speedBpm").classList.toggle("moved", sp !== 100);
   fillHomeSub();              // the song's own tempo teal, a changed one yellow
   $("#semis").textContent = st.semis ? `${st.semis > 0 ? "+" : ""}${st.semis} st` : "±0 st";
-  $("#tempoReset").classList.toggle("on", sp !== 100); $("#keyReset").classList.toggle("on", !!st.semis);
+  $("#tempoReset").classList.toggle("on", sp !== 100); $("#tempoMid").hidden = sp === 100; $("#keyReset").classList.toggle("on", !!st.semis);
   const bpm = effBpm();
   $("#bpm").textContent = bpm ? (bpm * sp / 100).toFixed(1) : "—";
   $("#bpmnote").textContent = bpm ? (sp !== 100 ? `${bpm.toFixed(1)} as recorded, at ${sp}%` : fx.bpm ? (fx.bpmHow === "tap" ? "tapped by you" : "set by you") : `beat ${m.confidence || ""}`) : "";
@@ -2686,7 +2687,7 @@ $("#keyUp").onclick = () => { st.semis = Math.min(12, st.semis + 1); refreshMusi
 
 $("#resetChange").onclick = () => { st.semis = 0; $("#speed").value = 100; applyChange(); refreshMusic(); refreshSave(); };
 // a reset for each: the tempo alone, the key alone
-$("#tempoReset").onclick = () => { if (+$("#speed").value === 100) return; $("#speed").value = 100; refreshMusic(); changeSoon(); };
+$("#tempoReset").onclick = $("#tempoMid").onclick = () => { if (+$("#speed").value === 100) return; $("#speed").value = 100; refreshMusic(); changeSoon(); };
 $("#keyReset").onclick = () => { if (!st.semis) return; st.semis = 0; refreshMusic(); changeSoon(); };
 $("#keepVoice").checked = lib.keepVoice; $("#keepVoice").onchange = e => { lib.keepVoice = e.target.checked; save("keepVoice"); if (st.semis) changeSoon(50); };
 $("#finer").onchange = () => { if (st.speed !== 1 || st.semis) changeSoon(50); };
@@ -2893,7 +2894,17 @@ window.avbUpdateInfo = text => {
     else toast(v ? `AVB Player ${ANDROID.version ? ANDROID.version() : ""} is the newest version` : "Could not check for updates. Are you online?");
   }
 };
+// the first start after an update: the bar says so for a few seconds, then goes away by itself
+var updateDoneUntil = 0;
+function showUpdated(v) {
+  updateDoneUntil = Date.now() + 5000;
+  $("#updText").textContent = `Updated to AVB Player ${v} ✓`;
+  $("#updBtn").hidden = true; $("#updLater").hidden = true;
+  $("#updBar").classList.add("done"); $("#updBar").hidden = false;
+  setTimeout(() => { updateDoneUntil = 0; $("#updBar").classList.remove("done"); showUpdateBar(); }, 5000);
+}
 function showUpdateBar(text) {
+  if (Date.now() < updateDoneUntil) return;
   const later = updateInfo && sessionStorage.getItem("updLater") === String(updateInfo.code);
   $("#updBar").hidden = !updateInfo || (later && !updateBusy);
   $("#updText").textContent = text || (updateInfo ? `New version: AVB Player ${updateInfo.name}` : "");
@@ -2939,6 +2950,6 @@ if (ANDROID && ANDROID.version) {
   const nowVer = ANDROID.version();
   // (a version from before this was remembered: Android's own "last updated" time, within the last 10 minutes)
   const justUpdated = lib.seenVersion ? lib.seenVersion !== nowVer : (ANDROID.updatedAgo ? (t => t >= 0 && t < 600000)(+ANDROID.updatedAgo()) : false);
-  if (nowVer && justUpdated) setTimeout(() => snack(`Updated to AVB Player ${nowVer}`, "", null), 800);
+  if (nowVer && justUpdated) showUpdated(nowVer);
   if (nowVer && lib.seenVersion !== nowVer) { lib.seenVersion = nowVer; save("seenVersion"); }
 }

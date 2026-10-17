@@ -1,7 +1,7 @@
 {
- "code": 80,
- "name": "7.0",
+ "code": 81,
+ "name": "7.1",
  "url": "https://angelikavb.github.io/avb-music-player-app/AVB-Player.apk",
- "sha256": "f8075200ffe473d5849b6193602468ef0985775e9b7cc32288600bb77b729d1f",
- "notes": "Update offer always current"
+ "sha256": "455f572b51a2deea39b5071c751979c4206ec88246c2a2cc630901476e8cd4f6",
+ "notes": "Updated bar, tempo reset circle, Pitch row"
 }

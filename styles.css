@@ -834,3 +834,16 @@ body.nolyrics.lyrforce #lyrChip { background: rgba(255,255,255,.16); color: #fff
 /* the search stays pinned under the header while the page scrolls (song panel, list, to the very bottom) */
 #page-music > .searchbar { position: sticky; top: var(--toph, 64px); z-index: 4; margin: 0 -16px; padding: 4px 16px 8px;
   background: rgba(11,10,31,.97); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); }
+
+/* "Updated to AVB Player x ✓": the bar turns green for a few seconds */
+.updbar.done { background: linear-gradient(90deg, rgba(34,197,94,.30), rgba(25,240,220,.18)); box-shadow: inset 0 0 0 1px rgba(34,197,94,.55); }
+
+/* the middle of the tempo slider is the original tempo: a teal circle there, tap it to go back */
+.tempotrack { position: relative; flex: 1; min-width: 0; display: flex; align-items: center; }
+.tempotrack input[type=range] { flex: 1; width: 100%; min-width: 0; margin: 0; }
+.tempomid { position: absolute; left: 50%; top: 50%; width: 18px; height: 18px; margin: -9px 0 0 -9px; padding: 0; border-radius: 50%;
+  border: 2.5px solid #19F0DC; background: rgba(11,10,31,.85); box-shadow: 0 0 8px rgba(25,240,220,.55); cursor: pointer; z-index: 1; }
+.tempomid::after { content: ""; position: absolute; inset: -12px; border-radius: 50%; }     /* a bigger tap area than it looks */
+
+/* Pitch: the − and + buttons side by side */
+.pmpair { display: inline-flex; gap: 6px; flex: none; }
