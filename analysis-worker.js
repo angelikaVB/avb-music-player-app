@@ -35,6 +35,7 @@ onmessage = e => {
   }
   const rms = Math.sqrt(sumsq / (n * nch));
   postMessage({ stage: "peaks", peaks, peakDb: db(peak), rmsDb: db(rms), duration: n / sr }, [peaks.buffer]);
+  postMessage({ stage: "checks", ...checks(channels, sr) });
 
   // ---- loudness
   const loud = loudness(channels, sr);
@@ -52,6 +53,56 @@ onmessage = e => {
 };
 
 function db(x) { return 20 * Math.log10(Math.max(x, 1e-9)); }
+
+// True peak (BS.1770 annex 2: 4x oversampling, 48-tap windowed-sinc interpolation),
+// clipping (3+ samples in a row at full scale), and left/right correlation.
+const TP = (() => {
+  const taps = 12, phases = 4, h = [];
+  for (let p = 1; p < phases; p++) {
+    const k = new Float32Array(taps * 2);
+    for (let i = 0; i < taps * 2; i++) {
+      const t = i - taps + 1 - p / phases;                         // distance from the in-between point
+      const sinc = t === 0 ? 1 : Math.sin(Math.PI * t) / (Math.PI * t);
+      const win = 0.5 + 0.5 * Math.cos(Math.PI * t / taps);          // Hann over +-taps
+      k[i] = sinc * win;
+    }
+    h.push(k);
+  }
+  return { taps, h };
+})();
+function checks(channels, sr) {
+  let tp = 0;
+  const hits = [];
+  for (const x of channels) {
+    const n = x.length;
+    let run = 0;
+    for (let i = 0; i < n; i++) {
+      const v = Math.abs(x[i]);
+      if (v > tp) tp = v;
+      if (v >= 0.999) { if (++run === 3 && hits.length < 20000) hits.push(i / sr); } else run = 0;
+    }
+    // in-between peaks, only where the signal is loud enough to matter (saves 90% of the work)
+    for (let i = TP.taps; i < n - TP.taps; i++) {
+      if (Math.abs(x[i]) < 0.5 && Math.abs(x[i + 1]) < 0.5) continue;
+      for (const k of TP.h) {
+        let s = 0; const base = i - TP.taps + 1;
+        for (let j = 0; j < k.length; j++) s += x[base + j] * k[j];
+        const v = Math.abs(s); if (v > tp) tp = v;
+      }
+    }
+  }
+  let corr = null;
+  if (channels.length >= 2) {
+    const L = channels[0], R = channels[1]; let lr = 0, ll = 0, rr = 0;
+    for (let i = 0; i < L.length; i += 2) { lr += L[i] * R[i]; ll += L[i] * L[i]; rr += R[i] * R[i]; }
+    corr = ll > 0 && rr > 0 ? lr / Math.sqrt(ll * rr) : 1;
+  }
+  // hits less than half a second apart are one place
+  hits.sort((a, b) => a - b);
+  const clips = [];
+  for (const t of hits) if (!clips.length || t - clips[clips.length - 1].end > 0.5) clips.push({ t, end: t }); else clips[clips.length - 1].end = t;
+  return { truePeakDb: db(tp), clipEvents: clips.length, clipTimes: clips.slice(0, 100).map(c => c.t), correlation: corr };
+}
 
 function downmix(channels, sr, target) {
   const n = channels[0].length, nch = channels.length;

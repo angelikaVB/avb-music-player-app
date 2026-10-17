@@ -53,12 +53,14 @@
         <button class="play" id="play" title="Play / pause">▶</button>
         <button class="icon" id="next" title="Next">⏭</button>
       </div>
-      <div class="buttons small">
+      <div class="buttons small tgrid">
         <button class="mark a" id="markA" title="Set A at the playhead">A</button>
         <button class="mark b" id="markB" title="Set B at the playhead">B</button>
         <button class="ghost" id="back10">−10s</button>
         <button class="ghost" id="fwd10">+10s</button>
+        <button class="ghost" id="shuffle" title="Shuffle">⤮</button>
         <button class="ghost" id="repeat" title="Repeat">↻ off</button>
+        <button class="ghost" id="mono" title="Mono check: both speakers play the same sum">Mono</button>
         <select id="speedQuick" class="ghost" title="Speed">
           <option value="0.5">0.5×</option><option value="0.75">0.75×</option><option value="0.9">0.9×</option>
           <option value="1" selected>1×</option><option value="1.1">1.1×</option><option value="1.25">1.25×</option><option value="1.5">1.5×</option>
@@ -98,9 +100,11 @@
         <button data-view="queue" class="on">Queue</button>
         <button data-view="favorites">Favourites</button>
         <button data-view="recent">Recent</button>
+        <button data-view="artists" id="viewArtists" hidden>Artists</button>
+        <button data-view="albums" id="viewAlbums" hidden>Albums</button>
         <span id="listTabs"></span>
       </nav>
-      <div class="faint" id="storage"></div>
+      <div class="listhead"><div class="faint" id="storage"></div><button class="ghost small" id="selMusic">Select</button></div>
       <ul class="list" id="list"></ul>
     </div>
 
@@ -122,6 +126,12 @@
         <div class="big"><div class="cap">TEMPO</div><div class="bpm" id="bpm">—</div><div class="faint" id="bpmnote"></div></div>
         <div class="big"><div class="cap">KEY</div><div class="key" id="key">—</div><div class="faint" id="keynote"></div></div>
         <div class="mini"><button class="ghost" id="half">½</button><button class="ghost" id="dbl">×2</button></div>
+      </div>
+      <div class="row fixrow">
+        <button class="ghost tap" id="tapBtn">Tap tempo</button>
+        <button class="ghost" id="bpmEdit">Type BPM</button>
+        <button class="ghost" id="keyEdit">Set key</button>
+        <button class="ghost" id="fixReset" hidden>Use the detected values</button>
       </div>
       <div class="grid" id="stats"></div>
       <div class="sections" id="sections"></div>
@@ -157,6 +167,7 @@
         <div class="row"><label>Width (Q)</label><input type="range" id="eqQ" min="0" max="1000"><span class="val" id="eqQv"></span></div>
       </div>
       <div class="row"><label>Output</label><input type="range" id="eqOut" min="-120" max="120"><span class="val" id="eqOutv"></span></div>
+      <div class="row"><label>Balance</label><input type="range" id="balance" min="-100" max="100" value="0"><span class="val" id="balanceV">Centre</span></div>
       <div class="faint">Drag a dot on the curve: sideways = frequency, up/down = gain. Changes are live; Save a copy can include the EQ (its name then says “EQ”).</div>
     </div>
 
@@ -187,6 +198,8 @@
     </div>
 
     <div class="tab" id="tab-notes">
+      <div class="row"><button class="primary" id="markAdd">📍 Add a marker here</button><span class="faint" id="markHint">Markers show on the waveform; tap one to jump there.</span></div>
+      <ul class="marks" id="marks"></ul>
       <textarea id="notes" placeholder="Notes on this song: mix ideas, where the vocal comes in, what to fix… Saved by themselves, per song."></textarea>
     </div>
   </section>
@@ -198,7 +211,7 @@
     <button class="primary rec big recbig" id="recBtn" title="Record from the microphone or a USB interface">● Record</button>
   </section>
   <section class="card">
-    <div class="faint" id="recsInfo"></div>
+    <div class="listhead"><div class="faint" id="recsInfo"></div><button class="ghost small" id="selRecs">Select</button></div>
     <ul class="list" id="recList"></ul>
   </section>
 </main>
@@ -217,6 +230,13 @@
   </div>
 </div>
 <div class="toast" id="toast"></div>
+<div class="selbar" id="selbar" hidden>
+  <button class="icon" id="selClose" title="Done">✕</button>
+  <span id="selCount">0 selected</span>
+  <button class="ghost" id="selAll">All</button>
+  <button class="ghost" id="selMore">More</button>
+  <button class="danger" id="selDel">Delete</button>
+</div>
 <div class="sheet" id="sheet"></div>
 <script type="module" src="app.js"></script>
 </body>

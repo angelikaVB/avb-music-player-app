@@ -20,7 +20,8 @@ const songGet = id => new Promise((ok, no) => { const t = db.transaction("songs"
 
 const lib = {
   queue: await kvGet("queue", []), index: await kvGet("index", -1), favorites: await kvGet("favorites", []),
-  recent: await kvGet("recent", []), playlists: await kvGet("playlists", []), notes: await kvGet("notes", {}), lyrics: await kvGet("lyrics", {}), eq: await kvGet("eq", null), hidden: await kvGet("hidden", []),
+  recent: await kvGet("recent", []), playlists: await kvGet("playlists", []), notes: await kvGet("notes", {}), lyrics: await kvGet("lyrics", {}), eq: await kvGet("eq", null), shuffle: await kvGet("shuffle", false), mono: false,
+  balance: await kvGet("balance", 0), fix: await kvGet("fix", {}), marks: await kvGet("marks", {}), hidden: await kvGet("hidden", []),
   repeat: await kvGet("repeat", "off"), volume: await kvGet("volume", 1), keepVoice: await kvGet("keepVoice", true),
 };
 const save = k => kvSet(k, lib[k]);
@@ -73,6 +74,7 @@ function analyse() {
     const d = e.data;
     if (d.stage === "peaks") { st.peaks = d.peaks; st.info = { ...st.info, peakDb: d.peakDb, rmsDb: d.rmsDb }; drawWave(); fillStats(); }
     if (d.stage === "loudness") { st.loud = d; fillStats(); drawLoud(); }
+    if (d.stage === "checks") { st.checks = d; fillStats(); drawWave(); }
     if (d.stage === "tempo") { st.music = { ...(st.music || {}), ...d }; refreshMusic(); }
     if (d.stage === "key") { st.music = { ...(st.music || {}), ...d }; refreshMusic(); }
     if (d.stage === "sections") { st.sections = d.sections; drawWave(); fillSections(); $("#listen").textContent = `analysed in ${((performance.now() - t0) / 1000).toFixed(0)} s`; }
@@ -93,7 +95,7 @@ async function loadSong(id, autoplay = true) {
   if (!rec || !rec.blob) { toast("That song is no longer in the app"); return; }
   await audio();
   st.id = id; st.name = rec.name; st.playing = false; st.pos = 0; st.a = st.b = null; st.loopOn = false; st.bpmScale = 1; st.changed = false;
-  st.music = null; st.sections = []; st.peaks = null; st.loud = null; st.view = { a: 0, b: 1 }; st.vzoom = 1;
+  st.music = null; st.sections = []; st.peaks = null; st.loud = null; st.checks = null; st.tags = null; st.view = { a: 0, b: 1 }; st.vzoom = 1;
   send({ cmd: "unload" }); send({ cmd: "loop", loop: null });
   $("#title").textContent = rec.name.replace(/\.[^.]+$/, "");
   $("#listen").textContent = "Reading…";
@@ -102,7 +104,12 @@ async function loadSong(id, autoplay = true) {
   let buf;
   try {
     const ab = await rec.blob.arrayBuffer();
-    buf = await ctx.decodeAudioData(ab);
+    try { buf = await ctx.decodeAudioData(ab.slice(0)); }
+    catch (err) {
+      const pcm = decodePcm(ab);                                   // AIFF / AIFF-C, 64-bit float WAV ...
+      if (!pcm) throw new Error(/\.m4a$/i.test(rec.name) ? "Apple Lossless (ALAC) is not supported yet" : "this format cannot be opened");
+      buf = await toContextBuffer(pcm);
+    }
   } catch (err) {
     toast("Cannot play this file: " + (err && err.message || "unknown format")); $("#listen").textContent = ""; return;
   }
@@ -115,7 +122,8 @@ async function loadSong(id, autoplay = true) {
   send({ cmd: "load", channels: chans });
   $("#tdur").textContent = fmtTime(buf.duration);
   $("#notes").value = lib.notes[id] || "";
-  findLyrics(id, rec);
+  renderMarks();
+  readTags(rec.blob, rec.name).catch(() => ({})).then(tags => { if (st.id !== id) return; st.tags = tags; showCover(id, tags); findLyrics(id, rec, tags); });
   if (!isRecording(id)) { lib.recent = [id, ...lib.recent.filter(x => x !== id)].slice(0, 60); save("recent"); }
   if ($("#page-recs").classList.contains("on")) renderRecList();
   analyse();
@@ -123,6 +131,63 @@ async function loadSong(id, autoplay = true) {
   if (autoplay) play();
   if ("mediaSession" in navigator) navigator.mediaSession.metadata = new MediaMetadata({ title: $("#title").textContent, artist: "AVB Music Player" });
   renderList();
+}
+// ---- our own reader for uncompressed files the browser engine refuses
+function decodePcm(ab, headerOnly) {
+  const v = new DataView(ab), u8 = new Uint8Array(ab);
+  const tag = o => String.fromCharCode(u8[o], u8[o + 1], u8[o + 2], u8[o + 3]);
+  let fmt = null, data = null;
+  if (tag(0) === "RIFF" && tag(8) === "WAVE") {
+    for (let p = 12; p + 8 <= u8.length;) {
+      const id = tag(p), size = v.getUint32(p + 4, true);
+      if (id === "fmt ") {
+        let code = v.getUint16(p + 8, true);
+        if (code === 0xFFFE && size >= 40) code = v.getUint16(p + 32, true);   // WAVE_FORMAT_EXTENSIBLE: the real code
+        fmt = { ch: v.getUint16(p + 10, true), sr: v.getUint32(p + 12, true), bits: v.getUint16(p + 22, true), float: code === 3, le: true };
+      } else if (id === "data") { data = { off: p + 8, len: Math.min(size, u8.length - p - 8) }; }
+      p += 8 + size + (size & 1);
+    }
+  } else if (tag(0) === "FORM" && (tag(8) === "AIFF" || tag(8) === "AIFC")) {
+    const aifc = tag(8) === "AIFC";
+    for (let p = 12; p + 8 <= u8.length;) {
+      const id = tag(p), size = v.getUint32(p + 4, false);
+      if (id === "COMM") {
+        const ch = v.getUint16(p + 8, false), bits = v.getUint16(p + 14, false);
+        // 80-bit extended sample rate
+        const ex = v.getUint16(p + 16, false), hi = v.getUint32(p + 18, false), lo = v.getUint32(p + 22, false);
+        const sr = Math.round((hi * 4294967296 + lo) * Math.pow(2, (ex & 0x7fff) - 16383 - 63));
+        const comp = aifc ? tag(p + 26) : "NONE";
+        fmt = { ch, sr, bits, float: comp === "fl32" || comp === "FL32" || comp === "fl64" || comp === "FL64", le: comp === "sowt" };
+        if (comp === "fl64" || comp === "FL64") fmt.bits = 64; if (comp === "fl32" || comp === "FL32") fmt.bits = 32;
+        if (aifc && !["NONE", "sowt", "fl32", "FL32", "fl64", "FL64"].includes(comp)) return null;
+      } else if (id === "SSND") { const offset = v.getUint32(p + 8, false); data = { off: p + 16 + offset, len: Math.min(size - 8 - offset, u8.length - p - 16 - offset) }; }
+      p += 8 + size + (size & 1);
+    }
+  }
+  if (!fmt || !fmt.ch || !fmt.sr) return null;
+  if (headerOnly) return { channels: [], sampleRate: fmt.sr, bits: fmt.bits };
+  if (!data) return null;
+  const bps = fmt.bits / 8, frames = Math.floor(data.len / (bps * fmt.ch));
+  const out = Array.from({ length: fmt.ch }, () => new Float32Array(frames));
+  for (let i = 0, p = data.off; i < frames; i++) for (let c = 0; c < fmt.ch; c++, p += bps) {
+    let x;
+    if (fmt.float) x = bps === 8 ? v.getFloat64(p, fmt.le) : v.getFloat32(p, fmt.le);
+    else if (bps === 1) x = fmt.le ? (u8[p] - 128) / 128 : v.getInt8(p) / 128;      // WAV 8-bit is unsigned, AIFF signed
+    else if (bps === 2) x = v.getInt16(p, fmt.le) / 32768;
+    else if (bps === 3) { const b0 = u8[fmt.le ? p : p + 2], b1 = u8[p + 1], b2 = u8[fmt.le ? p + 2 : p]; let n = b0 | (b1 << 8) | (b2 << 16); if (n & 0x800000) n -= 0x1000000; x = n / 8388608; }
+    else x = v.getInt32(p, fmt.le) / 2147483648;
+    out[c][i] = x;
+  }
+  return { channels: out, sampleRate: fmt.sr, bits: fmt.bits };
+}
+async function toContextBuffer(pcm) {
+  // the player runs at the phone's rate: convert, the way the browser engine would
+  const n = pcm.channels[0].length, nch = pcm.channels.length;
+  const off = new OfflineAudioContext(nch, Math.max(1, Math.round(n * ctx.sampleRate / pcm.sampleRate)), ctx.sampleRate);
+  const b = off.createBuffer(nch, n, pcm.sampleRate);
+  pcm.channels.forEach((c, i) => b.copyToChannel(c, i));
+  const src = off.createBufferSource(); src.buffer = b; src.connect(off.destination); src.start();
+  return off.startRendering();
 }
 function coverFor(name) {
   let h = 0; for (const ch of name) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
@@ -133,7 +198,7 @@ const fmtOf = n => (n.split(".").pop() || "").toUpperCase();
 function bitsOf(rec) {
   // only WAV/AIFF/FLAC headers say their depth; others are compressed
   const f = fmtOf(rec.name);
-  if (f === "WAV" || f === "AIFF" || f === "AIF" || f === "FLAC") return rec.bits || 0;
+  if (f === "WAV" || f === "AIFF" || f === "AIF" || f === "AIFC" || f === "FLAC") return rec.bits || 0;
   return 0;
 }
 async function sniffBits(blob, name) { return (await sniffHeader(blob, name)).bits; }
@@ -145,6 +210,10 @@ async function sniffHeader(blob, name) {
     if (f === "WAV" && head.getUint32(0, false) === 0x52494646) {
       let p = 12;
       while (p + 8 < head.byteLength) { const id = head.getUint32(p, false), sz = head.getUint32(p + 4, true); if (id === 0x666d7420) return { rate: head.getUint32(p + 12, true), bits: head.getUint16(p + 22, true) }; p += 8 + sz + (sz & 1); }
+    }
+    if ((f === "AIFF" || f === "AIF" || f === "AIFC") && head.getUint32(0, false) === 0x464f524d) {
+      const pcm = decodePcm(await blob.slice(0, 4096).arrayBuffer(), true);
+      if (pcm) return { rate: pcm.sampleRate, bits: pcm.bits };
     }
     if (f === "FLAC" && head.getUint32(0, false) === 0x664c6143) {
       const rate = (head.getUint8(18) << 12) | (head.getUint8(19) << 4) | (head.getUint8(20) >> 4);
@@ -175,6 +244,10 @@ function nextTrack(auto) {
     return;
   }
   if (!lib.queue.length) return;
+  if (lib.shuffle && lib.queue.length > 1) {
+    let n; do { n = Math.floor(Math.random() * lib.queue.length); } while (n === lib.index);
+    playIndex(n, auto || st.playing); return;
+  }
   let n = lib.index + 1;
   if (n >= lib.queue.length) { if (auto && lib.repeat === "off") return; n = 0; }
   playIndex(n, auto || st.playing);                     // the next song keeps playing only if music was playing
@@ -233,19 +306,24 @@ function shiftKey(key, semis) {
   return `${NAMES[((i + semis) % 12 + 12) % 12]} ${mode}`;
 }
 const CAMELOT = { "C major": "8B", "G major": "9B", "D major": "10B", "A major": "11B", "E major": "12B", "B major": "1B", "F# major": "2B", "C# major": "3B", "Ab major": "4B", "Eb major": "5B", "Bb major": "6B", "F major": "7B", "A minor": "8A", "E minor": "9A", "B minor": "10A", "F# minor": "11A", "C# minor": "12A", "Ab minor": "1A", "Eb minor": "2A", "Bb minor": "3A", "F minor": "4A", "C minor": "5A", "G minor": "6A", "D minor": "7A" };
+const fixOf = () => (st.id && lib.fix[st.id]) || {};
+function effBpm() { const f = fixOf(); return f.bpm || ((st.music && st.music.bpm || 0) * st.bpmScale); }
+function effKey() { const f = fixOf(); return f.key || (st.music && st.music.key) || ""; }
 function refreshMusic() {
-  const m = st.music || {}; const sp = +$("#speed").value;
+  const m = st.music || {}; const sp = +$("#speed").value; const fx = fixOf();
   $("#speedval").textContent = sp + "%"; $("#speedQuick").value = String(sp / 100);
   $("#semis").textContent = st.semis ? `${st.semis > 0 ? "+" : ""}${st.semis} st` : "±0 st";
-  const bpm = (m.bpm || 0) * st.bpmScale;
+  const bpm = effBpm();
   $("#bpm").textContent = bpm ? (bpm * sp / 100).toFixed(1) : "—";
-  $("#bpmnote").textContent = bpm ? (sp !== 100 ? `${bpm.toFixed(1)} as recorded, at ${sp}%` : `beat ${m.confidence || ""}`) : "";
+  $("#bpmnote").textContent = bpm ? (sp !== 100 ? `${bpm.toFixed(1)} as recorded, at ${sp}%` : fx.bpm ? (fx.bpmHow === "tap" ? "tapped by you" : "set by you") : `beat ${m.confidence || ""}`) : "";
+  $("#fixReset").hidden = !(fx.bpm || fx.key);
   $("#bpmTarget").value = bpm ? (bpm * sp / 100).toFixed(1) : ""; $("#bpmTarget").disabled = !bpm;
   $("#bpmFrom").textContent = bpm ? `of ${bpm.toFixed(1)}` : "";
-  if (m.key) {
-    const k = st.semis ? shiftKey(m.key, st.semis) : m.key;
-    $("#key").textContent = k; $("#keynote").textContent = `${CAMELOT[k] || ""}  ·  certainty ${Math.round((m.keyConfidence || 0) * 100)}%`;
-    $("#keyResult").textContent = st.semis ? `${m.key} → ${k}` : m.key;
+  const key0 = effKey();
+  if (key0) {
+    const k = st.semis ? shiftKey(key0, st.semis) : key0;
+    $("#key").textContent = k; $("#keynote").textContent = `${CAMELOT[k] || ""}  ·  ${fx.key ? "set by you" : "certainty " + Math.round((m.keyConfidence || 0) * 100) + "%"}`;
+    $("#keyResult").textContent = st.semis ? `${key0} → ${k}` : key0;
   } else { $("#key").textContent = "—"; $("#keynote").textContent = ""; $("#keyResult").textContent = ""; }
   fillStats();
 }
@@ -262,8 +340,14 @@ function fillStats() {
   const f = (v, d = 1, u = "") => v === undefined || v === null || v <= -100 ? "—" : v.toFixed(d) + u;
   $("#stats").innerHTML = stat("DURATION", st.buffer ? fmtTime(st.duration) : "—") + stat("INTEGRATED", l ? f(l.integrated, 1, " LUFS") : "—") + stat("PEAK", f(i.peakDb, 1, " dB"))
     + stat("RMS", f(i.rmsDb, 1, " dB")) + stat("DYNAMIC RANGE", i.peakDb !== undefined ? f(i.peakDb - i.rmsDb, 1, " dB") : "—") + stat("RANGE", l && l.lra !== null ? f(l.lra, 1, " LU") : "—")
-    + stat("BARS", m.downbeats ? m.downbeats.length : "—") + stat("BEATS", m.beats ? m.beats.length : "—") + stat("SECTIONS", st.sections.length || "—");
-  $("#loudstats").innerHTML = l ? stat("INTEGRATED", f(l.integrated, 1, " LUFS")) + stat("SHORT-TERM MAX", f(l.shortTermMax, 1, " LUFS")) + stat("LOUDNESS RANGE", l.lra !== null ? f(l.lra, 1, " LU") : "—") : "";
+    + stat("BARS", m.downbeats ? m.downbeats.length : "—") + stat("BEATS", m.beats ? m.beats.length : "—") + stat("SECTIONS", st.sections.length || "—")
+    + (st.checks ? stat("TRUE PEAK", (st.checks.truePeakDb > -0.05 ? "⚠ " : "") + f(st.checks.truePeakDb, 1, " dBTP"))
+      + stat("CLIPPING", st.checks.clipEvents ? `<a href="#" id="clipJump">⚠ ${st.checks.clipEvents} place${st.checks.clipEvents === 1 ? "" : "s"}</a>` : "none")
+      + stat("STEREO", st.checks.correlation === null ? "mono" : `${st.checks.correlation >= 0 ? "+" : ""}${st.checks.correlation.toFixed(2)}${st.checks.correlation < 0.2 ? " ⚠" : ""}`) : "");
+  const cj = $("#clipJump");
+  if (cj) cj.onclick = e => { e.preventDefault(); const t = st.checks.clipTimes.find(x => x > st.pos + 0.5) ?? st.checks.clipTimes[0]; seek(Math.max(0, t - 1)); toast(`Clipping at ${fmtTime(t)}`); };
+  $("#loudstats").innerHTML = l ? stat("INTEGRATED", f(l.integrated, 1, " LUFS")) + stat("SHORT-TERM MAX", f(l.shortTermMax, 1, " LUFS")) + stat("LOUDNESS RANGE", l.lra !== null ? f(l.lra, 1, " LU") : "—")
+    + (st.checks ? stat("TRUE PEAK", f(st.checks.truePeakDb, 1, " dBTP")) : "") : "";
 }
 function fillSections() {
   const el = $("#sections");
@@ -324,6 +408,13 @@ function drawWave() {
     wctx.strokeStyle = "rgba(255,255,255,.12)";
     for (const b of st.music.beats) { const x = xOf(b, w); if (x >= 0 && x <= w) { wctx.beginPath(); wctx.moveTo(x, top); wctx.lineTo(x, bottom); wctx.stroke(); } }
   }
+  // the user's markers: amber pins along the top of the wave
+  for (const mk of (lib.marks[st.id] || [])) {
+    const x = xOf(mk.t, w); if (x < -4 || x > w + 4) continue;
+    wctx.fillStyle = "rgba(245,158,11,.55)"; wctx.fillRect(x - 0.5, top, 1, bottom - top);
+    wctx.fillStyle = "#F59E0B"; wctx.beginPath(); wctx.moveTo(x - 5, top); wctx.lineTo(x + 5, top); wctx.lineTo(x, top + 7); wctx.fill();
+  }
+  if (st.checks && st.checks.clipTimes) for (const t of st.checks.clipTimes) { const x = xOf(t, w); if (x >= 0 && x <= w) { wctx.fillStyle = "rgba(239,68,68,.8)"; wctx.fillRect(x - 1, bottom - 6, 2, 6); } }
   // markers
   for (const [t, col, letter] of [[st.a, "#22D3EE", "A"], [st.b, "#F97316", "B"]]) {
     if (t === null) continue;
@@ -476,7 +567,7 @@ function saveName(part, f) {
   const stem = st.name.replace(/\.[^.]+$/, ""); const tags = [];
   const clock = (t, up) => { const s = up ? Math.ceil(t - 1e-6) : Math.floor(t + 1e-6); return `${Math.floor(s / 60)}.${String(s % 60).padStart(2, "0")}`; };
   if (part !== "whole" && st.a !== null && st.b !== null) tags.push((part === "remove" ? "without " : "") + `${clock(st.a)}–${clock(st.b, true)}`);
-  const bpm = (st.music && st.music.bpm || 0) * st.bpmScale;
+  const bpm = effBpm();
   if (st.speed !== 1) tags.push(bpm ? `${(bpm * st.speed).toFixed(1).replace(/\.0$/, "")} BPM` : `${Math.round(st.speed * 100)}% speed`);
   if (st.semis) { tags.push(`${st.semis > 0 ? "+" : ""}${st.semis} st`); if (!$("#keepVoice").checked) tags.push("voice shifted"); }
   if (eqActive()) tags.push("EQ");
@@ -696,26 +787,170 @@ function emptyText() {
   if (view === "recent") return "Nothing played yet.";
   return "Empty playlist. Use ⋯ on a song to add it.";
 }
+let groupBy = "artist", groupName = "";
+function renderGroups(key, filter) {
+  const groups = new Map();
+  for (const id of phoneIds) { if (lib.hidden.includes(id) || !songs[id]) continue; const g = (songs[id][key] && !/^<unknown>$/i.test(songs[id][key])) ? songs[id][key] : "Unknown"; groups.set(g, (groups.get(g) || 0) + 1); }
+  const rows = [...groups.entries()].filter(([g]) => g.toLowerCase().includes(filter)).sort((a, b) => a[0] === "Unknown" ? 1 : b[0] === "Unknown" ? -1 : a[0].localeCompare(b[0]));
+  const el = $("#list");
+  el.innerHTML = rows.map(([g, n]) => `<li class="grouprow" data-g="${encodeURIComponent(g)}"><div class="thumb" style="background:${coverFor(g)}">${g[0].toUpperCase()}</div><div class="n"><div class="name">${g.replace(/</g, "&lt;")}</div><div class="sub">${n} song${n === 1 ? "" : "s"}</div></div></li>`).join("")
+    || `<li class="muted">${phoneState === "ok" ? "Nothing here." : "Allow AVB Music Player to see your music first (All music)."}</li>`;
+  el.querySelectorAll("li[data-g]").forEach(li => li.onclick = () => { groupBy = key; groupName = decodeURIComponent(li.dataset.g); view = "group"; renderList(); });
+  $("#storage").textContent = `${rows.length} ${key === "artist" ? "artist" : "album"}${rows.length === 1 ? "" : "s"}`;
+  $("#views").querySelectorAll("button").forEach(b => { b.classList.toggle("on", b.dataset.view === view); b.onclick = () => { view = b.dataset.view; listName = b.dataset.name || ""; if (view === "phone" && phoneState === "denied") loadPhone(true); renderList(); }; });
+}
 function renderList() {
   const filter = $("#filter").value.toLowerCase();
-  let ids = view === "phone" ? phoneIds.filter(x => !lib.hidden.includes(x)) : view === "recordings" ? recordingIds : view === "queue" ? lib.queue : view === "favorites" ? lib.favorites
+  if (view === "artists" || view === "albums") { renderGroups(view === "artists" ? "artist" : "album", filter); return; }
+  let ids = view === "group" ? phoneIds.filter(x => !lib.hidden.includes(x) && (songs[x][groupBy] || "Unknown") === groupName)
+    : view === "phone" ? phoneIds.filter(x => !lib.hidden.includes(x)) : view === "recordings" ? recordingIds : view === "queue" ? lib.queue : view === "favorites" ? lib.favorites
     : view === "recent" ? lib.recent : (lib.playlists.find(p => p.name === listName) || { items: [] }).items;
   ids = ids.filter(id => !isRecording(id) && !String(id).startsWith("r:"));
   ids = ids.filter(id => songs[id] && ((songs[id].name + " " + (songs[id].artist || "") + " " + (songs[id].album || "")).toLowerCase().includes(filter)));
   const el = $("#list");
-  el.innerHTML = ids.map(id => { const s = songs[id]; return `<li data-id="${id}" class="${id === st.id ? "now" : ""}"><div class="thumb" style="background:${coverFor(s.name)}"></div><div class="n"><div class="name">${lib.favorites.includes(id) ? "♥ " : ""}${s.name.replace(/\.[^.]+$/, "")}</div><div class="sub">${subLine(s)}</div></div><button class="icon more" title="More">⋯</button></li>`; }).join("")
+  el.innerHTML = ids.map(id => { const s = songs[id]; return `<li data-id="${id}" class="${id === st.id ? "now" : ""}"><div class="thumb" style="background:${coverFor(s.name)}"></div><div class="n"><div class="name">${lib.favorites.includes(id) ? "♥ " : ""}${s.name.replace(/\.[^.]+$/, "")}</div><div class="sub">${subLine(s)}</div></div>${rowEnd(id, "music")}</li>`; }).join("")
     || `<li class="muted">${emptyText()}</li>`;
+  shownIds.music = ids;
   el.querySelectorAll("li[data-id]").forEach(li => {
-    li.querySelector(".n").onclick = () => { if (view === "queue") playIndex(lib.queue.indexOf(li.dataset.id)); else { lib.queue = ids.slice(); save("queue"); playIndex(ids.indexOf(li.dataset.id)); } window.scrollTo({ top: 0, behavior: "smooth" }); };
-    li.querySelector(".more").onclick = () => songMenu(li.dataset.id);
+    li.querySelector(".n").onclick = () => { if (pickRow(li, "music")) return; if (view === "queue") playIndex(lib.queue.indexOf(li.dataset.id)); else { lib.queue = ids.slice(); save("queue"); playIndex(ids.indexOf(li.dataset.id)); } window.scrollTo({ top: 0, behavior: "smooth" }); };
+    wireRow(li, "music");
   });
+  el.classList.toggle("selecting", sel.where === "music"); updateSelbar();
   $("#listTabs").innerHTML = lib.playlists.map(p => `<button data-view="list" data-name="${p.name}" class="${view === "list" && listName === p.name ? "on" : ""}">${p.name}</button>`).join("");
-  $("#views").querySelectorAll("button").forEach(b => { b.classList.toggle("on", b.dataset.view === view && (view !== "list" || b.dataset.name === listName)); b.onclick = () => { view = b.dataset.view; listName = b.dataset.name || ""; if (view === "phone" && phoneState === "denied") loadPhone(true); if (view === "recordings" && ANDROID) loadRecordings(); renderList(); }; });
+  $("#views").querySelectorAll("button").forEach(b => { b.classList.toggle("on", b.dataset.view === view && (view !== "list" || b.dataset.name === listName)); b.onclick = () => { selEnd(true); view = b.dataset.view; listName = b.dataset.name || ""; if (view === "phone" && phoneState === "denied") loadPhone(true); if (view === "recordings" && ANDROID) loadRecordings(); renderList(); }; });
   const n = ids.length;
   if (view === "phone") $("#storage").textContent = phoneState === "ok" ? `${n} song${n === 1 ? "" : "s"} on this phone` : "";
+  else if (view === "group") $("#storage").textContent = `${groupName} · ${n} song${n === 1 ? "" : "s"}`;
   else if (view === "recordings") $("#storage").textContent = ANDROID ? `${n} recording${n === 1 ? "" : "s"} · saved in Recordings/AVB Music Player on your phone` : `${n} recording${n === 1 ? "" : "s"} · kept in the app`;
   else if (!ANDROID && navigator.storage && navigator.storage.estimate) navigator.storage.estimate().then(e => $("#storage").textContent = `${Object.keys(songs).length} songs stored in the app · ${(e.usage / 1e6).toFixed(0)} MB of ${(e.quota / 1e9).toFixed(1)} GB`);
   else $("#storage").textContent = "";
+}
+// ---------------------------------------------------------------- selecting many
+// Long-press a song (or tap Select), tick more, then act on all of them from the bar.
+const sel = { where: null, ids: new Set() };
+const shownIds = { music: [], recs: [] };
+let longAt = 0;
+function rowEnd(id, where) {
+  return sel.where === where ? `<span class="check">✓</span>` : `<button class="icon more" title="More">⋯</button>`;
+}
+function wireRow(li, where) {
+  const id = li.dataset.id;
+  li.classList.toggle("sel", sel.where === where && sel.ids.has(id));
+  const more = li.querySelector(".more"); if (more) more.onclick = () => songMenu(id);
+  const chk = li.querySelector(".check"); if (chk) chk.onclick = () => pickRow(li, where);
+  let timer = null, x0 = 0, y0 = 0;
+  li.addEventListener("contextmenu", e => e.preventDefault());
+  li.addEventListener("pointerdown", e => {
+    x0 = e.clientX; y0 = e.clientY;
+    timer = setTimeout(() => { timer = null; longAt = Date.now(); if (navigator.vibrate) navigator.vibrate(15); selStart(where, id); }, 480);
+  });
+  const stop = () => { if (timer) clearTimeout(timer); timer = null; };
+  li.addEventListener("pointermove", e => { if (Math.hypot(e.clientX - x0, e.clientY - y0) > 10) stop(); });
+  li.addEventListener("pointerup", stop); li.addEventListener("pointercancel", stop);
+}
+function pickRow(li, where) {
+  if (Date.now() - longAt < 800) return true;                          // the click that ends a long-press
+  if (sel.where !== where) return false;
+  const id = li.dataset.id;
+  if (sel.ids.has(id)) sel.ids.delete(id); else sel.ids.add(id);
+  li.classList.toggle("sel", sel.ids.has(id));
+  updateSelbar();
+  return true;
+}
+function selStart(where, id) {
+  if (sel.where !== where) { sel.where = where; sel.ids.clear(); }
+  if (id) sel.ids.add(id);
+  document.body.classList.add("selecting");
+  where === "music" ? renderList() : renderRecList();
+}
+function selEnd(quiet) {
+  if (!sel.where) return;
+  const where = sel.where; sel.where = null; sel.ids.clear();
+  document.body.classList.remove("selecting"); $("#selbar").hidden = true;
+  if (!quiet) where === "music" ? renderList() : renderRecList();
+}
+function updateSelbar() {
+  const bar = $("#selbar");
+  bar.hidden = !sel.where;
+  $("#selMusic").textContent = sel.where === "music" ? "Done" : "Select";
+  $("#selRecs").textContent = sel.where === "recs" ? "Done" : "Select";
+  if (!sel.where) return;
+  for (const id of [...sel.ids]) if (!songs[id]) sel.ids.delete(id);
+  const n = sel.ids.size, all = shownIds[sel.where].length;
+  $("#selCount").textContent = `${n} selected`;
+  $("#selAll").textContent = n && n === all ? "None" : "All";
+  $("#selDel").disabled = !n; $("#selMore").disabled = !n;
+}
+$("#selMusic").onclick = () => sel.where === "music" ? selEnd() : selStart("music");
+$("#selRecs").onclick = () => sel.where === "recs" ? selEnd() : selStart("recs");
+$("#selClose").onclick = () => selEnd();
+$("#selAll").onclick = () => {
+  const ids = shownIds[sel.where] || [];
+  if (sel.ids.size === ids.length) sel.ids.clear(); else ids.forEach(id => sel.ids.add(id));
+  sel.where === "music" ? renderList() : renderRecList();
+};
+$("#selDel").onclick = () => deleteMany([...sel.ids]);
+$("#selMore").onclick = () => {
+  const ids = [...sel.ids]; if (!ids.length) return;
+  const n = ids.length, word = sel.where === "recs" ? (n === 1 ? "recording" : "recordings") : (n === 1 ? "song" : "songs");
+  const allFav = ids.every(id => lib.favorites.includes(id));
+  const items = [{ label: `Share ${n} ${word}`, run: () => shareMany(ids) }];
+  if (sel.where === "music") {
+    items.push({ label: allFav ? "Remove from favourites" : "Add to favourites", run: () => {
+      if (allFav) lib.favorites = lib.favorites.filter(x => !ids.includes(x)); else lib.favorites = [...ids.filter(x => !lib.favorites.includes(x)), ...lib.favorites];
+      save("favorites"); $("#heart").textContent = lib.favorites.includes(st.id) ? "♥" : "♡"; selEnd(); toast(allFav ? `${n} removed from favourites` : `${n} added to favourites`);
+    } });
+    for (const p of lib.playlists) items.push({ label: `Add to ${p.name}`, run: () => { for (const id of ids) if (!p.items.includes(id)) p.items.push(id); save("playlists"); selEnd(); toast(`${n} added to ${p.name}`); } });
+    items.push({ label: `New playlist with these ${n}`, run: () => { selEnd(true); newPlaylist(ids); } });
+    if (view === "queue") items.push({ label: "Remove from queue", run: () => {
+      const cur = lib.queue[lib.index]; lib.queue = lib.queue.filter(x => !ids.includes(x)); lib.index = lib.queue.indexOf(cur);
+      save("queue"); save("index"); selEnd();
+    } });
+    if (view === "list") items.push({ label: "Remove from this playlist", run: () => { const p = lib.playlists.find(p => p.name === listName); p.items = p.items.filter(x => !ids.includes(x)); save("playlists"); selEnd(); } });
+    items.push({ label: `Remove from AVB Music Player (the files stay on your phone)`, run: async () => { for (const id of ids) await removeFromApp(id, true); selEnd(); toast(`${n} removed from AVB Music Player. The files are still on your phone.`); } });
+  }
+  items.push({ label: ANDROID ? `Delete ${n} ${word} from phone completely` : `Delete ${n} ${word}`, danger: true, run: () => deleteMany(ids) });
+  sheet(items, `${n} ${word} selected`);
+};
+async function deleteMany(ids) {
+  ids = ids.filter(id => songs[id]); if (!ids.length) return;
+  const n = ids.length, recs = ids.every(isRecording);
+  const word = recs ? (n === 1 ? "recording" : "recordings") : (n === 1 ? "song" : "songs");
+  // what is on the phone: phone songs / recordings themselves, or the phone file behind an app copy
+  const target = new Map(ids.map(id => [id, /^[mr]:/.test(id) ? id : phoneTwin(id)]));
+  const onPhone = [...new Set([...target.values()].filter(Boolean))];
+  const appOnly = ids.filter(id => !target.get(id));
+  const names = ids.slice(0, 4).map(id => `“${songs[id].name}”`).join(", ") + (n > 4 ? ` and ${n - 4} more` : "");
+  if (!(await confirmBox(ANDROID && onPhone.length ? `Delete ${n} ${word} from your phone completely?` : `Delete ${n} ${word}?`,
+      `${names} ${n === 1 ? "is" : "are"} erased${ANDROID && onPhone.length ? " from the phone itself, not only from this app" : ""}. This cannot be undone.`, "Delete", "Cancel"))) return;
+  if (ANDROID && onPhone.length) {
+    const token = ++deleteToken;
+    const done = new Promise(r => deleteWaiters[token] = r);
+    ANDROID.deletePhone(onPhone.map(x => x.slice(2)).join(","), token);
+    if (!(await done)) { toast("Not deleted"); return; }
+  }
+  const gone = new Set([...ids, ...onPhone]);
+  for (const x of gone) {
+    if (songs[x] && !songs[x].url) await tx("songs", "readwrite", s2 => s2.delete(x));
+    forget(x); delete songs[x];
+  }
+  phoneIds = phoneIds.filter(x => !gone.has(x)); recordingIds = recordingIds.filter(x => !gone.has(x));
+  selEnd(true); renderList(); renderRecList();
+  toast(`Deleted ${n} ${word}${ANDROID && onPhone.length ? " from your phone" : ""}`);
+}
+async function shareMany(ids) {
+  if (ANDROID && ANDROID.shareMediaMany) {
+    const media = [...new Set(ids.map(id => /^[mr]:/.test(id) ? id : phoneTwin(id)).filter(Boolean))];
+    if (media.length < ids.length) toast(`${ids.length - media.length} of them ${ids.length - media.length === 1 ? "is" : "are"} not on the phone and ${ids.length - media.length === 1 ? "was" : "were"} left out`);
+    if (media.length) ANDROID.shareMediaMany(media.map(x => x.slice(2)).join(","));
+    selEnd(); return;
+  }
+  const files = [];
+  for (const id of ids) { const rec = await songGet(id).catch(() => null); if (rec && rec.blob) files.push(new File([rec.blob], songs[id].name, { type: rec.blob.type || "audio/*" })); }
+  if (files.length && navigator.canShare && navigator.canShare({ files })) {
+    try { await navigator.share({ files }); } catch (err) { if (err && err.name !== "AbortError") toast("Sharing failed: " + err.message); }
+  } else toast("This browser cannot share several files at once");
+  selEnd();
 }
 function sheet(items, title) {
   const s = $("#sheet");
@@ -728,11 +963,11 @@ function songMenu(id) {
   const items = [
     { label: fav ? "Remove from favourites" : "Add to favourites", run: () => toggleFav(id) },
     ...lib.playlists.map(p => ({ label: `Add to ${p.name}`, run: () => { if (!p.items.includes(id)) p.items.push(id); save("playlists"); renderList(); } })),
-    { label: "New playlist with this song…", run: () => newPlaylist([id]) },
+    { label: "New playlist with this song", run: () => newPlaylist([id]) },
   ];
   if (view === "queue") items.push({ label: "Remove from queue", run: () => { const i = lib.queue.indexOf(id); if (i >= 0) { lib.queue.splice(i, 1); if (i < lib.index) lib.index--; else if (i === lib.index) lib.index = -1; } save("queue"); save("index"); renderList(); } });
   if (view === "list") items.push({ label: "Remove from this playlist", run: () => { const p = lib.playlists.find(p => p.name === listName); p.items = p.items.filter(x => x !== id); save("playlists"); renderList(); } });
-  items.unshift({ label: "Share… (any format)", run: () => shareSong(id) });
+  items.unshift({ label: "Share", run: () => shareSong(id) });
   const rec = isRecording(id);
   const twin = phoneTwin(id);                         // the phone file behind an app copy, when it can be found
   if (!rec) items.push({ label: "Remove from AVB Music Player (the file stays on your phone)", run: () => removeFromApp(id) });
@@ -829,25 +1064,28 @@ function tagTitleArtist(name) {
   const m = stem.match(/^(.+?)\s+[-–]\s+(.+)$/);
   return m ? { artist: m[1], title: m[2] } : { artist: "", title: stem };
 }
-async function findLyrics(id, rec) {
+async function findLyrics(id, rec, preTags) {
   showLyrics("", "searching", id);
   if (lib.lyrics[id]) { showLyrics(lib.lyrics[id], "mine", id); openLyricsTab(); return; }
   let tags = {};
-  try { tags = await readTags(rec.blob, rec.name); } catch (_) { }
+  if (preTags) tags = preTags; else try { tags = await readTags(rec.blob, rec.name); } catch (_) { }
   if (st.id !== id) return;
   if (tags.lyrics && tags.lyrics.trim()) { showLyrics(tags.lyrics, "file", id); openLyricsTab(); return; }
   const guess = tagTitleArtist(rec.name);
   const title = tags.title || songs[id]?.title || guess.title, artist = tags.artist || songs[id]?.artist || guess.artist;
-  if (!navigator.onLine || isRecording(id) || !title || /^<unknown>$/i.test(artist || "")) { showLyrics("", "none", id); return; }
+  if (!navigator.onLine || isRecording(id) || !title || /^<unknown>$/i.test(artist || "") || (songs[id]?.duration && songs[id].duration < 30)) { showLyrics("", "none", id); return; }
   try {
     const q = new URLSearchParams({ track_name: title });
     if (artist && !/unknown/i.test(artist)) q.set("artist_name", artist);
     let r = await fetch("https://lrclib.net/api/get?" + q, { headers: { "Accept": "application/json" } });
+    // only lyrics for a song of the same length: a name alone matches the wrong songs
+    const dur = () => (st.id === id && st.duration) || songs[id]?.duration || 0;
+    const fits = x => x && (x.syncedLyrics || x.plainLyrics) && (!dur() || !x.duration || Math.abs(x.duration - dur()) <= 4);
     let d = r.ok ? await r.json() : null;
-    if (!d) {
+    if (!fits(d)) {
       r = await fetch("https://lrclib.net/api/search?" + new URLSearchParams({ q: `${artist || ""} ${title}`.trim() }));
       const list = r.ok ? await r.json() : [];
-      d = (list || []).find(x => x.syncedLyrics || x.plainLyrics) || null;
+      d = (list || []).find(fits) || null;
     }
     if (st.id !== id) return;
     if (d && (d.syncedLyrics || d.plainLyrics)) { showLyrics(d.syncedLyrics || d.plainLyrics, "lrclib", id); openLyricsTab(); }
@@ -879,6 +1117,20 @@ async function copyText(text) {
 // plain lyrics for copying: without the [mm:ss] times
 const plainLyrics = () => lyr.lines.map(l => l.text).join("\n").replace(/\n{3,}/g, "\n\n").trim();
 
+// ---- cover art: the picture inside the file, else the phone's album art, else the generated one
+let coverUrl = null;
+async function showCover(id, tags) {
+  const el = $("#cover");
+  if (coverUrl) { URL.revokeObjectURL(coverUrl); coverUrl = null; }
+  let blob = tags && tags.picture && tags.picture.size > 100 ? tags.picture : null;
+  if (!blob && ANDROID && ANDROID.albumArt && /^[mr]:/.test(id)) {
+    const b64 = ANDROID.albumArt(id.slice(2));
+    if (b64) blob = await (await fetch("data:image/jpeg;base64," + b64)).blob();
+  }
+  if (st.id !== id) return;
+  if (blob) { coverUrl = URL.createObjectURL(blob); el.style.background = `center / cover no-repeat url("${coverUrl}")`; el.classList.add("art"); }
+  else { el.style.background = coverFor(songs[id] ? songs[id].name : ""); el.classList.remove("art"); }
+}
 // ---- tags inside the file
 const dec = (bytes, enc) => {
   if (enc === 1 || enc === 2) { const le = enc === 1 ? !(bytes[0] === 0xFE && bytes[1] === 0xFF) : false; const start = enc === 1 && (bytes[0] === 0xFF || bytes[0] === 0xFE) ? 2 : 0;
@@ -902,6 +1154,7 @@ function id3(view, base) {
     const enc = body[0];
     const zero = enc === 1 || enc === 2 ? 2 : 1;
     const afterTerm = (b, from) => { for (let i = from; i < b.length - (zero - 1); i += zero) { if (b[i] === 0 && (zero === 1 || b[i + 1] === 0)) return i + zero; } return b.length; };
+    if (fid === "APIC" && !out.picture) { let k = 1; while (k < body.length && body[k]) k++; const mime = dec(body.subarray(1, k), 0); k += 2; k = afterTerm(body, k); out.picture = new Blob([body.slice(k)], { type: mime || "image/jpeg" }); }
     if (fid === "USLT") { const k = afterTerm(body, 4); out.lyrics = dec(body.subarray(k), enc).replace(/\0+$/, ""); }
     else if (fid === "TIT2") out.title = dec(body.subarray(1), enc).replace(/\0+$/, "");
     else if (fid === "TPE1") out.artist = dec(body.subarray(1), enc).replace(/\0+$/, "");
@@ -932,15 +1185,20 @@ async function readTags(blob, name) {
   const view = new DataView(head.buffer);
   if (head[0] === 0x49 && head[1] === 0x44 && head[2] === 0x33) return id3(view, 0);                      // MP3 (or any file starting with ID3)
   if (f === "FLAC" && head[0] === 0x66) {
-    let p = 4;
+    let p = 4, flacTags = {};
     while (p + 4 < head.length) {
       const last = head[p] & 0x80, type = head[p] & 0x7f, len = (head[p + 1] << 16) | (head[p + 2] << 8) | head[p + 3];
-      if (type === 4) return vorbis(head, p + 4);
+      if (type === 4) flacTags = { ...flacTags, ...vorbis(head, p + 4) };
+      if (type === 6 && !flacTags.picture) {                                  // PICTURE block
+        const dv2 = new DataView(head.buffer, p + 4); let q = 4; const ml = dv2.getUint32(q); const mime = new TextDecoder().decode(head.subarray(p + 4 + q + 4, p + 4 + q + 4 + ml)); q += 4 + ml;
+        const dl = dv2.getUint32(q); q += 4 + dl + 16; const plen = dv2.getUint32(q); q += 4;
+        flacTags.picture = new Blob([head.slice(p + 4 + q, p + 4 + q + plen)], { type: mime || "image/jpeg" });
+      }
       p += 4 + len; if (last) break;
     }
-    return {};
+    return flacTags;
   }
-  if (f === "WAV" || f === "AIFF" || f === "AIF") {                                                      // an "id3 " chunk inside the file
+  if (f === "WAV" || f === "AIFF" || f === "AIF" || f === "AIFC") {                                       // an "id3 " chunk inside the file
     const tail = new Uint8Array(await blob.slice(Math.max(0, blob.size - 2 * 1024 * 1024)).arrayBuffer());
     for (const buf of [head, tail]) for (let i = 0; i + 13 < buf.length; i++)
       if ((buf[i] === 0x69 || buf[i] === 0x49) && buf[i + 1] === 0x44 && buf[i + 2] === 0x33 && buf[i + 3] === 0x20 && buf[i + 8] === 0x49 && buf[i + 9] === 0x44 && buf[i + 10] === 0x33)
@@ -960,6 +1218,8 @@ async function readTags(blob, name) {
     let i = find([0xA9, 0x6C, 0x79, 0x72]); if (i >= 0) out.lyrics = data(i);
     i = find([0xA9, 0x6E, 0x61, 0x6D]); if (i >= 0) out.title = data(i);
     i = find([0xA9, 0x41, 0x52, 0x54]); if (i >= 0) out.artist = data(i);
+    i = find([0x63, 0x6F, 0x76, 0x72]);                                              // covr
+    if (i >= 0 && String.fromCharCode(...head.subarray(i + 8, i + 12)) === "data") { const len = new DataView(head.buffer).getUint32(i + 4); out.picture = new Blob([head.slice(i + 20, i + 4 + len)], { type: "image/jpeg" }); }
     return out;
   }
   return {};
@@ -1012,13 +1272,34 @@ function buildEqChain() {
   try { node.disconnect(); } catch (_) { }
   eqNodes.forEach(n => { try { n.disconnect(); } catch (_) { } });
   if (eqOut) try { eqOut.disconnect(); } catch (_) { }
+  if (outStage) for (const n of Object.values(outStage)) try { n.disconnect(); } catch (_) { }
   eqNodes = lib.eq.bands.map(b => { const n = ctx.createBiquadFilter(); setBiquad(n, b, ctx); return n; });
   eqOut = ctx.createGain();
   eqAnalyser = eqAnalyser || ctx.createAnalyser(); eqAnalyser.fftSize = 4096; eqAnalyser.smoothingTimeConstant = 0.8;
   let last = node;
   if (lib.eq.on) for (const n of eqNodes) { last.connect(n); last = n; }
   last.connect(eqOut); eqOut.gain.value = lib.eq.on ? Math.pow(10, lib.eq.out / 20) : 1;
-  eqOut.connect(ctx.destination); eqOut.connect(eqAnalyser);
+  buildOutputStage();
+}
+// after the EQ: mono check (both speakers get (L+R)/2) and balance, then the speakers
+let outStage = null;
+function buildOutputStage() {
+  if (outStage) for (const n of Object.values(outStage)) try { n.disconnect(); } catch (_) { }
+  try { eqOut.disconnect(); } catch (_) { }
+  const split = ctx.createChannelSplitter(2), merge = ctx.createChannelMerger(2), gL = ctx.createGain(), gR = ctx.createGain();
+  const mono = ctx.createGain(); mono.channelCount = 1; mono.channelCountMode = "explicit"; mono.channelInterpretation = "speakers";
+  if (lib.mono) { eqOut.connect(mono); mono.connect(gL); mono.connect(gR); }
+  else { eqOut.connect(split); split.connect(gL, 0); split.connect(gR, 1); }
+  gL.connect(merge, 0, 0); gR.connect(merge, 0, 1);
+  merge.connect(ctx.destination); merge.connect(eqAnalyser);
+  outStage = { split, merge, gL, gR, mono };
+  setBalance();
+}
+function setBalance() {
+  if (!outStage) return;
+  const p = (lib.balance || 0) / 100;
+  outStage.gL.gain.setTargetAtTime(p > 0 ? 1 - p : 1, ctx.currentTime, 0.01);
+  outStage.gR.gain.setTargetAtTime(p < 0 ? 1 + p : 1, ctx.currentTime, 0.01);
 }
 function eqChanged(rebuild) {
   save("eq");
@@ -1157,6 +1438,7 @@ function ask(title, text, value, yes = "Save", no = "Cancel", withInput = true) 
     const d = $("#dialog"), inp = $("#dlgInput");
     $("#dlgTitle").textContent = title; $("#dlgText").textContent = text || ""; $("#dlgText").hidden = !text;
     $("#dlgYes").textContent = yes; $("#dlgNo").textContent = no; inp.value = value || ""; inp.hidden = !withInput;
+    $("#dlgYes").classList.toggle("danger", /^(Delete|Discard)/.test(yes));
     d.hidden = false;
     if (withInput) setTimeout(() => { inp.focus(); inp.select(); }, 50);
     const finish = v => { d.hidden = true; $("#dlgYes").onclick = $("#dlgNo").onclick = inp.onkeydown = null; done(v); };
@@ -1301,13 +1583,15 @@ function renderRecList() {
   const el = $("#recList");
   const ids = recordingIds.filter(id => songs[id]);
   const when = t => { if (!t) return ""; const d = new Date(t); return d.toLocaleDateString(undefined, { day: "numeric", month: "short" }) + " " + d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" }); };
-  el.innerHTML = ids.map(id => { const s = songs[id]; return `<li data-id="${id}" class="${id === st.id ? "now" : ""} ${id === freshTake ? "fresh" : ""}"><div class="thumb rec"></div><div class="n"><div class="name">${s.name.replace(/\.[^.]+$/, "")}</div><div class="sub">${[s.duration ? fmtTime(s.duration) : "", when(s.added), s.size > 0 ? (s.size / 1e6).toFixed(1) + " MB" : ""].filter(Boolean).join(" · ")}</div></div><button class="icon more" title="More">⋯</button></li>`; }).join("")
+  el.innerHTML = ids.map(id => { const s = songs[id]; return `<li data-id="${id}" class="${id === st.id ? "now" : ""} ${id === freshTake ? "fresh" : ""}"><div class="thumb rec"></div><div class="n"><div class="name">${s.name.replace(/\.[^.]+$/, "")}</div><div class="sub">${[s.duration ? fmtTime(s.duration) : "", when(s.added), s.size > 0 ? (s.size / 1e6).toFixed(1) + " MB" : ""].filter(Boolean).join(" · ")}</div></div>${rowEnd(id, "recs")}</li>`; }).join("")
     || `<li class="muted">No recordings yet: tap ● Record.</li>`;
   $("#recsInfo").textContent = ids.length ? (ANDROID ? `${ids.length} recording${ids.length === 1 ? "" : "s"} · Recordings/AVB Music Player on your phone` : `${ids.length} recording${ids.length === 1 ? "" : "s"}`) : "";
+  shownIds.recs = ids;
   el.querySelectorAll("li[data-id]").forEach(li => {
-    li.querySelector(".n").onclick = () => { loadSong(li.dataset.id, false); window.scrollTo({ top: 0, behavior: "smooth" }); };
-    li.querySelector(".more").onclick = () => songMenu(li.dataset.id);
+    li.querySelector(".n").onclick = () => { if (pickRow(li, "recs")) return; loadSong(li.dataset.id, false); window.scrollTo({ top: 0, behavior: "smooth" }); };
+    wireRow(li, "recs");
   });
+  el.classList.toggle("selecting", sel.where === "recs"); updateSelbar();
 }
 function drawRecording() {
   const dpr = sizeCanvas(wave); const w = wave.width / dpr, h = wave.height / dpr;
@@ -1351,6 +1635,61 @@ $("#repeat").textContent = { off: "↻ off", all: "↻ all", one: "↻ one" }[li
 $("#seek").oninput = e => seek(+e.target.value / 1000 * st.duration);
 $("#heart").onclick = () => toggleFav(st.id);
 $("#shareBtn").onclick = () => shareSong();
+const setShuffleUi = () => $("#shuffle").classList.toggle("on", !!lib.shuffle);
+$("#shuffle").onclick = () => { lib.shuffle = !lib.shuffle; save("shuffle"); setShuffleUi(); toast(lib.shuffle ? "Shuffle on" : "Shuffle off"); };
+setShuffleUi();
+$("#mono").onclick = () => { lib.mono = !lib.mono; $("#mono").classList.toggle("on", lib.mono); if (ctx && eqOut) buildOutputStage(); toast(lib.mono ? "Mono check: both speakers play the same sum" : "Stereo again"); };
+const balText = v => v === 0 ? "Centre" : v < 0 ? `L ${-v}` : `R ${v}`;
+$("#balance").value = lib.balance; $("#balanceV").textContent = balText(lib.balance);
+$("#balance").oninput = e => { let v = +e.target.value; if (Math.abs(v) < 4) v = 0; lib.balance = v; $("#balanceV").textContent = balText(v); setBalance(); };
+$("#balance").onchange = () => save("balance");
+$("#balance").ondblclick = () => { lib.balance = 0; $("#balance").value = 0; $("#balanceV").textContent = "Centre"; setBalance(); save("balance"); };
+// tap tempo: the median of the last taps; a pause of 2.5 s starts again
+let taps = [];
+$("#tapBtn").onclick = () => {
+  if (!st.id) { toast("Load a song first"); return; }
+  const now = performance.now();
+  if (taps.length && now - taps[taps.length - 1] > 2500) taps = [];
+  taps.push(now); if (taps.length > 12) taps.shift();
+  $("#tapBtn").classList.add("hit"); setTimeout(() => $("#tapBtn").classList.remove("hit"), 90);
+  if (taps.length < 4) { $("#tapBtn").textContent = `Tap tempo · ${4 - taps.length} more`; return; }
+  const iv = taps.slice(1).map((t, i) => t - taps[i]).sort((a, b) => a - b);
+  const bpm = Math.round(60000 / iv[Math.floor(iv.length / 2)] * 10) / 10;
+  lib.fix[st.id] = { ...(lib.fix[st.id] || {}), bpm, bpmHow: "tap" }; save("fix");
+  $("#tapBtn").textContent = `Tap tempo · ${bpm}`; refreshMusic(); refreshSave();
+};
+$("#bpmEdit").onclick = async () => {
+  if (!st.id) return;
+  const v = await ask("Tempo", "Type the song's tempo in BPM.", effBpm() ? effBpm().toFixed(1) : "", "Set");
+  const bpm = parseFloat((v || "").replace(",", "."));
+  if (!bpm || bpm < 20 || bpm > 400) { if (v) toast("A tempo between 20 and 400, please"); return; }
+  lib.fix[st.id] = { ...(lib.fix[st.id] || {}), bpm, bpmHow: "typed" }; save("fix"); refreshMusic(); refreshSave();
+};
+$("#keyEdit").onclick = () => {
+  if (!st.id) return;
+  const names = ["C", "C#", "D", "Eb", "E", "F", "F#", "G", "Ab", "A", "Bb", "B"];
+  const items = [];
+  for (const mode of ["minor", "major"]) for (const n of names) { const k = `${n} ${mode}`; items.push({ label: `${k}  ·  ${CAMELOT[k]}${k === effKey() ? "  ✓" : ""}`, run: () => { lib.fix[st.id] = { ...(lib.fix[st.id] || {}), key: k }; save("fix"); refreshMusic(); } }); }
+  sheet(items, "The song's key");
+};
+$("#fixReset").onclick = () => { delete lib.fix[st.id]; save("fix"); $("#tapBtn").textContent = "Tap tempo"; taps = []; refreshMusic(); refreshSave(); };
+// markers: a time and a word, per song
+function renderMarks() {
+  const list = (st.id && lib.marks[st.id]) || [];
+  $("#marks").innerHTML = list.map((m, i) => `<li><span class="mt" data-i="${i}">${fmtTime(m.t)}</span><input data-i="${i}" value="${(m.text || "").replace(/"/g, "&quot;")}" placeholder="What happens here"><button data-i="${i}" title="Delete">✕</button></li>`).join("");
+  $("#marks").querySelectorAll(".mt").forEach(e => e.onclick = () => seek(list[+e.dataset.i].t));
+  $("#marks").querySelectorAll("input").forEach(e => e.onchange = () => { list[+e.dataset.i].text = e.value; save("marks"); });
+  $("#marks").querySelectorAll("button").forEach(e => e.onclick = () => { list.splice(+e.dataset.i, 1); if (!list.length) delete lib.marks[st.id]; save("marks"); renderMarks(); drawWave(); });
+  $("#markHint").hidden = list.length > 0;
+}
+$("#markAdd").onclick = () => {
+  if (!st.buffer) { toast("Load a song first"); return; }
+  const list = lib.marks[st.id] = lib.marks[st.id] || [];
+  list.push({ t: Math.round(st.pos * 10) / 10, text: "" }); list.sort((a, b) => a.t - b.t); save("marks");
+  renderMarks(); drawWave();
+  const i = list.findIndex(m => Math.abs(m.t - Math.round(st.pos * 10) / 10) < 0.05);
+  const inp = $("#marks").querySelector(`input[data-i="${i}"]`); if (inp) inp.focus();
+};
 $("#half").onclick = () => { st.bpmScale = Math.max(0.25, st.bpmScale / 2); refreshMusic(); refreshSave(); };
 $("#dbl").onclick = () => { st.bpmScale = Math.min(4, st.bpmScale * 2); refreshMusic(); refreshSave(); };
 // the change happens by itself: when the finger lifts off the slider, or shortly after the last tap on − / +
@@ -1359,7 +1698,7 @@ const changeSoon = (ms = 450) => { clearTimeout(changeTimer); changeTimer = setT
 $("#speed").oninput = () => { refreshMusic(); };
 $("#speed").onchange = () => changeSoon(50);
 $("#speedQuick").onchange = e => { $("#speed").value = Math.round(+e.target.value * 100); applyChange(); refreshMusic(); refreshSave(); };
-$("#bpmTarget").onchange = e => { const bpm = (st.music && st.music.bpm || 0) * st.bpmScale; if (bpm) { $("#speed").value = Math.max(50, Math.min(150, Math.round(+e.target.value / bpm * 100))); refreshMusic(); changeSoon(50); } };
+$("#bpmTarget").onchange = e => { const bpm = effBpm(); if (bpm) { $("#speed").value = Math.max(50, Math.min(150, Math.round(+e.target.value / bpm * 100))); refreshMusic(); changeSoon(50); } };
 $("#keyDown").onclick = () => { st.semis = Math.max(-12, st.semis - 1); refreshMusic(); changeSoon(); };
 $("#keyUp").onclick = () => { st.semis = Math.min(12, st.semis + 1); refreshMusic(); changeSoon(); };
 
@@ -1482,6 +1821,7 @@ window.avbTakeAndroid = takeAndroid;
 function phoneEntries(json, kind, prefix) {
   const out = [];
   for (const m of JSON.parse(json || "[]")) {
+    if (/\.(midi?|kar|rmi)$/i.test(m.name || "") || /midi/i.test(m.mime || "")) continue;   // MIDI is notes, not sound
     const id = prefix + m.id;
     songs[id] = { id, name: m.name, title: m.title, artist: m.artist, album: m.album, duration: m.duration / 1000, size: m.size,
                   type: m.mime, url: m.url, folder: m.folder, kind, added: m.added };
@@ -1502,11 +1842,12 @@ function loadRecordings() {
   recordingIds = phoneEntries(r, "recording", "r:"); renderList(); if ($("#page-recs").classList.contains("on")) renderRecList();
 }
 window.avbPhoneReady = () => { loadPhone(false); loadRecordings(); };
-if (ANDROID) { $("#viewPhone").hidden = false; setTimeout(() => { loadPhone(true); loadRecordings(); }, 300); }
+if (ANDROID) { $("#viewPhone").hidden = false; $("#viewArtists").hidden = false; $("#viewAlbums").hidden = false; setTimeout(() => { loadPhone(true); loadRecordings(); }, 300); }
 else recordingIds = Object.values(songs).filter(x => x.kind === "recording").sort((a, b) => b.added - a.added).map(x => x.id);
 if (ANDROID && ANDROID.askDefault) { $("#makeDefault").hidden = false; $("#makeDefault").onclick = () => ANDROID.askDefault(); }
 window.avbBack = () => {
   if ($("#sheet").classList.contains("on")) { $("#sheet").classList.remove("on"); return true; }
+  if (sel.where) { selEnd(); return true; }
   if (!$("#installHint").hidden) { $("#installHint").hidden = true; return true; }
   if ($("#page-recs").classList.contains("on")) { showPage("music"); return true; }
   return false;
