@@ -1473,6 +1473,13 @@ async function recordStart() {
   if (rec) return;
   if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { toast("This device cannot record here"); return; }
   if (st.playing) pause();
+  // a call holds the microphone: Android hands other apps silence, so say so before recording nothing
+  if (ANDROID && ANDROID.inCall && ANDROID.inCall()) {
+    const go = await confirmBox("A call is using the microphone",
+      "While a phone or internet call is on, Android gives other apps silence, so this recording would be empty. Apps cannot record calls; if your Phone app has Record call, use that during the call.",
+      "Record anyway", "Cancel");
+    if (!go) return;
+  }
   let stream;
   try {
     stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false, channelCount: 2,
@@ -1524,13 +1531,15 @@ async function recordStart() {
       if (++acc >= BLOCK) { r.peaks.push(mn, mx); acc = 0; mn = mx = 0; }
     }
     r.peak = Math.max(r.peak, p); r.level = p;
+    if (p > 0.0003) r.soundAt = r.frames / r.sr;               // something above digital silence
   };
   src.connect(tap);
   rec.block = BLOCK / rctx.sampleRate;
   rec.t0 = rctx.currentTime; rec.pausedSum = 0; rec.pausedAt = null;     // the recording clock: audio time minus pauses
   showPage("recs");
   $("#recName").value = takeName(rec.started);
-  $("#recInfo").textContent = `${nch === 1 ? "Mono" : "Stereo"} · ${(rctx.sampleRate / 1000).toFixed(1).replace(".0", "")} kHz`;
+  rec.infoText = `${nch === 1 ? "Mono" : "Stereo"} · ${(rctx.sampleRate / 1000).toFixed(1).replace(".0", "")} kHz`;
+  $("#recInfo").textContent = rec.infoText; $("#recInfo").classList.remove("warn");
   setFmtChip(rctx.sampleRate);
   setRecUi(); renderRecMarks();
 }
@@ -1639,7 +1648,7 @@ function setRecUi() {
   $("#recStatus").innerHTML = !on ? "READY TO RECORD" : paused ? "❚❚&nbsp; PAUSED" : `<span class="recdot"></span> RECORDING`;
   $("#recPauseLbl").textContent = paused ? "Resume" : "Pause";
   $("#recPause").innerHTML = paused ? `<svg viewBox="0 0 24 24" width="26" height="26"><circle cx="12" cy="12" r="7" fill="#EF4444"/></svg>` : `<svg viewBox="0 0 24 24" width="26" height="26" fill="#fff"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>`;
-  if (!on) { $("#recTime").textContent = clock(0); $("#recPeak").textContent = "—"; $("#recInfo").textContent = ""; setFmtChip(); }
+  if (!on) { $("#recTime").textContent = clock(0); $("#recPeak").textContent = "—"; $("#recInfo").textContent = ""; $("#recInfo").classList.remove("warn"); setFmtChip(); }
   document.body.classList.toggle("recording", on);
   updateMini();
 }
@@ -2105,6 +2114,16 @@ function tick(now) {
     drawRecorder(); drawMeter();
     $("#recPeak").innerHTML = rec.peak > 0 ? `<b>${(20 * Math.log10(rec.peak + 1e-9)).toFixed(1)}</b> dBFS peak${rec.clip ? ` <span class="clip">CLIP</span>` : ""}` : "—";
     $("#recTime").textContent = clock(recordedNow(rec));
+    // only silence arriving: a call (or another app) holds the microphone
+    const quiet = !rec.paused && rec.frames / rec.sr - (rec.soundAt || 0) > 3;
+    if (quiet !== !!rec.quiet) {
+      rec.quiet = quiet;
+      $("#recInfo").classList.toggle("warn", quiet);
+      $("#recInfo").textContent = quiet
+        ? (ANDROID && ANDROID.inCall && ANDROID.inCall() ? "Only silence: a call is using the microphone. Android does not let apps record calls." : "Only silence is arriving: is another app or a call using the microphone?")
+        : rec.infoText;
+      if (quiet && !rec.warned) { rec.warned = true; if (navigator.vibrate) try { navigator.vibrate([60, 60, 60]); } catch (_) { } }
+    }
   } else if (st.buffer && st.playing && now - lastDraw > 40) {
     lastDraw = now; $("#tnow").textContent = fmtTime(st.pos); $("#miniProg").style.width = (st.pos / st.duration * 100) + "%"; lyricsTick(st.pos); if ($("#tab-eq").classList.contains("on")) drawEq(); $("#seek").value = Math.round(st.pos / st.duration * 1000); drawWave();
     if ($("#tab-loud").classList.contains("on")) drawLoud();

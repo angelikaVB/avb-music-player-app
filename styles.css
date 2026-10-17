@@ -522,3 +522,4 @@ body.drill #tab-songs .libhead h2 { margin-top: 10px; }
 #libTitle { display: flex; align-items: center; gap: 4px; min-width: 0; }
 #libName { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .libback { border: 0; background: rgba(255,255,255,.08); color: #fff; width: 36px; height: 36px; border-radius: 50%; font-size: 26px; line-height: 1; padding: 0 0 4px; margin-right: 6px; flex: none; }
+#recInfo.warn { color: #fff; background: rgba(220,38,38,.85); border-radius: 12px; padding: 8px 12px; font-weight: 700; font-size: 13.5px; line-height: 1.35; }
