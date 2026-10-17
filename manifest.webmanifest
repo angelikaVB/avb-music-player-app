@@ -10,9 +10,84 @@
   "background_color": "#0B0A1F",
   "theme_color": "#0B0A1F",
   "icons": [
-    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
-    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
-    { "src": "icons/maskable-192.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" },
-    { "src": "icons/maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+    {
+      "src": "icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    },
+    {
+      "src": "icons/maskable-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "icons/maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "share_target": {
+    "action": "./share",
+    "method": "POST",
+    "enctype": "multipart/form-data",
+    "params": {
+      "title": "title",
+      "text": "text",
+      "files": [
+        {
+          "name": "audio",
+          "accept": [
+            "audio/*",
+            ".wav",
+            ".mp3",
+            ".flac",
+            ".m4a",
+            ".ogg",
+            ".opus",
+            ".aac",
+            ".aif",
+            ".aiff"
+          ]
+        }
+      ]
+    }
+  },
+  "file_handlers": [
+    {
+      "action": "./",
+      "launch_type": "single-client",
+      "accept": {
+        "audio/wav": [
+          ".wav"
+        ],
+        "audio/mpeg": [
+          ".mp3"
+        ],
+        "audio/flac": [
+          ".flac"
+        ],
+        "audio/mp4": [
+          ".m4a"
+        ],
+        "audio/ogg": [
+          ".ogg",
+          ".opus"
+        ],
+        "audio/aac": [
+          ".aac"
+        ],
+        "audio/aiff": [
+          ".aif",
+          ".aiff"
+        ]
+      }
+    }
   ]
 }

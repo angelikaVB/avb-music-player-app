@@ -12,6 +12,12 @@ WebAssembly, in `vendor/` with its licence.
 2. Menu (⋮) → **Add to Home screen** (or the **Install app** prompt) → Install.
 3. It opens full screen from its own icon and works offline from then on.
 
+## Opening songs from other apps
+
+Android: in Files, Drive, WhatsApp, Downloads… tap **Share → AVB Player**; the song
+opens and plays (Android does not list web apps under "Open with").  Windows/Mac
+(installed from Chrome or Edge): right-click a song → **Open with → AVB Music Player**.
+
 ## What it does
 
 Open files (several at once) → they join the queue.  Waveform with named

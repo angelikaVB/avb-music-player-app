@@ -448,7 +448,7 @@ function wavBlob(chans, sr, bits) {
 }
 
 // ---------------------------------------------------------------- library
-async function addFiles(files) {
+async function addFiles(files, playNow = false) {
   const ids = [];
   for (const f of files) {
     const id = `${f.name}|${f.size}|${f.lastModified}`;
@@ -462,7 +462,7 @@ async function addFiles(files) {
   const before = lib.queue.length;
   for (const id of ids) if (!lib.queue.includes(id)) lib.queue.push(id);
   save("queue");
-  if (!st.buffer && ids.length) playIndex(lib.queue.indexOf(ids[0]));
+  if ((playNow || !st.buffer) && ids.length) { playIndex(lib.queue.indexOf(ids[0])); showPage("play"); }
   else if (ids.length) toast(`Added ${lib.queue.length - before} to the queue`);
   renderList();
 }
@@ -640,6 +640,32 @@ if (!standalone) {
   $("#installBtn").hidden = false;                       // shown at once; Chrome's own prompt attaches when it is ready
   if (!sessionStorage.getItem("hintClosed")) setTimeout(() => { if (!installEvent && !standalone) showInstallHint(); }, 2500);
 }
+// Songs handed to the app: Android's Share sheet (the service worker keeps
+// them in an inbox) and, on desktop, "Open with" for the installed app.
+async function takeInbox() {
+  if (!("caches" in window)) return;
+  const inbox = await caches.open("avb-inbox");
+  const keys = await inbox.keys();
+  if (!keys.length) return;
+  const files = [];
+  for (const k of keys.sort((x, y) => x.url.localeCompare(y.url))) {
+    const r = await inbox.match(k);
+    files.push(new File([await r.blob()], decodeURIComponent(r.headers.get("X-Name") || "Shared song"),
+      { type: r.headers.get("Content-Type") || "", lastModified: +(r.headers.get("X-Modified") || Date.now()) }));
+    await inbox.delete(k);
+  }
+  history.replaceState(null, "", location.pathname);
+  await addFiles(files, true);
+}
+await takeInbox();
+if ("launchQueue" in window) {
+  window.launchQueue.setConsumer(async params => {
+    if (!params.files || !params.files.length) return;
+    const files = await Promise.all(params.files.map(h => h.getFile()));
+    await addFiles(files, true);
+  });
+}
+
 // a test hook: ?demo=<url> loads a file without a file picker (used only on localhost)
 const demo = new URLSearchParams(location.search).get("demo");
 if (demo && ["localhost", "127.0.0.1"].includes(location.hostname)) {
