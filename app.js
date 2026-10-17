@@ -2168,6 +2168,7 @@ if (lib.recInput && navigator.mediaDevices && navigator.mediaDevices.enumerateDe
 }).catch(() => { });
 // settings
 $("#settingsBtn").onclick = () => {
+  updateRecheck(false);                                 // the update line below refreshes itself if a newer one appeared
   // the user's order: Home screen, default player, share, updates, open a song, markers and notes; then the rest
   const items = [];
   if (ANDROID && ANDROID.addToHome) items.push({ label: "Add AVB Player to the Home screen", run: () => {
@@ -2928,7 +2929,11 @@ document.addEventListener("visibilitychange", () => {
 });
 $("#updBtn").onclick = startUpdate;
 $("#updLater").onclick = () => { try { sessionStorage.setItem("updLater", String(updateInfo && updateInfo.code)); } catch (_) { } showUpdateBar(); };
-if (ANDROID && ANDROID.updateCheck) setTimeout(() => ANDROID.updateCheck(), 3000);
+// checked at start, and again whenever the app comes back to the front (at most once a minute), so the offer is never stale
+var updateCheckedAt = 0;
+const updateRecheck = force => { if (!ANDROID || !ANDROID.updateCheck || updateBusy) return; if (!force && Date.now() - updateCheckedAt < 60000) return; updateCheckedAt = Date.now(); ANDROID.updateCheck(); };
+if (ANDROID && ANDROID.updateCheck) setTimeout(() => updateRecheck(true), 3000);
+document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") updateRecheck(false); });
 // the first start after an update says so (Android closes the app while it installs the new version)
 if (ANDROID && ANDROID.version) {
   const nowVer = ANDROID.version();
