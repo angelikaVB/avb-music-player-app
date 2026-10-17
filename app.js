@@ -83,17 +83,28 @@ function analyse() {
   worker.postMessage({ channels: chans, sampleRate: st.sr, columns: 1600 }, chans.map(c => c.buffer));
 }
 
+let loadSeq = 0;
 async function loadSong(id, autoplay = true) {
+  // show it at once: a big WAV takes seconds to read from the phone
+  const token = ++loadSeq;
+  if (st.playing) pause();
+  send({ cmd: "unload" });
+  st.id = id; st.buffer = null; st.loadErr = ""; st.duration = 0; st.peaks = null;
+  if (songs[id]) $("#title").textContent = songs[id].name.replace(/\.[^.]+$/, "");
+  $("#npArtist").textContent = ""; setMiniPlay(false);
+  updateMini(); placeWave(); renderList(); if ($("#page-recs").classList.contains("on")) renderRecList();
   let rec = null;
   if (songs[id] && songs[id].url) {
     // a song on the phone (All music / Recordings): read it where it is
     try {
       const blob = await (await fetch(songs[id].url)).blob();
       rec = { ...songs[id], blob, size: songs[id].size > 0 ? songs[id].size : blob.size };
-    } catch (err) { toast("Cannot read that song from the phone"); return; }
+    } catch (err) { if (token === loadSeq) { st.loadErr = "Cannot read this song"; updateMini(); drawWave(); toast("Cannot read that song from the phone"); } return; }
   } else rec = await songGet(id).catch(() => null);
-  if (!rec || !rec.blob) { toast("That song is no longer in the app"); return; }
+  if (token !== loadSeq) return;                                   // another song was tapped meanwhile
+  if (!rec || !rec.blob) { st.loadErr = "No longer in the app"; updateMini(); toast("That song is no longer in the app"); return; }
   await audio();
+  if (token !== loadSeq) return;
   st.id = id; st.name = rec.name; st.playing = false; st.pos = 0; st.a = st.b = null; st.loopOn = false; st.bpmScale = 1; st.changed = false;
   st.music = null; st.sections = []; st.peaks = null; st.loud = null; st.checks = null; st.tags = null; st.view = { a: 0, b: 1 }; st.vzoom = 1;
   send({ cmd: "unload" }); send({ cmd: "loop", loop: null });
@@ -113,9 +124,10 @@ async function loadSong(id, autoplay = true) {
       buf = await toContextBuffer(pcm);
     }
   } catch (err) {
+    st.loadErr = "Cannot play this file"; updateMini(); drawWave();
     toast("Cannot play this file: " + (err && err.message || "unknown format")); $("#listen").textContent = ""; return;
   }
-  if (st.id !== id) return;
+  if (st.id !== id || token !== loadSeq) return;
   st.buffer = buf; st.sr = buf.sampleRate; st.duration = buf.duration;
   const hdr = await sniffHeader(rec.blob, rec.name);
   st.info = { fmt: fmtOf(rec.name), rate: hdr.rate || buf.sampleRate, channels: buf.numberOfChannels, size: rec.size, bits: hdr.bits || bitsOf(rec) };
@@ -317,6 +329,7 @@ function effKey() { const f = fixOf(); return f.key || (st.music && st.music.key
 function refreshMusic() {
   const m = st.music || {}; const sp = +$("#speed").value; const fx = fixOf();
   $("#speedval").textContent = sp + "%"; $("#speedQuick").value = String(sp / 100);
+  { const b0 = effBpm(); $("#speedBpm").textContent = b0 ? `${(b0 * sp / 100).toFixed(1)} BPM` : "— BPM"; }
   $("#semis").textContent = st.semis ? `${st.semis > 0 ? "+" : ""}${st.semis} st` : "±0 st";
   const bpm = effBpm();
   $("#bpm").textContent = bpm ? (bpm * sp / 100).toFixed(1) : "—";
@@ -375,7 +388,7 @@ function drawWave() {
   wctx.fillStyle = "#0E0D26"; wctx.fillRect(0, 0, w, h);
   if (!st.buffer) {
     wctx.fillStyle = "#9592BF"; wctx.font = "600 14px system-ui"; wctx.textAlign = "center";
-    wctx.fillText("Pick a song in your library", w / 2, h / 2);
+    wctx.fillText(st.id ? (st.loadErr || "Loading…") : "Pick a song in your library", w / 2, h / 2);
     return;
   }
   const top = SECT_H + 4, bottom = h - RULER_H, mid = (top + bottom) / 2, amp = (bottom - top) / 2 - 2;
@@ -1877,7 +1890,8 @@ function updateMini() {
   $("#miniTitle").textContent = $("#title").textContent;
   $("#miniSub").textContent = $("#npArtist").textContent || (isRecording(st.id) ? "Recording" : (st.info && st.info.fmt) || "");
   const dur = st.duration || songs[st.id].duration || 0, fmt = (st.info && st.info.fmt) || fmtOf(songs[st.id].name);
-  $("#miniSub").textContent = [$("#npArtist").textContent, fmt, dur ? fmtTime(dur) : ""].filter(Boolean).join(" · ");
+  $("#miniSub").textContent = !st.buffer ? (st.loadErr || "Loading…") : [$("#npArtist").textContent, fmt, dur ? fmtTime(dur) : ""].filter(Boolean).join(" · ");
+  $("#mini").classList.toggle("loading", !st.buffer && !st.loadErr);
   setMiniPlay(st.playing);
 }
 // the round play / pause icon, and the equaliser moves only while music plays
@@ -1923,13 +1937,13 @@ function closeNP() { $("#np").hidden = true; document.body.classList.remove("npo
 $("#npClose").onclick = closeNP;
 $("#npMode").querySelectorAll("button").forEach(b => b.onclick = () => setNpMode(b.dataset.mode));
 $("#mini").onclick = e => { if (e.target.closest(".minibtn")) return; openNP(); };
-$("#miniPlay").onclick = () => togglePlay();
-$("#miniPrev").onclick = () => prevTrack();
+$("#miniPlay").onclick = e => { e.stopPropagation(); togglePlay(); };   // the bar's buttons never open Now Playing
+$("#miniPrev").onclick = e => { e.stopPropagation(); prevTrack(); };
 // Stop: the music stops and goes back to the start
 function stopPlay() { if (!st.buffer) return; pause(); seek(0); }
 $("#hStop").onclick = stopPlay; $("#npStop").onclick = stopPlay;
 $("#hPlay").onclick = () => togglePlay(); $("#hPrev").onclick = () => prevTrack(); $("#hNext").onclick = () => nextTrack(false);
-$("#miniNext").onclick = () => nextTrack(false);
+$("#miniNext").onclick = e => { e.stopPropagation(); nextTrack(false); };
 setMiniPlay(false);
 
 // ---------------------------------------------------------------- ui wiring
@@ -2166,6 +2180,13 @@ $("#dbl").onclick = () => { st.bpmScale = Math.min(4, st.bpmScale * 2); refreshM
 let changeTimer = 0;
 const changeSoon = (ms = 450) => { clearTimeout(changeTimer); changeTimer = setTimeout(() => { applyChange(); refreshSave(); }, ms); };
 $("#speed").oninput = () => { refreshMusic(); };
+$("#speedBpm").onclick = async () => {
+  const bpm = effBpm();
+  if (!bpm) { toast("The tempo is not known yet: tap Tap tempo in Studio › Info, or wait for the analysis"); return; }
+  const v = await ask("Tempo", `Type the BPM you want (the song is ${bpm.toFixed(1)} BPM). Between ${(bpm * .5).toFixed(0)} and ${(bpm * 1.5).toFixed(0)}.`, (bpm * +$("#speed").value / 100).toFixed(1), "Set");
+  const want = parseFloat((v || "").replace(",", ".")); if (!want) return;
+  $("#bpmTarget").value = want; $("#bpmTarget").dispatchEvent(new Event("change"));
+};
 $("#speed").onchange = () => changeSoon(50);
 $("#speedQuick").onchange = e => { $("#speed").value = Math.round(+e.target.value * 100); applyChange(); refreshMusic(); refreshSave(); };
 $("#bpmTarget").onchange = e => { const bpm = effBpm(); if (bpm) { $("#speed").value = Math.max(50, Math.min(150, Math.round(+e.target.value / bpm * 100))); refreshMusic(); changeSoon(50); } };

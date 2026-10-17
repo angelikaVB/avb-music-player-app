@@ -600,3 +600,10 @@ body.hasmini .snack { bottom: calc(76px + env(safe-area-inset-bottom)); }
 .hbtn:active { background: rgba(255,255,255,.08); }
 .hbtn.hplay { width: 56px; height: 56px; background: #fff; box-shadow: 0 6px 18px rgba(0,0,0,.4); }
 .controls #npStop { font-size: 18px; color: #fff; }
+.mini.loading .minisub { color: #C4B5FD; animation: blink 1.2s infinite; }
+
+/* BPM beside the tempo %: tap it to type a tempo */
+#rowTempo { flex-wrap: nowrap; }
+#rowTempo input[type=range] { min-width: 0; }
+#rowTempo #speedval { min-width: 44px; text-align: right; }
+.bpmchip { border: 0; background: rgba(249,115,22,.16); color: #FDBA74; font-weight: 800; font-size: 13px; border-radius: 999px; padding: 6px 10px; white-space: nowrap; font-variant-numeric: tabular-nums; flex: none; }
