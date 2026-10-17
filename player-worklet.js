@@ -67,9 +67,21 @@ registerProcessor("avb-player", AVBPlayer);
 
 // Recording: passes the input blocks to the page as they come (~23 ms each).
 class AVBTap extends AudioWorkletProcessor {
+  // pause / end act here, on the audio clock: a paused moment is never captured,
+  // and "end" is answered after every captured block has been posted
+  constructor() {
+    super();
+    this.paused = false; this.ended = false;
+    this.port.onmessage = e => {
+      const d = e.data;
+      if (d.cmd === "pause") this.paused = !!d.on;
+      if (d.cmd === "end") { this.ended = true; this.port.postMessage({ done: true }); }
+    };
+  }
   process(inputs) {
+    if (this.ended) return false;
     const inp = inputs[0];
-    if (inp && inp.length && inp[0].length) {
+    if (!this.paused && inp && inp.length && inp[0].length) {
       const channels = inp.map(ch => ch.slice());
       this.port.postMessage({ channels }, channels.map(c => c.buffer));
     }

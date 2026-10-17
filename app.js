@@ -20,7 +20,7 @@ const songGet = id => new Promise((ok, no) => { const t = db.transaction("songs"
 
 const lib = {
   queue: await kvGet("queue", []), index: await kvGet("index", -1), favorites: await kvGet("favorites", []),
-  recent: await kvGet("recent", []), playlists: await kvGet("playlists", []), notes: await kvGet("notes", {}), lyrics: await kvGet("lyrics", {}), eq: await kvGet("eq", null), shuffle: await kvGet("shuffle", false), mono: false,
+  recent: await kvGet("recent", []), playlists: await kvGet("playlists", []), notes: await kvGet("notes", {}), lyrics: await kvGet("lyrics", {}), eq: await kvGet("eq", null), mkOpen: await kvGet("mkOpen", true), mkCat: await kvGet("mkCat", "idea"), recInput: await kvGet("recInput", ""), recFmt: await kvGet("recFmt", { sr: 48000, bits: 24 }), shuffle: await kvGet("shuffle", false), mono: false,
   balance: await kvGet("balance", 0), fix: await kvGet("fix", {}), marks: await kvGet("marks", {}), hidden: await kvGet("hidden", []),
   repeat: await kvGet("repeat", "off"), volume: await kvGet("volume", 1), keepVoice: await kvGet("keepVoice", true),
 };
@@ -98,6 +98,8 @@ async function loadSong(id, autoplay = true) {
   st.music = null; st.sections = []; st.peaks = null; st.loud = null; st.checks = null; st.tags = null; st.view = { a: 0, b: 1 }; st.vzoom = 1;
   send({ cmd: "unload" }); send({ cmd: "loop", loop: null });
   $("#title").textContent = rec.name.replace(/\.[^.]+$/, "");
+  $("#npArtist").textContent = songs[id] && songs[id].artist && !/^<unknown>$/i.test(songs[id].artist) ? songs[id].artist : "";
+  $("#miniPlay").textContent = "▶";
   $("#listen").textContent = "Reading…";
   $("#cover").style.background = coverFor(rec.name);
   syncMarkers(); refreshMusic(); fillSections(); drawWave();
@@ -121,14 +123,16 @@ async function loadSong(id, autoplay = true) {
   const chans = channelsOf(buf);
   send({ cmd: "load", channels: chans });
   $("#tdur").textContent = fmtTime(buf.duration);
+  if (mkEditing && mkEditing.ctx === songMk) closeMarkEdit();
   $("#notes").value = lib.notes[id] || "";
   renderMarks();
-  readTags(rec.blob, rec.name).catch(() => ({})).then(tags => { if (st.id !== id) return; st.tags = tags; showCover(id, tags); findLyrics(id, rec, tags); });
+  readTags(rec.blob, rec.name).catch(() => ({})).then(tags => { if (st.id !== id) return; st.tags = tags; if (tags.artist) $("#npArtist").textContent = tags.artist; if (tags.title) $("#title").textContent = tags.title; showCover(id, tags); updateMini(); findLyrics(id, rec, tags); });
   if (!isRecording(id)) { lib.recent = [id, ...lib.recent.filter(x => x !== id)].slice(0, 60); save("recent"); }
   if ($("#page-recs").classList.contains("on")) renderRecList();
   analyse();
   if (st.speed !== 1 || st.semis) applyChange();            // the sliders carry over to the next song
   if (autoplay) play();
+  updateMini();
   if ("mediaSession" in navigator) navigator.mediaSession.metadata = new MediaMetadata({ title: $("#title").textContent, artist: "AVB Music Player" });
   renderList();
 }
@@ -191,7 +195,7 @@ async function toContextBuffer(pcm) {
 }
 function coverFor(name) {
   let h = 0; for (const ch of name) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
-  const a = RUN[h % 6], b = RUN[(h >> 3) % 6];
+  const a = RUN[h % 6], b = RUN[((h >>> 3) + 1 + (h % 5)) % 6];
   return `linear-gradient(135deg, ${a}66, ${b}cc), #1e1b4b`;
 }
 const fmtOf = n => (n.split(".").pop() || "").toUpperCase();
@@ -226,12 +230,12 @@ async function sniffHeader(blob, name) {
 
 // ---------------------------------------------------------------- transport
 const ANDROID = window.AVBAndroid || null;
-function play() { if (!st.buffer) return; audio().then(() => { send({ cmd: "play" }); st.playing = true; $("#play").textContent = "❚❚"; if (ANDROID) ANDROID.playing(true); if (navigator.mediaSession) navigator.mediaSession.playbackState = "playing"; }); }
-function pause() { send({ cmd: "pause" }); st.playing = false; $("#play").textContent = "▶"; if (ANDROID) ANDROID.playing(false); if (navigator.mediaSession) navigator.mediaSession.playbackState = "paused"; }
+function play() { if (!st.buffer) return; audio().then(() => { send({ cmd: "play" }); st.playing = true; $("#play").textContent = "❚❚"; $("#miniPlay").textContent = "❚❚"; if (ANDROID) ANDROID.playing(true); if (navigator.mediaSession) navigator.mediaSession.playbackState = "playing"; }); }
+function pause() { send({ cmd: "pause" }); st.playing = false; $("#play").textContent = "▶"; $("#miniPlay").textContent = "▶"; if (ANDROID) ANDROID.playing(false); if (navigator.mediaSession) navigator.mediaSession.playbackState = "paused"; }
 function togglePlay() { if (!st.buffer) { if (lib.queue.length) playIndex(Math.max(0, lib.index), true); else $("#files2").click(); return; } st.playing ? pause() : play(); }
 function seek(t) { if (!st.buffer) return; t = Math.max(0, Math.min(st.duration, t)); st.pos = t; send({ cmd: "seek", frame: Math.round(t * st.sr) }); drawWave(); }
 function onEnded() {
-  st.playing = false; $("#play").textContent = "▶"; if (ANDROID) ANDROID.playing(false);
+  st.playing = false; $("#play").textContent = "▶"; $("#miniPlay").textContent = "▶"; if (ANDROID) ANDROID.playing(false);
   if (lib.repeat === "one") { seek(0); play(); } else if (!isRecording(st.id)) nextTrack(true);
 }
 // choosing a song only loads it: playing is the user's ▶ (autoplay only when the music was already going)
@@ -370,7 +374,7 @@ function drawWave() {
   wctx.fillStyle = "#0E0D26"; wctx.fillRect(0, 0, w, h);
   if (!st.buffer) {
     wctx.fillStyle = "#9592BF"; wctx.font = "600 14px system-ui"; wctx.textAlign = "center";
-    wctx.fillText(lib.queue.length ? "Tap to play" : "Tap here or “+ Open files” to pick songs", w / 2, h / 2);
+    wctx.fillText("Pick a song in your library", w / 2, h / 2);
     return;
   }
   const top = SECT_H + 4, bottom = h - RULER_H, mid = (top + bottom) / 2, amp = (bottom - top) / 2 - 2;
@@ -408,11 +412,12 @@ function drawWave() {
     wctx.strokeStyle = "rgba(255,255,255,.12)";
     for (const b of st.music.beats) { const x = xOf(b, w); if (x >= 0 && x <= w) { wctx.beginPath(); wctx.moveTo(x, top); wctx.lineTo(x, bottom); wctx.stroke(); } }
   }
-  // the user's markers: amber pins along the top of the wave
+  // the user's markers: small coloured flags along the top of the wave
   for (const mk of (lib.marks[st.id] || [])) {
-    const x = xOf(mk.t, w); if (x < -4 || x > w + 4) continue;
-    wctx.fillStyle = "rgba(245,158,11,.55)"; wctx.fillRect(x - 0.5, top, 1, bottom - top);
-    wctx.fillStyle = "#F59E0B"; wctx.beginPath(); wctx.moveTo(x - 5, top); wctx.lineTo(x + 5, top); wctx.lineTo(x, top + 7); wctx.fill();
+    const x = xOf(mk.t, w); if (x < -6 || x > w + 6) continue;
+    const c = mkColor(mk);
+    wctx.globalAlpha = .5; wctx.fillStyle = c; wctx.fillRect(x - 0.5, top, 1, bottom - top); wctx.globalAlpha = 1;
+    wctx.fillRect(x - 1, top, 2, 14); wctx.beginPath(); wctx.moveTo(x + 1, top); wctx.lineTo(x + 10, top + 3.5); wctx.lineTo(x + 1, top + 7); wctx.fill();
   }
   if (st.checks && st.checks.clipTimes) for (const t of st.checks.clipTimes) { const x = xOf(t, w); if (x >= 0 && x <= w) { wctx.fillStyle = "rgba(239,68,68,.8)"; wctx.fillRect(x - 1, bottom - 6, 2, 6); } }
   // markers
@@ -474,6 +479,11 @@ wave.addEventListener("pointerdown", e => {
   const now = Date.now();
   if (now - lastWaveTap < 300 && y >= SECT_H) { clearTimeout(scrubTimer); st.view = { a: 0, b: 1 }; st.vzoom = 1; drawWave(); lastWaveTap = 0; return; }   // double-tap: back to the whole song
   lastWaveTap = now;
+  // a flag: show its time and note (the song keeps playing)
+  if (y < SECT_H + 26) {
+    const hit = (lib.marks[st.id] || []).map(m => [m, Math.abs(xOf(m.t, w) + 4 - x)]).filter(([, d]) => d < 14).sort((p, q) => p[1] - q[1])[0];
+    if (hit) { fingers.delete(e.pointerId); showMarkPop(songMk, hit[0].id, r.top + 40); return; }
+  }
   if (y < SECT_H && showSections()) {
     const t = tOf(x, w), s = st.sections.find(s => t >= s.start && t < s.end);
     if (s) { if (now - lastTap < 350) loopRange(s.start, s.end); else seek(s.start); }
@@ -763,7 +773,7 @@ async function addFiles(files, playNow = false) {
   const before = lib.queue.length;
   for (const id of ids) if (!lib.queue.includes(id)) lib.queue.push(id);
   save("queue");
-  if ((playNow || !st.buffer) && ids.length) { playIndex(lib.queue.indexOf(ids[0])); showPage("music"); window.scrollTo({ top: 0, behavior: "smooth" }); }
+  if ((playNow || !st.buffer) && ids.length) { playIndex(lib.queue.indexOf(ids[0])); showPage("music"); if (playNow) openNP("listen"); }
   else if (ids.length) toast(`Added ${lib.queue.length - before} to the queue`);
   renderList();
 }
@@ -800,6 +810,7 @@ function renderGroups(key, filter) {
   $("#views").querySelectorAll("button").forEach(b => { b.classList.toggle("on", b.dataset.view === view); b.onclick = () => { view = b.dataset.view; listName = b.dataset.name || ""; if (view === "phone" && phoneState === "denied") loadPhone(true); renderList(); }; });
 }
 function renderList() {
+  renderShelves();
   const filter = $("#filter").value.toLowerCase();
   if (view === "artists" || view === "albums") { renderGroups(view === "artists" ? "artist" : "album", filter); return; }
   let ids = view === "group" ? phoneIds.filter(x => !lib.hidden.includes(x) && (songs[x][groupBy] || "Unknown") === groupName)
@@ -812,7 +823,7 @@ function renderList() {
     || `<li class="muted">${emptyText()}</li>`;
   shownIds.music = ids;
   el.querySelectorAll("li[data-id]").forEach(li => {
-    li.querySelector(".n").onclick = () => { if (pickRow(li, "music")) return; if (view === "queue") playIndex(lib.queue.indexOf(li.dataset.id)); else { lib.queue = ids.slice(); save("queue"); playIndex(ids.indexOf(li.dataset.id)); } window.scrollTo({ top: 0, behavior: "smooth" }); };
+    li.querySelector(".n").onclick = () => { if (pickRow(li, "music")) return; if (view === "queue") playIndex(lib.queue.indexOf(li.dataset.id)); else { lib.queue = ids.slice(); save("queue"); playIndex(ids.indexOf(li.dataset.id)); } };
     wireRow(li, "music");
   });
   el.classList.toggle("selecting", sel.where === "music"); updateSelbar();
@@ -860,13 +871,13 @@ function pickRow(li, where) {
 function selStart(where, id) {
   if (sel.where !== where) { sel.where = where; sel.ids.clear(); }
   if (id) sel.ids.add(id);
-  document.body.classList.add("selecting");
+  document.body.classList.add("selecting"); updateMini();
   where === "music" ? renderList() : renderRecList();
 }
 function selEnd(quiet) {
   if (!sel.where) return;
   const where = sel.where; sel.where = null; sel.ids.clear();
-  document.body.classList.remove("selecting"); $("#selbar").hidden = true;
+  document.body.classList.remove("selecting"); $("#selbar").hidden = true; updateMini();
   if (!quiet) where === "music" ? renderList() : renderRecList();
 }
 function updateSelbar() {
@@ -930,10 +941,12 @@ async function deleteMany(ids) {
     if (!(await done)) { toast("Not deleted"); return; }
   }
   const gone = new Set([...ids, ...onPhone]);
+  erasing = true;
   for (const x of gone) {
     if (songs[x] && !songs[x].url) await tx("songs", "readwrite", s2 => s2.delete(x));
     forget(x); delete songs[x];
   }
+  erasing = false;
   phoneIds = phoneIds.filter(x => !gone.has(x)); recordingIds = recordingIds.filter(x => !gone.has(x));
   selEnd(true); renderList(); renderRecList();
   toast(`Deleted ${n} ${word}${ANDROID && onPhone.length ? " from your phone" : ""}`);
@@ -986,9 +999,10 @@ function phoneTwin(id) {
 function forget(id) {
   lib.queue = lib.queue.filter(x => x !== id); lib.favorites = lib.favorites.filter(x => x !== id); lib.recent = lib.recent.filter(x => x !== id);
   lib.playlists.forEach(p => p.items = p.items.filter(x => x !== id)); delete lib.notes[id]; delete lib.lyrics[id];
+  if (erasing && lib.marks[id]) { delete lib.marks[id]; save("marks"); }      // kept when only removed from the app
   lib.index = st.id && lib.queue.includes(st.id) ? lib.queue.indexOf(st.id) : -1;
   for (const k of ["queue", "index", "favorites", "recent", "playlists", "notes", "lyrics"]) save(k);
-  if (st.id === id) { pause(); send({ cmd: "unload" }); st.buffer = null; st.id = null; st.peaks = null; $("#title").textContent = "No song loaded"; $("#badges").innerHTML = ""; drawWave(); }
+  if (st.id === id) { pause(); send({ cmd: "unload" }); st.buffer = null; st.id = null; st.peaks = null; $("#title").textContent = "No song loaded"; $("#badges").innerHTML = ""; drawWave(); closeNP(); }
 }
 async function removeFromApp(id, quiet) {
   if (!songs[id]) return;
@@ -998,6 +1012,7 @@ async function removeFromApp(id, quiet) {
   renderList(); renderRecList();
   if (!quiet) toast("Removed from AVB Music Player. The file is still on your phone.");
 }
+let erasing = false;      // forget() inside a delete: the markers go as well
 // deleting a file from the phone: our question first, then Android's own confirmation
 const deleteWaiters = {};
 let deleteToken = 0;
@@ -1010,10 +1025,12 @@ async function deleteFromPhone(phoneId, shownId) {
   const done = new Promise(r => deleteWaiters[token] = r);
   ANDROID.deletePhone(phoneId.slice(2), token);
   if (!(await done)) { toast("Not deleted"); return; }
+  erasing = true;
   for (const x of new Set([phoneId, shownId])) {
     if (songs[x] && !songs[x].url) await tx("songs", "readwrite", s2 => s2.delete(x));
     forget(x); delete songs[x];
   }
+  erasing = false;
   phoneIds = phoneIds.filter(x => x !== phoneId && x !== shownId); recordingIds = recordingIds.filter(x => x !== phoneId && x !== shownId);
   renderList(); renderRecList();
   toast(`Deleted “${s0.name}” from your phone`);
@@ -1092,13 +1109,9 @@ async function findLyrics(id, rec, preTags) {
     else showLyrics("", "none", id);
   } catch (_) { if (st.id === id) showLyrics("", "none", id); }
 }
-function openLyricsTab() {
-  // lyrics appear under the song by themselves, unless the user is busy in another tool
-  const on = document.querySelector("#tools button.on");
-  if (!on || on.dataset.tab === "intel" || on.dataset.tab === "songs") selectTool("lyrics");
-}
+function openLyricsTab() { /* lyrics live under the controls in Now Playing → Listen */ }
 function lyricsTick(t) {
-  if (!lyr.timed || !$("#tab-lyrics").classList.contains("on")) return;
+  if (!lyr.timed || $("#np").hidden || npMode !== "listen") return;
   let k = -1;
   for (let i = 0; i < lyr.lines.length; i++) if (lyr.lines[i].t != null && lyr.lines[i].t <= t + 0.15) k = i;
   if (k === lyr.now) return;
@@ -1130,6 +1143,7 @@ async function showCover(id, tags) {
   if (st.id !== id) return;
   if (blob) { coverUrl = URL.createObjectURL(blob); el.style.background = `center / cover no-repeat url("${coverUrl}")`; el.classList.add("art"); }
   else { el.style.background = coverFor(songs[id] ? songs[id].name : ""); el.classList.remove("art"); }
+  $("#miniCover").style.background = el.style.background;
 }
 // ---- tags inside the file
 const dec = (bytes, enc) => {
@@ -1454,14 +1468,15 @@ const confirmBox = (title, text, yes, no = "Cancel") => ask(title, text, "", yes
 // PCM through an AudioWorklet -> a 24-bit WAV in the app, into the queue.
 // While recording the waveform draws itself live; pause/resume; on stop the
 // take gets a name.
-let rec = null;
+let rec = null, lastTake = null;
 async function recordStart() {
   if (rec) return;
   if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { toast("This device cannot record here"); return; }
   if (st.playing) pause();
   let stream;
   try {
-    stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false, channelCount: 2 } });
+    stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false, channelCount: 2,
+      ...(lib.recInput ? { deviceId: { exact: lib.recInput } } : {}) } });
   } catch (err) {
     if (err && err.name === "NotAllowedError") { toast("Microphone not allowed: " + (err.message || err.name)); return; }
     try { stream = await navigator.mediaDevices.getUserMedia({ audio: true }); }         // the phone refused the stereo / raw settings
@@ -1470,7 +1485,8 @@ async function recordStart() {
   // its own audio engine for this take (closed on stop), so a second take never attaches to a spent one
   let rctx;
   try {
-    rctx = new (window.AudioContext || window.webkitAudioContext)({ latencyHint: "interactive" });
+    try { rctx = new AudioContext({ latencyHint: "interactive", sampleRate: lib.recFmt.sr }); }
+    catch (_) { rctx = new AudioContext({ latencyHint: "interactive" }); }                  // the phone's own rate
     await rctx.audioWorklet.addModule("player-worklet.js");
     if (rctx.state === "suspended") await rctx.resume();
   } catch (err) {
@@ -1486,7 +1502,8 @@ async function recordStart() {
     stream.getTracks().forEach(t => t.stop()); rctx.close().catch(() => { });
     toast("No sound is coming from the microphone: " + (err && err.message || err)); return;
   }
-  rec = { stream, src, tap, rctx, chunks: [], nch, frames: 0, peak: 0, clip: 0, paused: false, started: Date.now(), peaks: [], sr: rctx.sampleRate };
+  renderRecMarks([]);
+  rec = { stream, src, tap, rctx, chunks: [], nch, frames: 0, peak: 0, clip: 0, paused: false, started: Date.now(), peaks: [], sr: rctx.sampleRate, marks: [], shown: 0, block: 0.02 };
   const mine = rec;
   setTimeout(() => {                                          // nothing arriving: say so instead of "recording" silence
     if (rec === mine && !mine.paused && mine.frames === 0) { recordStop(false); toast("No sound is coming from the microphone. Close other apps that use it, then try again."); }
@@ -1494,9 +1511,9 @@ async function recordStart() {
   const BLOCK = Math.round(rctx.sampleRate * 0.02);          // one waveform column per 20 ms
   let acc = 0, mn = 0, mx = 0;
   tap.port.onmessage = e => {
-    const r = rec;
-    if (!r || r.paused) return;
-    const ch = e.data.channels;
+    const r = mine;                                 // blocks arrive in order, even after Stop: all are kept
+    if (e.data.done) { r.ended && r.ended(); return; }
+    const ch = e.data.channels; if (!ch) return;
     r.chunks.push(ch); r.frames += ch[0].length;
     let p = 0;
     const a = ch[0], b = ch[ch.length - 1];
@@ -1509,45 +1526,56 @@ async function recordStart() {
     r.peak = Math.max(r.peak, p); r.level = p;
   };
   src.connect(tap);
+  rec.block = BLOCK / rctx.sampleRate;
+  rec.t0 = rctx.currentTime; rec.pausedSum = 0; rec.pausedAt = null;     // the recording clock: audio time minus pauses
   showPage("recs");
-  $("#recbar").classList.add("on"); $("#recbar").classList.remove("paused");
-  $("#recLabel").textContent = "REC"; $("#recPause").textContent = "❚❚ Pause";
-  $("#recInfo").textContent = `${(rctx.sampleRate / 1000).toFixed(1).replace(".0", "")} kHz · ${nch === 1 ? "mono" : "stereo"} · saved as a 24-bit WAV`;
-  $("#recStart").style.display = "none";
-  document.querySelector(".wavecard").classList.add("recording");
-  window.scrollTo({ top: 0, behavior: "smooth" });
+  $("#recName").value = takeName(rec.started);
+  $("#recInfo").textContent = `${nch === 1 ? "Mono" : "Stereo"} · ${(rctx.sampleRate / 1000).toFixed(1).replace(".0", "")} kHz`;
+  setFmtChip(rctx.sampleRate);
+  setRecUi(); renderRecMarks();
 }
 function recordPause() {
   if (!rec) return;
   rec.paused = !rec.paused;
-  $("#recbar").classList.toggle("paused", rec.paused);
-  $("#recLabel").textContent = rec.paused ? "PAUSED" : "REC";
-  $("#recPause").textContent = rec.paused ? "● Resume" : "❚❚ Pause";
-  if (rec.paused) rec.peaks.push(-0.02, 0.02, -0.02, 0.02);   // a small gap marks where it paused
+  const now = rec.rctx.currentTime;
+  if (rec.paused) rec.pausedAt = now; else { rec.pausedSum += now - rec.pausedAt; rec.pausedAt = null; }
+  rec.tap.port.postMessage({ cmd: "pause", on: rec.paused });
+  setRecUi();
+}
+// how much audio has been recorded right now, on the audio clock (pauses excluded);
+// the blocks themselves may still be on their way to this thread
+function recordedNow(r) {
+  if (!r) return 0;
+  if (r.t0 === undefined) return r.frames / r.sr;
+  const t = (r.paused ? r.pausedAt : r.rctx.currentTime) - r.t0 - r.pausedSum;
+  return Math.max(0, t);
 }
 async function recordStop(keep) {
   if (!rec) return;
-  const r = rec; rec = null;
+  const r = rec; rec = null; lastTake = r;
+  r.stopAt = recordedNow(r);
+  // the worklet answers "end" after its last block: wait for it so the tail is not cut
+  await new Promise(ok => { r.ended = ok; try { r.tap.port.postMessage({ cmd: "end" }); } catch (_) { ok(); } setTimeout(ok, 2000); });
   try { r.src.disconnect(); r.tap.disconnect(); r.tap.port.onmessage = null; } catch (_) { }
   r.stream.getTracks().forEach(t => t.stop());
   r.rctx.close().catch(() => { });
-  $("#recbar").classList.remove("on"); $("#recStart").style.display = "";
-  document.querySelector(".wavecard").classList.remove("recording");
-  drawWave();
-  if (!keep || !r.frames) { if (keep) toast("Nothing was recorded"); return; }
+  setRecUi(); drawRecorder();
+  if (!keep || !r.frames) { if (mkEditing && mkEditing.ctx === recMk) closeMarkEdit(); renderRecMarks([]); if (keep) toast("Nothing was recorded"); return; }
   const n = r.frames;
   const chans = []; for (let c = 0; c < r.nch; c++) chans.push(new Float32Array(n));
   let p = 0; for (const ch of r.chunks) { for (let c = 0; c < r.nch; c++) chans[c].set(ch[Math.min(c, ch.length - 1)], p); p += ch[0].length; }
-  const d = new Date(r.started), pad = x => String(x).padStart(2, "0");
-  const suggested = `Recording ${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}.${pad(d.getMinutes())}`;
+  const suggested = ($("#recName").value || "").trim() || takeName(r.started);
   let name = await ask("Name this recording", `${fmtTime(n / r.sr)} recorded`, suggested, "Save", "Discard");
   if (name === null) {
     if (await confirmBox("Throw this recording away?", "It has not been saved.", "Discard", "Keep it")) { toast("Recording discarded"); return; }
     name = suggested;
   }
   name = name.replace(/[\\/:*?"<>|]+/g, " ").trim().replace(/\.wav$/i, "") + ".wav";
-  const blob = wavBlob(chans, r.sr, 24);
-  await saveRecording(blob, name, r.started, n / r.sr);
+  const blob = wavBlob(chans, r.sr, lib.recFmt.bits === 16 ? 16 : 24);
+  const id = await saveRecording(blob, name, r.started, n / r.sr);
+  if (id && r.marks.length) { lib.marks[id] = r.marks.map(m => ({ ...m })).sort((p, q) => p.t - q.t); save("marks"); }
+  if (mkEditing && mkEditing.ctx === recMk) closeMarkEdit();
+  $("#recName").value = ""; renderRecMarks([]);
   toast(`Saved “${name}” in Recordings (${fmtTime(n / r.sr)})`);
 }
 async function saveRecording(blob, name, started, seconds) {
@@ -1557,16 +1585,18 @@ async function saveRecording(blob, name, started, seconds) {
     const id = recordingIds.find(x => songs[x].name === name) || recordingIds[0];
     if (id && !songs[id].duration) songs[id].duration = seconds;   // the phone may not have measured it yet
     showSavedTake(id);
-    return;
+    return id;
   }
   // web: kept in the app, in the Recordings library only
   const id = `rec|${name}|${started}`;
-  await tx("songs", "readwrite", st2 => st2.put({ id, name, size: blob.size, type: "audio/wav", added: Date.now(), blob, bits: 24, kind: "recording", duration: seconds }));
+  await tx("songs", "readwrite", st2 => st2.put({ id, name, size: blob.size, type: "audio/wav", added: Date.now(), blob, bits: lib.recFmt.bits === 16 ? 16 : 24, kind: "recording", duration: seconds }));
   songs[id] = { id, name, size: blob.size, type: "audio/wav", added: Date.now(), kind: "recording", duration: seconds };
   recordingIds.unshift(id);
   showSavedTake(id);
+  return id;
 }
-let freshTake = null;
+let freshTake = null, recAll = false;
+$("#recSeeAll").onclick = () => { recAll = true; renderRecList(); };
 function showSavedTake(id) {
   freshTake = id;
   showPage("recs");
@@ -1582,47 +1612,216 @@ function selectTool(name) {
 function renderRecList() {
   const el = $("#recList");
   const ids = recordingIds.filter(id => songs[id]);
-  const when = t => { if (!t) return ""; const d = new Date(t); return d.toLocaleDateString(undefined, { day: "numeric", month: "short" }) + " " + d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" }); };
-  el.innerHTML = ids.map(id => { const s = songs[id]; return `<li data-id="${id}" class="${id === st.id ? "now" : ""} ${id === freshTake ? "fresh" : ""}"><div class="thumb rec"></div><div class="n"><div class="name">${s.name.replace(/\.[^.]+$/, "")}</div><div class="sub">${[s.duration ? fmtTime(s.duration) : "", when(s.added), s.size > 0 ? (s.size / 1e6).toFixed(1) + " MB" : ""].filter(Boolean).join(" · ")}</div></div>${rowEnd(id, "recs")}</li>`; }).join("")
+  const when = t => { if (!t) return ""; const d = new Date(t); return d.toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" }) + ", " + d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" }); };
+  const shown = recAll || sel.where === "recs" ? ids : ids.slice(0, 5);
+  $("#recSeeAll").hidden = ids.length <= 5 || recAll;
+  el.innerHTML = shown.map(id => { const s = songs[id]; return `<li data-id="${id}" class="${id === st.id ? "now" : ""} ${id === freshTake ? "fresh" : ""}"><div class="thumb rec"><svg viewBox="0 0 24 24" width="22" height="22" fill="#fff"><path d="M9 18V5l11-2v13" fill="none" stroke="#fff" stroke-width="2"/><circle cx="6" cy="18" r="3"/><circle cx="17" cy="16" r="3"/></svg></div><div class="n"><div class="name">${esc(s.name.replace(/\.[^.]+$/, ""))}</div><div class="sub">${[when(s.added), s.duration ? clock(s.duration) : "", s.size > 0 ? (s.size / 1e6).toFixed(1) + " MB" : ""].filter(Boolean).join(" · ")}</div></div>${sel.where === "recs" ? "" : `<button class="rowplay" title="Play">▶</button>`}${rowEnd(id, "recs")}</li>`; }).join("")
     || `<li class="muted">No recordings yet: tap ● Record.</li>`;
   $("#recsInfo").textContent = ids.length ? (ANDROID ? `${ids.length} recording${ids.length === 1 ? "" : "s"} · Recordings/AVB Music Player on your phone` : `${ids.length} recording${ids.length === 1 ? "" : "s"}`) : "";
   shownIds.recs = ids;
   el.querySelectorAll("li[data-id]").forEach(li => {
-    li.querySelector(".n").onclick = () => { if (pickRow(li, "recs")) return; loadSong(li.dataset.id, false); window.scrollTo({ top: 0, behavior: "smooth" }); };
+    li.querySelector(".n").onclick = () => { if (pickRow(li, "recs")) return; loadSong(li.dataset.id, false); };
+    const pb = li.querySelector(".rowplay"); if (pb) pb.onclick = () => { if (st.id === li.dataset.id && st.buffer) togglePlay(); else loadSong(li.dataset.id, true); };
     wireRow(li, "recs");
   });
   el.classList.toggle("selecting", sel.where === "recs"); updateSelbar();
 }
-function drawRecording() {
-  const dpr = sizeCanvas(wave); const w = wave.width / dpr, h = wave.height / dpr;
-  wctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-  wctx.fillStyle = rec.paused ? "#0E0D26" : "#1a0a18"; wctx.fillRect(0, 0, w, h);
-  const top = 30, bottom = h - 8, mid = (top + bottom) / 2, amp = (bottom - top) / 2 - 2;
-  const cols = rec.peaks.length / 2;
-  const span = Math.max(cols, Math.floor(w));                 // fills from the left, then scrolls
-  const first = Math.max(0, cols - Math.floor(w));
-  const g = wctx.createLinearGradient(0, 0, w, 0); ["#EF4444", "#EC4899", "#D946EF", "#8B5CF6"].forEach((c, i) => g.addColorStop(i / 3, c));
-  wctx.fillStyle = g; wctx.beginPath();
-  for (let i = first, x = 0; i < cols; i++, x++) {
-    const lo = rec.peaks[i * 2], hi = rec.peaks[i * 2 + 1];
-    wctx.rect(x, mid - hi * amp, 1, Math.max(1, (hi - lo) * amp));
-  }
-  wctx.fill();
-  const head = Math.min(w - 2, cols - first);
-  wctx.shadowColor = "#EF4444"; wctx.shadowBlur = 10; wctx.fillStyle = "#fff"; wctx.fillRect(head, top, 2, bottom - top); wctx.shadowBlur = 0;
-  wctx.fillStyle = rec.paused ? "#F59E0B" : "#EF4444"; wctx.font = "800 14px system-ui"; wctx.textAlign = "left";
-  wctx.fillText(rec.paused ? "❚❚ PAUSED" : "● RECORDING", 10, 20);
-  wctx.textAlign = "right"; wctx.fillStyle = "#fff"; wctx.fillText(fmtTime(rec.frames / rec.sr), w - 10, 20);
-  void span;
+// ---------------------------------------------------------------- the recorder
+const clock = sec => { sec = Math.max(0, Math.floor(sec || 0)); const p = x => String(x).padStart(2, "0"); return `${p(Math.floor(sec / 3600))}:${p(Math.floor(sec / 60) % 60)}:${p(sec % 60)}`; };
+function takeName(t) { const d = new Date(t), p = x => String(x).padStart(2, "0"); return `Recording ${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}.${p(d.getMinutes())}`; }
+function setFmtChip(rate) { $("#recFmtText").textContent = `${((rate || lib.recFmt.sr) / 1000).toFixed(1).replace(".0", "")} kHz · ${lib.recFmt.bits}-bit`; }
+function setRecUi() {
+  const on = !!rec, paused = on && rec.paused;
+  $("#recIdle").hidden = on; $("#recCtl").hidden = !on;
+  $("#recMarksBox").hidden = !on; $("#recNameBox").hidden = !on;
+  $("#recInputBtn").disabled = on; $("#recFmtBtn").disabled = on;
+  $("#recCard").classList.toggle("live", on && !paused); $("#recCard").classList.toggle("paused", paused);
+  $("#recStatus").innerHTML = !on ? "READY TO RECORD" : paused ? "❚❚&nbsp; PAUSED" : `<span class="recdot"></span> RECORDING`;
+  $("#recPauseLbl").textContent = paused ? "Resume" : "Pause";
+  $("#recPause").innerHTML = paused ? `<svg viewBox="0 0 24 24" width="26" height="26"><circle cx="12" cy="12" r="7" fill="#EF4444"/></svg>` : `<svg viewBox="0 0 24 24" width="26" height="26" fill="#fff"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>`;
+  if (!on) { $("#recTime").textContent = clock(0); $("#recPeak").textContent = "—"; $("#recInfo").textContent = ""; setFmtChip(); }
+  document.body.classList.toggle("recording", on);
+  updateMini();
 }
+const RECCOL = ["#8B5CF6", "#A855F7", "#D946EF", "#EC4899", "#F43F5E", "#F97316"];
+function drawRecorder() {
+  const c = $("#recWave"); if (!c || !c.getBoundingClientRect().width) return;
+  const dpr = sizeCanvas(c), w = c.width / dpr, h = c.height / dpr, g = c.getContext("2d");
+  g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRect(0, 0, w, h);
+  const top = 6, bottom = h - 22, mid = (top + bottom) / 2, half = (bottom - top) / 2;
+  const elapsed = rec ? rec.frames / rec.sr : 0;
+  const span = Math.max(30, Math.ceil(elapsed * 1.25 / 30) * 30);          // always room ahead of the playhead
+  const step = 5, bars = Math.floor(w / step), perBar = span / bars;
+  const xHead = elapsed / span * w;
+  // the centre line ahead
+  g.fillStyle = "rgba(255,255,255,.10)"; g.fillRect(xHead, mid - .5, w - xHead, 1);
+  if (rec && rec.peaks.length) {
+    const grad = g.createLinearGradient(0, 0, Math.max(xHead, 40), 0);
+    RECCOL.forEach((col, i) => grad.addColorStop(i / (RECCOL.length - 1), col));
+    g.fillStyle = grad;
+    const pk = rec.peaks, per = rec.block;
+    for (let k = 0; k < bars; k++) {
+      const t0 = k * perBar; if (t0 >= elapsed) break;
+      const i0 = Math.floor(t0 / per), i1 = Math.max(i0 + 1, Math.floor((t0 + perBar) / per));
+      let a = 0; for (let i = i0; i < i1 && i * 2 + 1 < pk.length; i++) a = Math.max(a, -pk[i * 2], pk[i * 2 + 1]);
+      const hh = Math.max(1.5, Math.pow(Math.min(1, a), 0.7) * half);
+      g.beginPath(); g.roundRect ? g.roundRect(k * step, mid - hh, 3, hh * 2, 1.5) : g.rect(k * step, mid - hh, 3, hh * 2); g.fill();
+    }
+  }
+  // markers
+  if (rec) for (const m of rec.marks) { const x = m.t / span * w; g.fillStyle = mkColor(m); g.globalAlpha = .5; g.fillRect(x - .5, top, 1, bottom - top); g.globalAlpha = 1; g.fillRect(x - 1, top, 2, 14); g.beginPath(); g.moveTo(x + 1, top); g.lineTo(x + 10, top + 3.5); g.lineTo(x + 1, top + 7); g.fill(); }
+  // the playhead
+  if (rec) { g.fillStyle = "#F43F5E"; g.fillRect(xHead - 1, top, 2, bottom - top); g.beginPath(); g.arc(xHead, top + 2, 4, 0, Math.PI * 2); g.fill(); }
+  // the ruler
+  g.fillStyle = "rgba(255,255,255,.35)"; g.font = "600 11px Jakarta, system-ui"; g.textBaseline = "alphabetic";
+  for (let i = 0; i <= 4; i++) {
+    const t = span * i / 4, x = Math.min(w - 1, Math.max(0, t / span * w));
+    g.fillRect(x, bottom + 3, 1, 4);
+    g.textAlign = i === 0 ? "left" : i === 4 ? "right" : "center";
+    g.fillText(fmtTime(t), x, h - 2);
+  }
+}
+function drawMeter() {
+  const c = $("#recMeter"); if (!c || !c.getBoundingClientRect().width) return;
+  const dpr = sizeCanvas(c), w = c.width / dpr, h = c.height / dpr, g = c.getContext("2d");
+  g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRect(0, 0, w, h);
+  const lv = rec && !rec.paused ? (rec.level || 0) : 0;
+  rec && (rec.shown = Math.max(lv, (rec.shown || 0) * 0.86));
+  const shown = rec ? rec.shown : 0;
+  const frac = Math.max(0, Math.min(1, (20 * Math.log10(shown + 1e-6) + 60) / 60));
+  const n = Math.floor(w / 7), lit = Math.round(frac * n);
+  for (let i = 0; i < n; i++) {
+    const p = i / (n - 1);
+    g.fillStyle = i < lit ? RECCOL[Math.min(RECCOL.length - 1, Math.floor(p * RECCOL.length))] : "rgba(255,255,255,.10)";
+    g.beginPath(); g.roundRect ? g.roundRect(i * 7, 0, 4, h, 2) : g.rect(i * 7, 0, 4, h); g.fill();
+  }
+}
+$("#recWave").addEventListener("pointerdown", e => {
+  if (!rec || !rec.marks.length) return;
+  const r = $("#recWave").getBoundingClientRect(), x = e.clientX - r.left, w = r.width;
+  const elapsed = rec.frames / rec.sr, span = Math.max(30, Math.ceil(elapsed * 1.25 / 30) * 30);
+  const hit = rec.marks.map(m => [m, Math.abs(m.t / span * w + 4 - x)]).filter(([, d]) => d < 16).sort((p, q) => p[1] - q[1])[0];
+  if (hit) showMarkPop(recMk, hit[0].id, r.top + 30);
+});
+async function chooseInput() {
+  if (rec) return;
+  let devs = [];
+  try { devs = (await navigator.mediaDevices.enumerateDevices()).filter(d => d.kind === "audioinput"); } catch (_) { }
+  if (devs.length && !devs.some(d => d.label)) {
+    // the names show only once the microphone has been allowed: ask once, then list
+    try { const s2 = await navigator.mediaDevices.getUserMedia({ audio: true }); s2.getTracks().forEach(t => t.stop()); devs = (await navigator.mediaDevices.enumerateDevices()).filter(d => d.kind === "audioinput"); } catch (_) { }
+  }
+  const nice = d => d.deviceId === "default" || !d.label ? "Phone microphone" : d.label.replace(/\s*\(.*?\)\s*$/, "") || "Microphone";
+  const items = [{ label: `Phone microphone (default)${!lib.recInput ? "  ✓" : ""}`, run: () => { lib.recInput = ""; save("recInput"); $("#recInputName").textContent = "Phone microphone"; } }];
+  for (const d of devs) if (d.deviceId && d.deviceId !== "default" && d.deviceId !== "communications")
+    items.push({ label: `${nice(d)}${lib.recInput === d.deviceId ? "  ✓" : ""}`, run: () => { lib.recInput = d.deviceId; save("recInput"); $("#recInputName").textContent = nice(d); } });
+  sheet(items, "Record from");
+}
+function chooseFormat() {
+  if (rec) return;
+  const f = lib.recFmt, items = [];
+  for (const sr of [44100, 48000]) items.push({ label: `${(sr / 1000).toFixed(1).replace(".0", "")} kHz${f.sr === sr ? "  ✓" : ""}`, run: () => { lib.recFmt = { ...f, sr }; save("recFmt"); setFmtChip(); } });
+  for (const bits of [16, 24]) items.push({ label: `${bits}-bit WAV${f.bits === bits ? "  ✓" : ""}`, run: () => { lib.recFmt = { ...f, bits }; save("recFmt"); setFmtChip(); } });
+  sheet(items, "Recording format");
+}
+$("#recInputBtn").onclick = chooseInput; $("#recFmtBtn").onclick = chooseFormat;
+$("#recMarkBtn").onclick = () => addMarker(recMk); $("#recMarkAdd").onclick = () => addMarker(recMk);
+setFmtChip();
+// a saved input that is gone falls back to the phone's microphone
+if (lib.recInput && navigator.mediaDevices && navigator.mediaDevices.enumerateDevices) navigator.mediaDevices.enumerateDevices().then(ds => {
+  const d = ds.find(x => x.deviceId === lib.recInput);
+  if (!d) { lib.recInput = ""; save("recInput"); } else if (d.label) $("#recInputName").textContent = d.label.replace(/\s*\(.*?\)\s*$/, "");
+}).catch(() => { });
+// settings
+$("#settingsBtn").onclick = () => {
+  const items = [
+    { label: `Record from: ${$("#recInputName").textContent}`, run: chooseInput },
+    { label: `Recording format: ${$("#recFmtText").textContent}`, run: chooseFormat },
+  ];
+  items.push({ label: "Export all markers and notes (CSV)", run: exportAllMarks });
+  if (ANDROID && ANDROID.askDefault) items.push({ label: "Make AVB Music Player your default player", run: () => ANDROID.askDefault() });
+  if (!ANDROID) items.push({ label: "Add music from your files", run: () => $("#files2").click() });
+  if (!ANDROID && !$("#installBtn").hidden) items.push({ label: "Install the app on this phone", run: () => $("#installBtn").click() });
+  sheet(items, "Settings");
+};
+
+// ---------------------------------------------------------------- home: shelves, mini player, Now Playing
+const esc = t => String(t || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/"/g, "&quot;");
+const songTitle = id => songs[id] ? (songs[id].title && !/^<unknown>$/i.test(songs[id].title) ? songs[id].title : songs[id].name.replace(/\.[^.]+$/, "")) : "";
+const songArtist = id => songs[id] && songs[id].artist && !/^<unknown>$/i.test(songs[id].artist) ? songs[id].artist : "";
+// album art from the phone, small, fetched once per song while it scrolls into view
+const artCache = new Map();
+function artFor(id, el) {
+  if (!ANDROID || !ANDROID.albumArt || !/^[mr]:/.test(id)) return;
+  if (artCache.has(id)) { const u = artCache.get(id); if (u) { el.style.background = `center / cover no-repeat url("${u}")`; } return; }
+  artObserver.observe(el); el.dataset.art = id;
+}
+const artObserver = "IntersectionObserver" in window ? new IntersectionObserver(entries => {
+  for (const e of entries) {
+    if (!e.isIntersecting) continue;
+    artObserver.unobserve(e.target);
+    const id = e.target.dataset.art;
+    setTimeout(() => {
+      let url = null;
+      try { const b64 = ANDROID.albumArt(id.slice(2)); if (b64) url = "data:image/jpeg;base64," + b64; } catch (_) { }
+      artCache.set(id, url);
+      if (url) e.target.style.background = `center / cover no-repeat url("${url}")`;
+    }, 0);
+  }
+}, { rootMargin: "200px" }) : { observe() { }, unobserve() { } };
+
+function renderShelves() {
+  const hasSongs = Object.keys(songs).some(id => !isRecording(id) && !lib.hidden.includes(id));
+  $("#hero").hidden = hasSongs || phoneState === "loading";
+  const recent = lib.recent.filter(id => songs[id] && !isRecording(id)).slice(0, 12);
+  $("#recentShelf").hidden = !recent.length;
+  $("#recentTiles").innerHTML = recent.map(id => `<button class="tile" data-id="${esc(id)}"><div class="art" style="background:${coverFor(songs[id].name)}"></div><div class="tname">${esc(songTitle(id))}</div><div class="tsub">${esc(songArtist(id) || fmtOf(songs[id].name))}</div></button>`).join("");
+  $("#recentTiles").querySelectorAll(".tile").forEach(t => {
+    artFor(t.dataset.id, t.querySelector(".art"));
+    t.onclick = () => { const id = t.dataset.id; if (!lib.queue.includes(id)) { lib.queue.push(id); save("queue"); } playIndex(lib.queue.indexOf(id)); openNP("listen"); };
+  });
+  const lists = [{ key: "favorites", name: "Favourites", n: lib.favorites.length, cls: "fav" }, ...lib.playlists.map(p => ({ key: "list", name: p.name, n: p.items.length }))];
+  $("#listTiles").innerHTML = lists.map(p => `<button class="tile" data-view="${p.key}" data-name="${esc(p.name)}"><div class="art ${p.cls || ""}" style="${p.cls ? "" : "background:" + coverFor(p.name)}"><span>${p.cls ? "♥" : esc(p.name[0] || "♪").toUpperCase()}</span></div><div class="tname">${esc(p.name)}</div><div class="tsub">${p.n} song${p.n === 1 ? "" : "s"}</div></button>`).join("")
+    + `<button class="tile" id="newList"><div class="art add"><span>+</span></div><div class="tname">New playlist</div><div class="tsub">&nbsp;</div></button>`;
+  $("#listTiles").querySelectorAll(".tile[data-view]").forEach(t => t.onclick = () => { selEnd(true); view = t.dataset.view; listName = t.dataset.view === "list" ? t.dataset.name : ""; renderList(); $("#tab-songs").scrollIntoView({ behavior: "smooth" }); });
+  $("#newList").onclick = () => newPlaylist();
+}
+function updateMini() {
+  const show = !!st.id && songs[st.id] && $("#np").hidden && !rec && !sel.where;
+  $("#mini").hidden = !show; document.body.classList.toggle("hasmini", !!show);
+  if (!st.id || !songs[st.id]) return;
+  $("#miniTitle").textContent = $("#title").textContent;
+  $("#miniSub").textContent = $("#npArtist").textContent || (isRecording(st.id) ? "Recording" : (st.info && st.info.fmt) || "");
+  $("#miniCover").style.background = $("#cover").style.background || coverFor(songs[st.id].name);
+  $("#miniPlay").textContent = st.playing ? "❚❚" : "▶";
+}
+let npMode = "listen";
+function setNpMode(m) {
+  npMode = m;
+  $("#np").classList.toggle("studio", m === "studio");
+  $("#npMode").querySelectorAll("button").forEach(b => b.classList.toggle("on", b.dataset.mode === m));
+  requestAnimationFrame(() => { drawWave(); if ($("#tab-eq").classList.contains("on")) drawEq(); if ($("#tab-loud").classList.contains("on")) drawLoud(); });
+}
+function openNP(mode) {
+  if (mode) setNpMode(mode);
+  $("#np").hidden = false; document.body.classList.add("npopen");
+  $("#npScroll").scrollTop = 0;
+  updateMini(); requestAnimationFrame(() => { drawWave(); if (st.buffer && st.duration) { $("#tnow").textContent = fmtTime(st.pos); $("#seek").value = Math.round(st.pos / st.duration * 1000); } });
+}
+function closeNP() { $("#np").hidden = true; document.body.classList.remove("npopen"); updateMini(); }
+$("#npClose").onclick = closeNP;
+$("#npMode").querySelectorAll("button").forEach(b => b.onclick = () => setNpMode(b.dataset.mode));
+$("#mini").onclick = e => { if (e.target.closest("#miniPlay")) return; openNP(); };
+$("#miniPlay").onclick = () => togglePlay();
 
 // ---------------------------------------------------------------- ui wiring
 function showPage(p) {
   if (p === "play" || p === "library") p = "music";
   document.querySelectorAll(".page").forEach(e => e.classList.toggle("on", e.id === "page-" + p));
   $("#pages").querySelectorAll("button").forEach(b => b.classList.toggle("on", b.dataset.page === p));
-  if (p === "recs") { if (ANDROID) loadRecordings(); renderRecList(); }
-  drawWave();
+  document.body.classList.toggle("onrecs", p === "recs");
+  if (p === "recs") { if (ANDROID) loadRecordings(); renderRecList(); requestAnimationFrame(() => { drawRecorder(); drawMeter(); }); }
+  window.scrollTo({ top: 0 });
 }
 $("#pages").querySelectorAll("button").forEach(b => b.onclick = () => showPage(b.dataset.page));
 $("#tools").querySelectorAll("button").forEach(b => b.onclick = () => selectTool(b.dataset.tab));
@@ -1630,8 +1829,9 @@ $("#files2").onchange = e => { addFiles([...e.target.files], true); e.target.val
 $("#play").onclick = togglePlay; $("#prev").onclick = prevTrack; $("#next").onclick = () => nextTrack(false);
 $("#back10").onclick = () => seek(st.pos - 10); $("#fwd10").onclick = () => seek(st.pos + 10);
 $("#markA").onclick = () => markButton("A"); $("#markB").onclick = () => markButton("B");
-$("#repeat").onclick = () => { lib.repeat = { off: "all", all: "one", one: "off" }[lib.repeat]; save("repeat"); $("#repeat").textContent = { off: "↻ off", all: "↻ all", one: "↻ one" }[lib.repeat]; $("#repeat").classList.toggle("on", lib.repeat !== "off"); };
-$("#repeat").textContent = { off: "↻ off", all: "↻ all", one: "↻ one" }[lib.repeat]; $("#repeat").classList.toggle("on", lib.repeat !== "off");
+const setRepeatUi = () => { $("#repeat").textContent = lib.repeat === "one" ? "↻¹" : "↻"; $("#repeat").classList.toggle("on", lib.repeat !== "off"); $("#repeat").title = { off: "Repeat: off", all: "Repeat: all", one: "Repeat: this song" }[lib.repeat]; };
+$("#repeat").onclick = () => { lib.repeat = { off: "all", all: "one", one: "off" }[lib.repeat]; save("repeat"); setRepeatUi(); toast({ off: "Repeat off", all: "Repeat all", one: "Repeat this song" }[lib.repeat]); };
+setRepeatUi();
 $("#seek").oninput = e => seek(+e.target.value / 1000 * st.duration);
 $("#heart").onclick = () => toggleFav(st.id);
 $("#shareBtn").onclick = () => shareSong();
@@ -1673,23 +1873,175 @@ $("#keyEdit").onclick = () => {
   sheet(items, "The song's key");
 };
 $("#fixReset").onclick = () => { delete lib.fix[st.id]; save("fix"); $("#tapBtn").textContent = "Tap tempo"; taps = []; refreshMusic(); refreshSave(); };
-// markers: a time and a word, per song
-function renderMarks() {
-  const list = (st.id && lib.marks[st.id]) || [];
-  $("#marks").innerHTML = list.map((m, i) => `<li><span class="mt" data-i="${i}">${fmtTime(m.t)}</span><input data-i="${i}" value="${(m.text || "").replace(/"/g, "&quot;")}" placeholder="What happens here"><button data-i="${i}" title="Delete">✕</button></li>`).join("");
-  $("#marks").querySelectorAll(".mt").forEach(e => e.onclick = () => seek(list[+e.dataset.i].t));
-  $("#marks").querySelectorAll("input").forEach(e => e.onchange = () => { list[+e.dataset.i].text = e.value; save("marks"); });
-  $("#marks").querySelectorAll("button").forEach(e => e.onclick = () => { list.splice(+e.dataset.i, 1); if (!list.length) delete lib.marks[st.id]; save("marks"); renderMarks(); drawWave(); });
-  $("#markHint").hidden = list.length > 0;
-}
-$("#markAdd").onclick = () => {
-  if (!st.buffer) { toast("Load a song first"); return; }
-  const list = lib.marks[st.id] = lib.marks[st.id] || [];
-  list.push({ t: Math.round(st.pos * 10) / 10, text: "" }); list.sort((a, b) => a.t - b.t); save("marks");
-  renderMarks(); drawWave();
-  const i = list.findIndex(m => Math.abs(m.t - Math.round(st.pos * 10) / 10) < 0.05);
-  const inp = $("#marks").querySelector(`input[data-i="${i}"]`); if (inp) inp.focus();
+// ---------------------------------------------------------------- markers & notes
+// One tap drops a marker at the exact moment; a note, a category and the time can
+// be changed later, all without pausing playback or recording.  Per song in
+// lib.marks[id] = [{ id, t, text, cat }], sorted by time.
+const MK_CATS = { idea: ["Idea", "#A78BFA"], fix: ["Fix", "#FB923C"], fav: ["Favourite", "#F472B6"], section: ["Section", "#22D3EE"] };
+const mkColor = m => (MK_CATS[m.cat] || MK_CATS.idea)[1];
+const mkCatName = m => (MK_CATS[m.cat] || MK_CATS.idea)[0];
+const mkTime = t => { t = Math.max(0, t || 0); const h = Math.floor(t / 3600), m = Math.floor(t / 60) % 60, sec = Math.floor(t % 60), d = Math.floor((t % 1) * 10); return `${h ? h + ":" + String(m).padStart(2, "0") : m}:${String(sec).padStart(2, "0")}.${d}`; };
+const FLAG_SVG = `<svg viewBox="0 0 24 24" width="15" height="15" fill="currentColor"><path d="M5 22V3h12l-2 4.5L17 12H7v10z"/></svg>`;
+// older markers ({t, text}) get an id and a category
+for (const k of Object.keys(lib.marks)) for (const m of lib.marks[k]) { if (!m.id) m.id = Math.random().toString(36).slice(2, 10); if (!m.cat) m.cat = "idea"; if (m.text === undefined) m.text = ""; }
+// where markers live: the loaded song, or the take being recorded
+const songMk = {
+  live: false,
+  list() { return st.id ? (lib.marks[st.id] = lib.marks[st.id] || []) : []; },
+  now() { return st.pos || 0; },
+  dur() { return st.duration || 0; },
+  seek(t) { seek(t); },
+  changed() { const l = lib.marks[st.id]; if (l) { l.sort((a, b) => a.t - b.t); if (!l.length) delete lib.marks[st.id]; } save("marks"); renderMarks(); drawWave(); },
+  title() { return st.id && songs[st.id] ? songTitle(st.id) : "Song"; },
 };
+const recMk = {
+  live: true,
+  list() { return rec ? rec.marks : (lastTake ? lastTake.marks : []); },
+  now() { return rec ? recordedNow(rec) : (lastTake ? lastTake.stopAt || 0 : 0); },   // recorded audio only: pauses are not counted
+  dur() { return rec ? recordedNow(rec) : (lastTake ? lastTake.stopAt || 0 : 0); },
+  seek() { },                                                       // never touches the take
+  changed() { if (rec) rec.marks.sort((a, b) => a.t - b.t); renderRecMarks(); drawRecorder(); },
+  title() { return ($("#recName").value || "Recording").trim(); },
+};
+function addMarker(ctx) {
+  if (ctx === songMk && !st.buffer) { toast("Load a song first"); return; }
+  if (ctx === recMk && !rec) return;
+  const m = { id: Math.random().toString(36).slice(2, 10), t: Math.round(ctx.now() * 100) / 100, text: "", cat: lib.mkCat || "idea" };
+  ctx.list().push(m); ctx.changed();
+  if (ctx === songMk && !lib.mkOpen) { lib.mkOpen = true; save("mkOpen"); renderMarks(); }
+  snack(`${mkCatName(m)} marker at ${mkTime(m.t)}`, "Add note", () => editMarker(ctx, m.id, true));
+}
+function findMk(ctx, id) { return ctx.list().find(m => m.id === id); }
+function deleteMarker(ctx, id) {
+  const list = ctx.list(), i = list.findIndex(m => m.id === id); if (i < 0) return;
+  const [gone] = list.splice(i, 1); ctx.changed();
+  if (ctx === songMk && !lib.marks[st.id]) lib.marks[st.id] = [];
+  const songId = st.id;
+  snack(`Marker at ${mkTime(gone.t)} deleted`, "Undo", () => { if (ctx === songMk && st.id !== songId) return; ctx.list().push(gone); ctx.changed(); });
+}
+// the compact editor: a strip at the bottom, nothing stops, every change is kept at once
+let mkEditing = null;
+function editMarker(ctx, id, focus) {
+  const m = findMk(ctx, id); if (!m) return;
+  mkEditing = { ctx, id };
+  hideMarkPop();
+  const el = $("#mkEdit");
+  el.innerHTML = `
+    <div class="mkehead"><span class="mkdot" style="background:${mkColor(m)}"></span>
+      <button class="mketime" id="mkeTime" title="${ctx.live ? "" : "Jump here"}">${mkTime(m.t)}</button>
+      <span class="spacer"></span><button class="textbtn" id="mkeDone">Done</button></div>
+    <div class="mkecats">${Object.entries(MK_CATS).map(([k, [n, c]]) => `<button data-cat="${k}" class="${m.cat === k ? "on" : ""}" style="--c:${c}">${n}</button>`).join("")}</div>
+    <textarea id="mkeText" rows="2" placeholder="Note (optional): what happens here, what to fix…">${esc(m.text)}</textarea>
+    <div class="mkemove"><span class="faint">Move</span>
+      <button data-d="-1">−1 s</button><button data-d="-0.1">−0.1</button><button data-d="0.1">+0.1</button><button data-d="1">+1 s</button>
+      <button data-d="now">${ctx.live ? "To now" : "To playhead"}</button>
+      <span class="spacer"></span><button class="textbtn danger" id="mkeDel">Delete</button></div>`;
+  el.hidden = false;
+  const ta = $("#mkeText");
+  ta.oninput = () => { m.text = ta.value; if (ctx === songMk) save("marks"); clearTimeout(editMarker.t); editMarker.t = setTimeout(() => ctx === songMk ? renderMarks() : renderRecMarks(), 250); };
+  el.querySelectorAll("[data-cat]").forEach(b => b.onclick = () => {
+    m.cat = b.dataset.cat; lib.mkCat = m.cat; save("mkCat");
+    el.querySelectorAll("[data-cat]").forEach(x => x.classList.toggle("on", x === b));
+    el.querySelector(".mkdot").style.background = mkColor(m); ctx.changed();
+  });
+  el.querySelectorAll("[data-d]").forEach(b => b.onclick = () => {
+    const d = b.dataset.d, max = ctx.dur() || m.t;
+    m.t = Math.round(Math.max(0, Math.min(max, d === "now" ? ctx.now() : m.t + +d)) * 100) / 100;
+    $("#mkeTime").textContent = mkTime(m.t); ctx.changed();
+  });
+  $("#mkeTime").onclick = () => { if (!ctx.live) ctx.seek(m.t); };
+  $("#mkeDel").onclick = () => { closeMarkEdit(); deleteMarker(ctx, m.id); };
+  $("#mkeDone").onclick = closeMarkEdit;
+  if (focus) setTimeout(() => ta.focus(), 30);
+}
+function closeMarkEdit() { $("#mkEdit").hidden = true; if (mkEditing) { mkEditing.ctx.changed(); } mkEditing = null; }
+// tapping a flag: its time and note, a jump (playback only) and Edit
+function showMarkPop(ctx, id, anchorY) {
+  const m = findMk(ctx, id); if (!m) return;
+  const el = $("#mkPop");
+  el.innerHTML = `<div class="mkprow"><span class="mkdot" style="background:${mkColor(m)}"></span><b>${mkTime(m.t)}</b><span class="mkpcat">${mkCatName(m)}</span></div>
+    <div class="mkptext">${m.text ? esc(m.text) : `<span class="faint">No note</span>`}</div>
+    <div class="mkpbtns">${ctx.live ? "" : `<button id="mkpJump">Jump here</button>`}<button id="mkpEdit">${m.text ? "Edit" : "Add note"}</button></div>`;
+  el.style.top = Math.max(60, Math.min(window.innerHeight - 180, anchorY)) + "px";
+  el.hidden = false;
+  if (!ctx.live) $("#mkpJump").onclick = () => { ctx.seek(m.t); hideMarkPop(); };
+  $("#mkpEdit").onclick = () => editMarker(ctx, m.id, true);
+  clearTimeout(showMarkPop.t); showMarkPop.t = setTimeout(hideMarkPop, 6000);
+}
+function hideMarkPop() { $("#mkPop").hidden = true; }
+document.addEventListener("pointerdown", e => { if (!$("#mkPop").hidden && !e.target.closest("#mkPop, #seekMarks, #wave, #recWave")) hideMarkPop(); });
+// one list for the song (in Now Playing) and the take (in the recorder)
+function markRows(ctx) {
+  return ctx.list().map(m => `<li data-id="${m.id}"><button class="mkt" style="--c:${mkColor(m)}">${FLAG_SVG}<span>${mkTime(m.t)}</span></button>
+    <button class="mkn"><span class="mkc" style="color:${mkColor(m)}">${mkCatName(m)}</span>${m.text ? esc(m.text) : `<span class="faint">Add a note</span>`}</button>
+    <button class="mkx" title="Delete">✕</button></li>`).join("");
+}
+function wireRows(ul, ctx) {
+  ul.querySelectorAll("li[data-id]").forEach(li => {
+    const id = li.dataset.id;
+    li.querySelector(".mkt").onclick = () => { if (ctx.live) editMarker(ctx, id); else { const m = findMk(ctx, id); if (m) ctx.seek(m.t); } };
+    li.querySelector(".mkn").onclick = () => editMarker(ctx, id, true);
+    li.querySelector(".mkx").onclick = () => deleteMarker(ctx, id);
+  });
+}
+function renderMarks() {
+  const list = st.id ? (lib.marks[st.id] || []) : [];
+  $("#mkCount").textContent = list.length;
+  $("#mkPanel").hidden = !lib.mkOpen;
+  $("#mkChev").textContent = lib.mkOpen ? "⌃" : "⌄";
+  $("#mkList").innerHTML = markRows(songMk) || `<li class="muted mkempty">Tap <b>⚑ Marker</b> at any moment: the music keeps playing. Add a note now or later.</li>`;
+  wireRows($("#mkList"), songMk);
+  $("#mkCopy").disabled = $("#mkExport").disabled = !list.length;
+  // flags along the seek bar
+  const d = st.duration || 0;
+  $("#seekMarks").innerHTML = d ? list.map(m => `<button data-id="${m.id}" style="left:${(m.t / d * 100).toFixed(3)}%;--c:${mkColor(m)}" title="${mkTime(m.t)}"></button>`).join("") : "";
+  $("#seekMarks").querySelectorAll("button").forEach(b => b.onclick = e => showMarkPop(songMk, b.dataset.id, b.getBoundingClientRect().top - 150));
+}
+function renderRecMarks(list) {
+  const ctx = list ? { ...recMk, list: () => list } : recMk;
+  $("#recMarks").innerHTML = markRows(ctx) || `<li class="muted">Tap <b>Add Marker</b> at a moment you want to find again. Recording never stops.</li>`;
+  wireRows($("#recMarks"), ctx);
+}
+$("#mkAdd").onclick = () => addMarker(songMk);
+$("#mkToggle").onclick = () => { lib.mkOpen = !lib.mkOpen; save("mkOpen"); renderMarks(); };
+// export / copy
+function marksText(title, list, notes) {
+  const lines = list.map(m => `${mkTime(m.t).padEnd(9)} ${mkCatName(m).padEnd(10)} ${m.text || ""}`.trimEnd());
+  return `${title}\n${"".padEnd(Math.min(60, title.length), "=")}\n\n${lines.join("\n") || "(no markers)"}${notes ? `\n\nNotes\n-----\n${notes}` : ""}\n`;
+}
+const csvCell = v => `"${String(v === undefined || v === null ? "" : v).replace(/"/g, '""')}"`;
+function marksCsv(rows) { return "File,Time,Seconds,Category,Note\r\n" + rows.map(([file, m]) => [file, mkTime(m.t), m.t.toFixed(2), mkCatName(m), m.text || ""].map(csvCell).join(",")).join("\r\n") + "\r\n"; }
+async function saveTextFile(text, name, mime) {
+  const blob = new Blob([mime === "text/csv" ? "\uFEFF" + text : text], { type: mime });   // the BOM lets Excel read accents
+  try {
+    if (ANDROID && ANDROID.saveBegin) { await androidSave(blob, name); toast(`Saved to Downloads: ${name}`); }
+    else { const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = name; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 60000); toast(`Saved ${name}`); }
+  } catch (err) { toast("Could not save: " + (err && err.message || err)); }
+}
+function exportMarks(title, list, notes) {
+  const base = title.replace(/[\\/:*?"<>|]+/g, " ").trim() + " - markers";
+  sheet([
+    { label: "Save as CSV (spreadsheet) in Downloads", run: () => saveTextFile(marksCsv(list.map(m => [title, m])), base + ".csv", "text/csv") },
+    { label: "Save as TXT in Downloads", run: () => saveTextFile(marksText(title, list, notes), base + ".txt", "text/plain") },
+    { label: "Share as text", run: () => deliverShare(new Blob([marksText(title, list, notes)], { type: "text/plain" }), base + ".txt") },
+  ], `Export ${list.length} marker${list.length === 1 ? "" : "s"}`);
+}
+$("#mkCopy").onclick = async () => { const list = lib.marks[st.id] || []; toast(await copyText(marksText(songMk.title(), list, lib.notes[st.id] || "")) ? "Markers and notes copied" : "Could not copy"); };
+$("#mkExport").onclick = () => exportMarks(songMk.title(), lib.marks[st.id] || [], lib.notes[st.id] || "");
+function exportAllMarks() {
+  const rows = [];
+  for (const [id, list] of Object.entries(lib.marks)) for (const m of list) rows.push([songs[id] ? songs[id].name : id.replace(/^[a-z]+[:|]/, ""), m]);
+  if (!rows.length) { toast("No markers yet"); return; }
+  saveTextFile(marksCsv(rows), "AVB Music Player - all markers.csv", "text/csv");
+}
+// the snack bar: a short message with one action (Add note, Undo)
+let snackTimer = 0;
+function snack(text, action, run) {
+  const el = $("#snack"); $("#snackText").textContent = text;
+  $("#snackBtn").textContent = action || ""; $("#snackBtn").hidden = !action;
+  $("#snackBtn").onclick = () => { el.hidden = true; run && run(); };
+  el.hidden = false; clearTimeout(snackTimer); snackTimer = setTimeout(() => el.hidden = true, 4500);
+}
 $("#half").onclick = () => { st.bpmScale = Math.max(0.25, st.bpmScale / 2); refreshMusic(); refreshSave(); };
 $("#dbl").onclick = () => { st.bpmScale = Math.min(4, st.bpmScale * 2); refreshMusic(); refreshSave(); };
 // the change happens by itself: when the finger lifts off the slider, or shortly after the last tap on − / +
@@ -1717,12 +2069,12 @@ $("#lyrSave").onclick = () => {
   if (t.trim()) showLyrics(t, "mine", st.id); else findLyrics(st.id, { name: st.name, blob: new Blob() });
 };
 $("#notes").oninput = () => { if (st.id) { lib.notes[st.id] = $("#notes").value; save("notes"); } };
-$("#newList").onclick = () => newPlaylist();
+$("#files3").onchange = e => { addFiles([...e.target.files], true); e.target.value = ""; };
 $("#recBtn").onclick = recordStart; $("#recPause").onclick = recordPause;
 $("#recStop").onclick = () => recordStop(true);
 $("#recCancel").onclick = async () => { const was = rec && rec.paused; if (rec && !was) recordPause(); if (await confirmBox("Throw this take away?", "It has not been saved.", "Discard", "Keep recording")) recordStop(false); else if (rec && !was) recordPause(); };
 $("#filter").oninput = renderList;
-window.addEventListener("resize", () => { drawWave(); drawLoud(); drawEq(); });
+window.addEventListener("resize", () => { drawWave(); drawLoud(); drawEq(); drawRecorder(); drawMeter(); });
 document.addEventListener("keydown", e => { if (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA") return; if (e.code === "Space") { e.preventDefault(); togglePlay(); } if (e.key === "ArrowLeft") seek(st.pos - 5); if (e.key === "ArrowRight") seek(st.pos + 5); });
 
 // clock
@@ -1730,13 +2082,11 @@ let lastDraw = 0;
 function tick(now) {
   if (rec && now - lastDraw > 33) {
     lastDraw = now;
-    drawRecording();
-    const lv = rec.paused ? 0 : (rec.level || 0);
-    $("#recLevel").style.width = Math.min(100, Math.max(0, (20 * Math.log10(lv + 1e-6) + 48) / 48 * 100)) + "%";
-    $("#recPeak").textContent = "peak " + (20 * Math.log10(rec.peak + 1e-6)).toFixed(1) + " dB" + (rec.clip ? " · CLIP" : "");
-    $("#recTime").textContent = fmtTime(rec.frames / rec.sr);
+    drawRecorder(); drawMeter();
+    $("#recPeak").innerHTML = rec.peak > 0 ? `<b>${(20 * Math.log10(rec.peak + 1e-9)).toFixed(1)}</b> dBFS peak${rec.clip ? ` <span class="clip">CLIP</span>` : ""}` : "—";
+    $("#recTime").textContent = clock(recordedNow(rec));
   } else if (st.buffer && st.playing && now - lastDraw > 40) {
-    lastDraw = now; $("#tnow").textContent = fmtTime(st.pos); lyricsTick(st.pos); if ($("#tab-eq").classList.contains("on")) drawEq(); $("#seek").value = Math.round(st.pos / st.duration * 1000); drawWave();
+    lastDraw = now; $("#tnow").textContent = fmtTime(st.pos); $("#miniProg").style.width = (st.pos / st.duration * 100) + "%"; lyricsTick(st.pos); if ($("#tab-eq").classList.contains("on")) drawEq(); $("#seek").value = Math.round(st.pos / st.duration * 1000); drawWave();
     if ($("#tab-loud").classList.contains("on")) drawLoud();
     const i = st.sections.findIndex(s => st.pos >= s.start && st.pos < s.end);
     document.querySelectorAll(".sec").forEach((d, k) => d.classList.toggle("now", k === i));
@@ -1847,7 +2197,10 @@ else recordingIds = Object.values(songs).filter(x => x.kind === "recording").sor
 if (ANDROID && ANDROID.askDefault) { $("#makeDefault").hidden = false; $("#makeDefault").onclick = () => ANDROID.askDefault(); }
 window.avbBack = () => {
   if ($("#sheet").classList.contains("on")) { $("#sheet").classList.remove("on"); return true; }
+  if (!$("#mkEdit").hidden) { closeMarkEdit(); return true; }
+  if (!$("#mkPop").hidden) { hideMarkPop(); return true; }
   if (sel.where) { selEnd(); return true; }
+  if (!$("#np").hidden && !rec) { closeNP(); return true; }
   if (!$("#installHint").hidden) { $("#installHint").hidden = true; return true; }
   if ($("#page-recs").classList.contains("on")) { showPage("music"); return true; }
   return false;
@@ -1868,4 +2221,4 @@ if (demo && ["localhost", "127.0.0.1"].includes(location.hostname)) {
   const f = new File([blob], decodeURIComponent(demo.split("/").pop()), { type: blob.type, lastModified: 1 });
   await addFiles([f]);
 }
-window.avb = { st, lib, shareSong, loadSong, applyChange, saveCopy, seek, play, pause, markButton, loopRange };
+window.avb = { st, lib, songMk, recMk, addMarker, editMarker, marksCsv, marksText, shareSong, loadSong, applyChange, saveCopy, seek, play, pause, markButton, loopRange };
