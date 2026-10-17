@@ -890,7 +890,10 @@ function updateSelbar() {
   const n = sel.ids.size, all = shownIds[sel.where].length;
   $("#selCount").textContent = `${n} selected`;
   $("#selAll").textContent = n && n === all ? "None" : "All";
-  $("#selDel").disabled = !n; $("#selMore").disabled = !n;
+  $("#selDel").disabled = !n; $("#selMore").disabled = !n; $("#selRemove").disabled = !n;
+  const webRecs = !ANDROID && sel.where === "recs";              // in the browser a recording lives only in the app
+  $("#selRemove").hidden = webRecs;
+  $("#selDel").textContent = ANDROID ? "Delete from phone" : "Delete";
 }
 $("#selMusic").onclick = () => sel.where === "music" ? selEnd() : selStart("music");
 $("#selRecs").onclick = () => sel.where === "recs" ? selEnd() : selStart("recs");
@@ -901,6 +904,20 @@ $("#selAll").onclick = () => {
   sel.where === "music" ? renderList() : renderRecList();
 };
 $("#selDel").onclick = () => deleteMany([...sel.ids]);
+$("#selRemove").onclick = () => removeMany([...sel.ids]);
+// "Remove from player": phone files are only hidden (they stay on the phone, Undo brings them back);
+// a copy kept inside the app (opened with +) is let go, the original file is untouched
+async function removeMany(ids) {
+  ids = ids.filter(id => songs[id]); if (!ids.length) return;
+  const n = ids.length, recs = ids.every(isRecording);
+  const word = recs ? (n === 1 ? "recording" : "recordings") : (n === 1 ? "song" : "songs");
+  const hiddenOnly = ids.every(id => songs[id].url);
+  for (const id of ids) await removeFromApp(id, true);
+  selEnd(true); renderList(); renderRecList();
+  snack(`${n} ${word} removed from the player. The files are still on your phone.`, hiddenOnly ? "Undo" : "", () => {
+    lib.hidden = lib.hidden.filter(x => !ids.includes(x)); save("hidden"); renderList(); renderRecList();
+  });
+}
 $("#selMore").onclick = () => {
   const ids = [...sel.ids]; if (!ids.length) return;
   const n = ids.length, word = sel.where === "recs" ? (n === 1 ? "recording" : "recordings") : (n === 1 ? "song" : "songs");
@@ -918,9 +935,7 @@ $("#selMore").onclick = () => {
       save("queue"); save("index"); selEnd();
     } });
     if (view === "list") items.push({ label: "Remove from this playlist", run: () => { const p = lib.playlists.find(p => p.name === listName); p.items = p.items.filter(x => !ids.includes(x)); save("playlists"); selEnd(); } });
-    items.push({ label: `Remove from AVB Music Player (the files stay on your phone)`, run: async () => { for (const id of ids) await removeFromApp(id, true); selEnd(); toast(`${n} removed from AVB Music Player. The files are still on your phone.`); } });
   }
-  items.push({ label: ANDROID ? `Delete ${n} ${word} from phone completely` : `Delete ${n} ${word}`, danger: true, run: () => deleteMany(ids) });
   sheet(items, `${n} ${word} selected`);
 };
 async function deleteMany(ids) {
@@ -983,7 +998,7 @@ function songMenu(id) {
   items.unshift({ label: "Share", run: () => shareSong(id) });
   const rec = isRecording(id);
   const twin = phoneTwin(id);                         // the phone file behind an app copy, when it can be found
-  if (!rec) items.push({ label: "Remove from AVB Music Player (the file stays on your phone)", run: () => removeFromApp(id) });
+  if (!rec || (ANDROID && songs[id] && songs[id].url)) items.push({ label: "Remove from player (the file stays on your phone)", run: () => removeFromApp(id) });
   if (ANDROID && (id.startsWith("m:") || id.startsWith("r:") || twin))
     items.push({ label: rec ? "Delete this recording from the phone" : "Delete from phone completely", danger: true, run: () => deleteFromPhone(twin || id, id) });
   else if (rec) items.push({ label: "Delete this recording", danger: true, run: async () => {
@@ -1620,7 +1635,7 @@ function selectTool(name) {
 }
 function renderRecList() {
   const el = $("#recList");
-  const ids = recordingIds.filter(id => songs[id]);
+  const ids = recordingIds.filter(id => songs[id] && !lib.hidden.includes(id));
   const when = t => { if (!t) return ""; const d = new Date(t); return d.toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" }) + ", " + d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" }); };
   const shown = recAll || sel.where === "recs" ? ids : ids.slice(0, 5);
   $("#recSeeAll").hidden = ids.length <= 5 || recAll;
@@ -1748,6 +1763,7 @@ $("#settingsBtn").onclick = () => {
     { label: `Recording format: ${$("#recFmtText").textContent}`, run: chooseFormat },
   ];
   items.push({ label: "Export all markers and notes (CSV)", run: exportAllMarks });
+  if (lib.hidden.length) items.push({ label: `Show removed songs again (${lib.hidden.length})`, run: () => { const n = lib.hidden.length; lib.hidden = []; save("hidden"); renderList(); renderRecList(); toast(`${n} back in the player`); } });
   if (ANDROID && ANDROID.askDefault) items.push({ label: "Make AVB Music Player your default player", run: () => ANDROID.askDefault() });
   if (!ANDROID) items.push({ label: "Add music from your files", run: () => $("#files2").click() });
   if (!ANDROID && !$("#installBtn").hidden) items.push({ label: "Install the app on this phone", run: () => $("#installBtn").click() });

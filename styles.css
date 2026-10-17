@@ -523,3 +523,13 @@ body.drill #tab-songs .libhead h2 { margin-top: 10px; }
 #libName { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .libback { border: 0; background: rgba(255,255,255,.08); color: #fff; width: 36px; height: 36px; border-radius: 50%; font-size: 26px; line-height: 1; padding: 0 0 4px; margin-right: 6px; flex: none; }
 #recInfo.warn { color: #fff; background: rgba(220,38,38,.85); border-radius: 12px; padding: 8px 12px; font-weight: 700; font-size: 13.5px; line-height: 1.35; }
+/* selection bar: two rows, the two removals spelled out */
+.selbar { flex-direction: column; align-items: stretch; gap: 8px; }
+.selrow { display: flex; align-items: center; gap: 8px; }
+.selrow #selCount { flex: 1; font-weight: 700; white-space: nowrap; }
+.selrow.two button { flex: 1; height: 46px; border-radius: 12px; font-weight: 800; font-size: 14.5px; }
+.selrow.two .danger { background: #B91C1C; border: 0; color: #fff; }
+.selrow button:disabled { opacity: .4; }
+body.selecting { padding-bottom: 140px; }
+/* the header is solid: content never shows through it */
+.top { background: rgba(11,10,31,.97); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); }

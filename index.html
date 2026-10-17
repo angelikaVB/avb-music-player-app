@@ -288,11 +288,16 @@
 <div class="mkpop" id="mkPop" hidden></div>
 <div class="mkedit" id="mkEdit" hidden></div>
 <div class="selbar" id="selbar" hidden>
-  <button class="icon" id="selClose" title="Done">✕</button>
-  <span id="selCount">0 selected</span>
-  <button class="ghost" id="selAll">All</button>
-  <button class="ghost" id="selMore">More</button>
-  <button class="danger" id="selDel">Delete</button>
+  <div class="selrow">
+    <button class="icon" id="selClose" title="Done">✕</button>
+    <span id="selCount">0 selected</span>
+    <button class="ghost" id="selAll">All</button>
+    <button class="ghost" id="selMore">More</button>
+  </div>
+  <div class="selrow two">
+    <button class="ghost" id="selRemove">Remove from player</button>
+    <button class="danger" id="selDel">Delete from phone</button>
+  </div>
 </div>
 <div class="sheet" id="sheet"></div>
 <script type="module" src="app.js"></script>
