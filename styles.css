@@ -575,3 +575,7 @@ body.selecting { padding-bottom: 140px; }
 body.hasmini { padding-bottom: calc(72px + env(safe-area-inset-bottom)); }
 body.hasmini .toast { bottom: calc(80px + env(safe-area-inset-bottom)); }
 body.hasmini .snack { bottom: calc(76px + env(safe-area-inset-bottom)); }
+/* the waveform on the home screen */
+.homewave { margin: 4px 0 14px; }
+.homewave #wave { height: 132px; border-radius: 14px; }
+.waveslot { min-height: 10px; }

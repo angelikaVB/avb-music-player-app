@@ -26,6 +26,7 @@
 
 <!-- MUSIC: the library is the home screen -->
 <main id="page-music" class="page on">
+  <section class="homewave" id="homeWave" hidden></section>
   <div class="searchbar"><input type="search" id="filter" placeholder="Search songs, artists, albums"></div>
 
   <section class="hero" id="hero" hidden>
@@ -136,7 +137,7 @@
     </div>
 
     <section class="wavecard studio-only">
-      <canvas id="wave"></canvas>
+      <div class="waveslot" id="npWaveSlot"><canvas id="wave"></canvas></div>
       <div class="tgrid">
         <button class="mark a" id="markA" title="Set A at the playhead">A</button>
         <button class="mark b" id="markB" title="Set B at the playhead">B</button>

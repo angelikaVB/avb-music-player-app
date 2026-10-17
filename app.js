@@ -132,7 +132,7 @@ async function loadSong(id, autoplay = true) {
   analyse();
   if (st.speed !== 1 || st.semis) applyChange();            // the sliders carry over to the next song
   if (autoplay) play();
-  updateMini();
+  updateMini(); placeWave();
   if ("mediaSession" in navigator) navigator.mediaSession.metadata = new MediaMetadata({ title: $("#title").textContent, artist: "AVB Music Player" });
   renderList();
 }
@@ -233,7 +233,8 @@ const ANDROID = window.AVBAndroid || null;
 function play() { if (!st.buffer) return; audio().then(() => { send({ cmd: "play" }); st.playing = true; $("#play").textContent = "❚❚"; setMiniPlay(true); if (ANDROID) ANDROID.playing(true); if (navigator.mediaSession) navigator.mediaSession.playbackState = "playing"; }); }
 function pause() { send({ cmd: "pause" }); st.playing = false; $("#play").textContent = "▶"; setMiniPlay(false); if (ANDROID) ANDROID.playing(false); if (navigator.mediaSession) navigator.mediaSession.playbackState = "paused"; }
 function togglePlay() { if (!st.buffer) { if (lib.queue.length) playIndex(Math.max(0, lib.index), true); else $("#files2").click(); return; } st.playing ? pause() : play(); }
-function seek(t) { if (!st.buffer) return; t = Math.max(0, Math.min(st.duration, t)); st.pos = t; send({ cmd: "seek", frame: Math.round(t * st.sr) }); drawWave(); }
+function seek(t) { if (!st.buffer) return; t = Math.max(0, Math.min(st.duration, t)); st.pos = t; send({ cmd: "seek", frame: Math.round(t * st.sr) }); drawWave();
+  $("#miniProg").style.width = (t / st.duration * 100) + "%"; $("#tnow").textContent = fmtTime(t); $("#seek").value = Math.round(t / st.duration * 1000); }
 function onEnded() {
   st.playing = false; $("#play").textContent = "▶"; setMiniPlay(false); if (ANDROID) ANDROID.playing(false);
   if (lib.repeat === "one") { seek(0); play(); } else if (!isRecording(st.id)) nextTrack(true);
@@ -1879,19 +1880,28 @@ function setMiniPlay(on) {
   $("#mini").classList.toggle("playing", !!on);
 }
 let npMode = "listen";
+// one waveform (with pinch zoom, seek, A/B, flags): on the home screen, or in Studio while that is open
+function placeWave() {
+  const inStudio = !$("#np").hidden && npMode === "studio";
+  const slot = inStudio ? $("#npWaveSlot") : $("#homeWave");
+  if (wave.parentElement !== slot) slot.appendChild(wave);
+  $("#homeWave").hidden = !st.id || !songs[st.id] || inStudio;
+  requestAnimationFrame(drawWave);
+}
 function setNpMode(m) {
   npMode = m;
   $("#np").classList.toggle("studio", m === "studio");
+  placeWave();
   $("#npMode").querySelectorAll("button").forEach(b => b.classList.toggle("on", b.dataset.mode === m));
   requestAnimationFrame(() => { drawWave(); if ($("#tab-eq").classList.contains("on")) drawEq(); if ($("#tab-loud").classList.contains("on")) drawLoud(); });
 }
 function openNP(mode) {
   if (mode) setNpMode(mode);
-  $("#np").hidden = false; document.body.classList.add("npopen");
+  $("#np").hidden = false; document.body.classList.add("npopen"); placeWave();
   $("#npScroll").scrollTop = 0;
   updateMini(); requestAnimationFrame(() => { drawWave(); if (st.buffer && st.duration) { $("#tnow").textContent = fmtTime(st.pos); $("#seek").value = Math.round(st.pos / st.duration * 1000); } });
 }
-function closeNP() { $("#np").hidden = true; document.body.classList.remove("npopen"); updateMini(); }
+function closeNP() { $("#np").hidden = true; document.body.classList.remove("npopen"); updateMini(); placeWave(); }
 $("#npClose").onclick = closeNP;
 $("#npMode").querySelectorAll("button").forEach(b => b.onclick = () => setNpMode(b.dataset.mode));
 $("#mini").onclick = e => { if (e.target.closest(".minibtn")) return; openNP(); };
