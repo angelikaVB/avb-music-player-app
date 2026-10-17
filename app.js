@@ -821,7 +821,7 @@ function renderList() {
   const el = $("#list");
   el.innerHTML = ids.map((id, i) => { const s = songs[id]; return `<li data-id="${id}" class="${id === st.id ? "now" : ""}"><div class="num">${id === st.id ? "♪" : i + 1}</div><div class="n"><div class="name">${lib.favorites.includes(id) ? "♥ " : ""}${s.name.replace(/\.[^.]+$/, "")}</div><div class="sub">${subLine(s)}</div></div>${rowEnd(id, "music")}</li>`; }).join("")
     || `<li class="muted">${emptyText()}</li>`;
-  shownIds.music = ids;
+  shownIds.music = ids; el.style.setProperty("--numw", String(ids.length).length + "ch");
   el.querySelectorAll("li[data-id]").forEach(li => {
     li.querySelector(".n").onclick = () => { if (pickRow(li, "music")) return; if (view === "queue") playIndex(lib.queue.indexOf(li.dataset.id)); else { lib.queue = ids.slice(); save("queue"); playIndex(ids.indexOf(li.dataset.id)); } };
     wireRow(li, "music");
@@ -1642,7 +1642,7 @@ function renderRecList() {
   el.innerHTML = shown.map((id, i) => { const s = songs[id]; return `<li data-id="${id}" class="${id === st.id ? "now" : ""} ${id === freshTake ? "fresh" : ""}"><div class="num">${id === st.id ? "♪" : i + 1}</div><div class="n"><div class="name">${esc(s.name.replace(/\.[^.]+$/, ""))}</div><div class="sub">${[when(s.added), s.duration ? clock(s.duration) : "", s.size > 0 ? (s.size / 1e6).toFixed(1) + " MB" : ""].filter(Boolean).join(" · ")}</div></div>${sel.where === "recs" ? "" : `<button class="rowplay" title="Play">▶</button>`}${rowEnd(id, "recs")}</li>`; }).join("")
     || `<li class="muted">No recordings yet: tap ● Record.</li>`;
   $("#recsInfo").textContent = ids.length ? (ANDROID ? `${ids.length} recording${ids.length === 1 ? "" : "s"} · Recordings/AVB Music Player on your phone` : `${ids.length} recording${ids.length === 1 ? "" : "s"}`) : "";
-  shownIds.recs = ids;
+  shownIds.recs = ids; el.style.setProperty("--numw", String(shown.length).length + "ch");
   el.querySelectorAll("li[data-id]").forEach(li => {
     li.querySelector(".n").onclick = () => { if (pickRow(li, "recs")) return; loadSong(li.dataset.id, false); };
     const pb = li.querySelector(".rowplay"); if (pb) pb.onclick = () => { if (st.id === li.dataset.id && st.buffer) togglePlay(); else loadSong(li.dataset.id, true); };

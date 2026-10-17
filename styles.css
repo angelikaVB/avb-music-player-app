@@ -540,3 +540,9 @@ body.selecting { padding-bottom: 140px; }
 .list li .name { font-size: 15px; }
 .list li .sub { font-size: 12.5px; margin-top: 0; }
 .list li.grouprow { padding: 12px 6px; }
+/* lists start at the page margin: no indent before the numbers */
+.list li { margin: 0; padding: 9px 0; gap: 10px; border-radius: 0; }
+.list li .num { width: var(--numw, 2ch); text-align: left; font-size: 13.5px; }
+.list li.now { background: none; }
+.list li.now .num { font-size: 14px; }
+.list li .more { width: 30px; margin-right: -6px; }
