@@ -980,6 +980,35 @@ async function shareMany(ids) {
   } else toast("This browser cannot share several files at once");
   selEnd();
 }
+// swipe a menu (or the marker editor) down to close it; a short drag springs back
+function swipeToClose(el, close) {
+  let y0 = 0, t0 = 0, dy = 0, dragging = false, startedAtTop = false;
+  el.addEventListener("touchstart", e => {
+    if (e.touches.length !== 1) return;
+    y0 = e.touches[0].clientY; t0 = performance.now(); dy = 0; dragging = false;
+    startedAtTop = el.scrollTop <= 0 && !e.target.closest("textarea");   // typing in a note never drags
+  }, { passive: true });
+  el.addEventListener("touchmove", e => {
+    if (!startedAtTop) return;
+    dy = e.touches[0].clientY - y0;
+    if (!dragging && dy > 8) { dragging = true; el.style.transition = "none"; }
+    if (!dragging) return;
+    e.preventDefault();
+    el.style.transform = `translateY(${Math.max(0, dy)}px)`;
+  }, { passive: false });
+  el.addEventListener("touchend", () => {
+    if (!dragging) return;
+    dragging = false;
+    const fast = dy / Math.max(1, performance.now() - t0) > 0.6;      // a flick
+    el.style.transition = "transform .18s ease-out";
+    if (dy > 80 || fast) {
+      el.style.transform = "translateY(110%)";
+      setTimeout(() => { el.style.transform = ""; el.style.transition = ""; close(); }, 180);
+    } else { el.style.transform = ""; setTimeout(() => el.style.transition = "", 200); }
+  });
+}
+swipeToClose($("#sheet"), () => $("#sheet").classList.remove("on"));
+swipeToClose($("#mkEdit"), () => closeMarkEdit());
 // a tap outside a menu closes it (and does nothing else)
 $("#shade").addEventListener("click", e => { e.preventDefault(); $("#sheet").classList.remove("on"); });
 function sheet(items, title) {
