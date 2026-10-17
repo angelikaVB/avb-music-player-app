@@ -743,3 +743,6 @@ body.hasmini .snack { bottom: calc(76px + env(safe-area-inset-bottom)); }
 .htbtn { width: 38px; height: 38px; border-radius: 50%; border: 0; background: rgba(255,255,255,.07); color: #fff; font-size: 18px; display: flex; align-items: center; justify-content: center; padding: 0; flex: none; }
 .htbtn.fav svg { width: 20px; height: 20px; fill: none; stroke: #FF1744; stroke-width: 1.9; }
 .htbtn.fav.on svg { fill: #FF1744; filter: drop-shadow(0 0 6px rgba(255,23,68,.5)); }
+/* Tools row: fits large phone fonts */
+.tgrid > * { font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#speedBtn.on { border-color: #FFE600; color: #FFE600; }

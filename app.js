@@ -332,7 +332,7 @@ function effBpm() { const f = fixOf(); return f.bpm || ((st.music && st.music.bp
 function effKey() { const f = fixOf(); return f.key || (st.music && st.music.key) || ""; }
 function refreshMusic() {
   const m = st.music || {}; const sp = +$("#speed").value; const fx = fixOf();
-  $("#speedval").textContent = sp + "%"; $("#speedQuick").value = String(sp / 100);
+  $("#speedval").textContent = sp + "%"; $("#speedBtn").textContent = `${+(sp / 100).toFixed(2)}×`; $("#speedBtn").classList.toggle("on", sp !== 100);
   { const b0 = effBpm(); $("#speedBpm").textContent = (b0 ? `${(b0 * sp / 100).toFixed(1)} BPM` : "— BPM") + (sp !== 100 ? ` · ${sp}%` : ""); }
   $("#speedBpm").classList.toggle("moved", sp !== 100);
   fillHomeSub();              // the song's own tempo teal, a changed one yellow
@@ -2358,7 +2358,12 @@ $("#speedBpm").onclick = async () => {
   $("#bpmTarget").value = want; $("#bpmTarget").dispatchEvent(new Event("change"));
 };
 $("#speed").onchange = () => changeSoon(50);
-$("#speedQuick").onchange = e => { $("#speed").value = Math.round(+e.target.value * 100); applyChange(); refreshMusic(); refreshSave(); };
+// speed: a button that opens the list (a dropdown drew no text in the phone's web view)
+$("#speedBtn").onclick = () => {
+  const cur = +$("#speed").value / 100;
+  sheet([0.5, 0.75, 0.9, 1, 1.1, 1.25, 1.5].map(v => ({ label: `${v}×${v === 1 ? "  (original)" : ""}${Math.abs(v - cur) < .001 ? "  ✓" : ""}`,
+    run: () => { $("#speed").value = Math.round(v * 100); applyChange(); refreshMusic(); refreshSave(); } })), "Speed");
+};
 $("#bpmTarget").onchange = e => { const bpm = effBpm(); if (bpm) { $("#speed").value = Math.max(50, Math.min(150, Math.round(+e.target.value / bpm * 100))); refreshMusic(); changeSoon(50); } };
 $("#keyDown").onclick = () => { st.semis = Math.max(-12, st.semis - 1); refreshMusic(); changeSoon(); };
 $("#keyUp").onclick = () => { st.semis = Math.min(12, st.semis + 1); refreshMusic(); changeSoon(); };
