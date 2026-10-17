@@ -1141,7 +1141,7 @@ function songMenu(id) {
   if (ANDROID && (id.startsWith("m:") || id.startsWith("r:") || twin))
     items.push({ label: rec ? "Delete this recording from the phone" : "Delete from phone completely", danger: true, run: () => deleteFromPhone(twin || id, id) });
   else if (rec) items.push({ label: "Delete this recording", danger: true, run: async () => {
-    if (await confirmBox("Delete this recording?", `“${songs[id].name}” is erased. This cannot be undone.`, "Delete")) removeFromApp(id, true);
+    if (await confirmBox("Delete this recording?", `“${songs[id].name}” is erased. This cannot be undone.`, "Delete")) { erasing = true; await removeFromApp(id, true); erasing = false; }
   } });
   const s0 = songs[id];
   sheet(items, s0 ? s0.name.replace(/\.[^.]+$/, "") : "");
@@ -1184,6 +1184,10 @@ function forget(id) {
   lib.queue = lib.queue.filter(x => x !== id); lib.favorites = lib.favorites.filter(x => x !== id); lib.recent = lib.recent.filter(x => x !== id);
   lib.playlists.forEach(p => p.items = p.items.filter(x => x !== id)); delete lib.notes[id]; delete lib.lyrics[id]; if (lib.renamed[id]) { delete lib.renamed[id]; save("renamed"); }
   if (erasing && lib.marks[id]) { delete lib.marks[id]; save("marks"); }      // kept when only removed from the app
+  if (erasing) {                                    // deleted for good: its tapped tempo / key and "removed" mark go too
+    if (lib.fix[id]) { delete lib.fix[id]; save("fix"); }
+    if (lib.hidden.includes(id)) { lib.hidden = lib.hidden.filter(x => x !== id); save("hidden"); }
+  }
   lib.index = st.id && lib.queue.includes(st.id) ? lib.queue.indexOf(st.id) : -1;
   for (const k of ["queue", "index", "favorites", "recent", "playlists", "notes", "lyrics"]) save(k);
   if (st.id === id) { pause(); send({ cmd: "unload" }); st.buffer = null; st.id = null; st.peaks = null; mediaReport(); $("#title").textContent = "No song loaded"; $("#badges").innerHTML = ""; drawWave(); closeNP(); }

@@ -1,7 +1,7 @@
 {
- "code": 69,
- "name": "5.9",
+ "code": 70,
+ "name": "6.0",
  "url": "https://angelikavb.github.io/avb-music-player-app/AVB-Player.apk",
- "sha256": "288264eb4aa740f04f18638835977c0ceab2720ef2aabe2708d80ce9898d744b",
- "notes": "Sort the song list"
+ "sha256": "a34598bda332c9c72ec67a53d720590cb5c37cfdb035092f69efc94b4b0ed938",
+ "notes": "A deleted song leaves nothing behind in the app"
 }
