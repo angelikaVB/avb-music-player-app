@@ -762,3 +762,5 @@ body.hasmini .snack { bottom: calc(76px + env(safe-area-inset-bottom)); }
 .homewave .htime b { color: #fff; font-weight: 700; }
 
 #eqDraw.on { background: rgba(255,138,30,.25); border-color: #FF8A1E; color: #FFB27A; }
+/* no + in the header: adding a file is in Settings */
+.top .addbtn { display: none !important; }

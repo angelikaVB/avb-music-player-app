@@ -1947,7 +1947,7 @@ $("#settingsBtn").onclick = () => {
   items.push({ label: "Export all markers and notes (CSV)", run: exportAllMarks });
   if (lib.hidden.length) items.push({ label: `Show removed songs again (${lib.hidden.length})`, run: () => { const n = lib.hidden.length; lib.hidden = []; save("hidden"); renderList(); renderRecList(); toast(`${n} back in the player`); } });
   if (ANDROID && ANDROID.askDefault) items.push({ label: "Make AVB Music Player your default player", run: () => ANDROID.askDefault() });
-  if (!ANDROID) items.push({ label: "Add music from your files", run: () => $("#files2").click() });
+  items.push({ label: ANDROID ? "Add a song from your files (Drive, WhatsApp…)" : "Add music from your files", run: () => $("#files2").click() });
   if (!ANDROID && !$("#installBtn").hidden) items.push({ label: "Install the app on this phone", run: () => $("#installBtn").click() });
   sheet(items, "Settings");
 };
