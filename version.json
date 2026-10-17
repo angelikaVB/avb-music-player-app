@@ -1,7 +1,7 @@
 {
- "code": 75,
- "name": "6.5",
+ "code": 76,
+ "name": "6.6",
  "url": "https://angelikavb.github.io/avb-music-player-app/AVB-Player.apk",
- "sha256": "12c7b5e71f7099d998d09e7654c4ac946bbf7cb958000803f8b878fdc6a3d17d",
- "notes": "Save all markers and notes as one spreadsheet"
+ "sha256": "0b82d31a8db233613a9ad4742a6531829028dd60c8b8b7118cb7f0cf326db149",
+ "notes": "Add AVB Player to the Home screen"
 }
