@@ -365,7 +365,7 @@ function fillStats() {
   const f = (v, d = 1, u = "") => v === undefined || v === null || v <= -100 ? "—" : v.toFixed(d) + u;
   $("#stats").innerHTML = stat("DURATION", st.buffer ? fmtTime(st.duration) : "—") + stat("INTEGRATED", l ? f(l.integrated, 1, " LUFS") : "—") + stat("PEAK", f(i.peakDb, 1, " dB"))
     + stat("RMS", f(i.rmsDb, 1, " dB")) + stat("DYNAMIC RANGE", i.peakDb !== undefined ? f(i.peakDb - i.rmsDb, 1, " dB") : "—") + stat("RANGE", l && l.lra !== null ? f(l.lra, 1, " LU") : "—")
-    + stat("BARS", m.downbeats ? m.downbeats.length : "—") + stat("BEATS", m.beats ? m.beats.length : "—") + stat("SECTIONS", st.sections.length || "—")
+    + stat("BARS", m.downbeats ? m.downbeats.length : "—") + stat("BEATS", m.beats ? m.beats.length : "—")
     + (st.checks ? stat("TRUE PEAK", (st.checks.truePeakDb > -0.05 ? "⚠ " : "") + f(st.checks.truePeakDb, 1, " dBTP"))
       + stat("CLIPPING", st.checks.clipEvents ? `<a href="#" id="clipJump">⚠ ${st.checks.clipEvents} place${st.checks.clipEvents === 1 ? "" : "s"}</a>` : "none")
       + stat("STEREO", st.checks.correlation === null ? "mono" : `${st.checks.correlation >= 0 ? "+" : ""}${st.checks.correlation.toFixed(2)}${st.checks.correlation < 0.2 ? " ⚠" : ""}`) : "");
@@ -388,7 +388,9 @@ function sizeCanvas(c) { const dpr = window.devicePixelRatio || 1; const r = c.g
 const xOf = (t, w) => (t / st.duration - st.view.a) / (st.view.b - st.view.a) * w;
 const tOf = (x, w) => (st.view.a + x / w * (st.view.b - st.view.a)) * st.duration;
 // "Part A / Part B" means the analysis could not tell verse from chorus: show nothing then
-const showSections = () => st.sections.length >= 3 && !isRecording(st.id) && !st.sections.every(x => /^Part /.test(x.name));
+// The verse / chorus names were guesses from loudness and repetition, often wrong: the user
+// rightly called them made up. Not shown anywhere (the analysis still runs for tempo and key).
+const showSections = () => false;
 function drawWave() {
   const dpr = sizeCanvas(wave); const w = wave.width / dpr, h = wave.height / dpr;
   wctx.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -398,7 +400,7 @@ function drawWave() {
     wctx.fillText(st.id ? (st.loadErr || "Loading…") : "Pick a song in your library", w / 2, h / 2);
     return;
   }
-  const top = SECT_H + 4, bottom = h - RULER_H, mid = (top + bottom) / 2, amp = (bottom - top) / 2 - 2;
+  const top = showSections() ? SECT_H + 4 : 16, bottom = h - RULER_H, mid = (top + bottom) / 2, amp = (bottom - top) / 2 - 2;
   // sections
   for (const s of (showSections() ? st.sections : [])) {
     const x0 = Math.max(0, xOf(s.start, w)), x1 = Math.min(w, xOf(s.end, w));
