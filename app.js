@@ -296,6 +296,8 @@ async function applyChange() {
   st.speed = speed;
   if (!st.buffer) { $("#changeStatus").textContent = speed === 1 && !semis ? "" : "Applies to the next song you load"; return; }
   if (speed === 1 && semis === 0) {
+    // back to the original: a change still being made must not land afterwards
+    if (st.rendering) { st.rendering.terminate(); st.rendering = null; }
     const chans = channelsOf(st.buffer); send({ cmd: "swap", channels: chans, speed: 1 }); st.changed = false; $("#changeStatus").textContent = ""; refreshMusic(); refreshSave(); return;
   }
   if (st.rendering) { st.rendering.terminate(); st.rendering = null; }
