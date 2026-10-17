@@ -1,7 +1,7 @@
 {
- "code": 74,
- "name": "6.4",
+ "code": 75,
+ "name": "6.5",
  "url": "https://angelikavb.github.io/avb-music-player-app/AVB-Player.apk",
- "sha256": "56714bf164aea38692e58159ccbfe1c27a98c55cc9ad2ca20b1bdabb6f9ccd6d",
- "notes": "Open a song from Drive or another app"
+ "sha256": "12c7b5e71f7099d998d09e7654c4ac946bbf7cb958000803f8b878fdc6a3d17d",
+ "notes": "Save all markers and notes as one spreadsheet"
 }

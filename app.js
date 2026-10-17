@@ -2166,7 +2166,7 @@ if (lib.recInput && navigator.mediaDevices && navigator.mediaDevices.enumerateDe
 $("#settingsBtn").onclick = () => {
   const items = [
   ];
-  items.push({ label: "Export all markers and notes (CSV)", run: exportAllMarks });
+  items.push({ label: "Save all markers and notes (spreadsheet in Downloads)", run: exportAllMarks });
   if (ANDROID && ANDROID.updateCheck) items.push(updateInfo
     ? { label: `Update to AVB Player ${updateInfo.name}`, run: startUpdate }
     : { label: "Check for updates", run: () => { updateManual = true; ANDROID.updateCheck(); } });
@@ -2625,11 +2625,20 @@ function exportMarks(title, list, notes) {
 }
 $("#mkCopy").onclick = async () => { const list = lib.marks[st.id] || []; toast(await copyText(marksText(songMk.title(), list, lib.notes[st.id] || "")) ? "Markers and notes copied" : "Could not copy"); };
 $("#mkExport").onclick = () => exportMarks(songMk.title(), lib.marks[st.id] || [], lib.notes[st.id] || "");
+// every song's notes and markers in one spreadsheet: per song its notes first (Category "Song notes"), then its markers in time order
 function exportAllMarks() {
-  const rows = [];
-  for (const [id, list] of Object.entries(lib.marks)) for (const m of list) rows.push([songs[id] ? songs[id].name : id.replace(/^[a-z]+[:|]/, ""), m]);
-  if (!rows.length) { toast("No markers yet"); return; }
-  saveTextFile(marksCsv(rows), "AVB Player - all markers.csv", "text/csv");
+  const lines = [];
+  const ids = [...new Set([...Object.keys(lib.notes).filter(id => (lib.notes[id] || "").trim()), ...Object.keys(lib.marks).filter(id => (lib.marks[id] || []).length)])];
+  const nameOf = id => songs[id] ? songs[id].name : id.replace(/^[a-z]+[:|]/, "");
+  ids.sort((a, b) => nameOf(a).localeCompare(nameOf(b), undefined, { numeric: true, sensitivity: "base" }));
+  for (const id of ids) {
+    const note = (lib.notes[id] || "").trim();
+    if (note) lines.push([nameOf(id), "", "", "Song notes", note].map(csvCell).join(","));
+    for (const m of (lib.marks[id] || []).slice().sort((a, b) => a.t - b.t))
+      lines.push([nameOf(id), mkTime(m.t), m.t.toFixed(2), mkCatName(m), m.text || ""].map(csvCell).join(","));
+  }
+  if (!lines.length) { toast("No markers or notes yet"); return; }
+  saveTextFile("File,Time,Seconds,Category,Note\r\n" + lines.join("\r\n") + "\r\n", "AVB Player - all markers and notes.csv", "text/csv");
 }
 // the snack bar: a short message with one action (Add note, Undo)
 let snackTimer = 0;
