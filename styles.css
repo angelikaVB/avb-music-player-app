@@ -779,3 +779,11 @@ body.hasmini .snack { bottom: calc(76px + env(safe-area-inset-bottom)); }
 .top img.logo { display: block !important; width: 36px; height: 36px; border-radius: 10px; flex: none; background: none; object-fit: cover; box-shadow: 0 2px 10px rgba(157,43,255,.45); }
 #dlgText { white-space: pre-line; }
 .lyrblock.nolyr #lyrSource { text-decoration: underline dotted; cursor: pointer; }
+/* the song that is playing: glossy saturated purple in the list, like the title at the top */
+.list li.now { background: linear-gradient(90deg, rgba(157,43,255,.16), rgba(157,43,255,0) 85%); }
+.list li.now .name { color: transparent; -webkit-background-clip: text; background-clip: text; font-weight: 800;
+  background-image: linear-gradient(180deg, #F3E8FF 0%, #D8B4FE 22%, #B65CFF 48%, #9D2BFF 72%, #7A12E8 100%);
+  filter: drop-shadow(0 0 6px rgba(157,43,255,.55)); }
+.list li.now .num { color: #C084FC; text-shadow: 0 0 8px rgba(157,43,255,.7); }
+/* the playing row keeps its number (same size as the others, so it never gets cut) */
+.list li.now .num { font-size: 13.5px; overflow: visible; }

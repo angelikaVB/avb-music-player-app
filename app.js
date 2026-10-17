@@ -845,7 +845,7 @@ function renderList() {
   ids = ids.filter(id => !isRecording(id) && !String(id).startsWith("r:"));
   ids = ids.filter(id => songs[id] && ((songs[id].name + " " + (songs[id].artist || "") + " " + (songs[id].album || "")).toLowerCase().includes(filter)));
   const el = $("#list");
-  el.innerHTML = ids.map((id, i) => { const s = songs[id]; return `<li data-id="${id}" class="${id === st.id ? "now" : ""}"><div class="nf"><div class="num">${id === st.id ? "♪" : i + 1}</div><button class="fav${lib.favorites.includes(id) ? " on" : ""}" title="Favorite">${HEART}</button></div><div class="n"><div class="name">${s.name.replace(/\.[^.]+$/, "")}</div><div class="sub">${subLine(s)}</div></div>${rowEnd(id, "music")}</li>`; }).join("")
+  el.innerHTML = ids.map((id, i) => { const s = songs[id]; return `<li data-id="${id}" class="${id === st.id ? "now" : ""}"><div class="nf"><div class="num">${i + 1}</div><button class="fav${lib.favorites.includes(id) ? " on" : ""}" title="Favorite">${HEART}</button></div><div class="n"><div class="name">${s.name.replace(/\.[^.]+$/, "")}</div><div class="sub">${subLine(s)}</div></div>${rowEnd(id, "music")}</li>`; }).join("")
     || `<li class="muted">${emptyText()}</li>`;
   shownIds.music = ids; el.style.setProperty("--numw", String(ids.length).length + "ch");
   el.querySelectorAll("li[data-id]").forEach(li => {
@@ -1903,7 +1903,7 @@ function renderRecList() {
   const when = t => { if (!t) return ""; const d = new Date(t); return d.toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" }) + ", " + d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" }); };
   const shown = recAll || sel.where === "recs" ? ids : ids.slice(0, 5);
   $("#recSeeAll").hidden = ids.length <= 5 || recAll;
-  el.innerHTML = shown.map((id, i) => { const s = songs[id]; return `<li data-id="${id}" class="${id === st.id ? "now" : ""} ${id === freshTake ? "fresh" : ""}"><div class="num">${id === st.id ? "♪" : i + 1}</div><div class="n"><div class="name">${esc(s.name.replace(/\.[^.]+$/, ""))}</div><div class="sub">${[when(s.added), s.duration ? clock(s.duration) : "", s.size > 0 ? (s.size / 1e6).toFixed(1) + " MB" : ""].filter(Boolean).join(" · ")}</div></div>${sel.where === "recs" ? "" : `<button class="rowplay" title="Play">▶</button>`}${rowEnd(id, "recs")}</li>`; }).join("")
+  el.innerHTML = shown.map((id, i) => { const s = songs[id]; return `<li data-id="${id}" class="${id === st.id ? "now" : ""} ${id === freshTake ? "fresh" : ""}"><div class="num">${i + 1}</div><div class="n"><div class="name">${esc(s.name.replace(/\.[^.]+$/, ""))}</div><div class="sub">${[when(s.added), s.duration ? clock(s.duration) : "", s.size > 0 ? (s.size / 1e6).toFixed(1) + " MB" : ""].filter(Boolean).join(" · ")}</div></div>${sel.where === "recs" ? "" : `<button class="rowplay" title="Play">▶</button>`}${rowEnd(id, "recs")}</li>`; }).join("")
     || `<li class="muted">No recordings yet: tap ● Record.</li>`;
   $("#recsInfo").textContent = ids.length ? (ANDROID ? `${ids.length} recording${ids.length === 1 ? "" : "s"} · Recordings/AVB Music Player on your phone` : `${ids.length} recording${ids.length === 1 ? "" : "s"}`) : "";
   shownIds.recs = ids; el.style.setProperty("--numw", String(shown.length).length + "ch");
