@@ -1204,7 +1204,7 @@ function showLyrics(text, source, id) {
   }
   const none = !lyr.text.trim();
   $("#tab-lyrics").classList.toggle("nolyr", none);                // no lyrics: one slim line
-  $("#lyrSource").textContent = none ? (source === "searching" ? "Looking…" : "No lyrics found") : ({ mine: "Your lyrics", file: "From the file", lrclib: "From LRCLIB (online)" }[source] || "") + (none || lyr.timed ? "" : " · not timed");
+  $("#lyrSource").textContent = none ? (source === "searching" ? "Looking…" : "No lyrics found") : "";      // where they came from is not shown
   $("#lyrSync").hidden = !lyr.text.trim() || lyr.timed;            // no times yet: tap along once to time them
   $("#lyrCopy").disabled = !lyr.text.trim();
 }
