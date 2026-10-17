@@ -831,3 +831,6 @@ body.searching #homeMix, body.searching #homeTools, body.searching #homeLyrics, 
 body:not(.nolyrics) #lyrChip { display: none; }
 body.nolyrics:not(.lyrforce) #homeLyrics { display: none !important; }
 body.nolyrics.lyrforce #lyrChip { background: rgba(255,255,255,.16); color: #fff; }
+/* the search stays pinned under the header while the page scrolls (song panel, list, to the very bottom) */
+#page-music > .searchbar { position: sticky; top: var(--toph, 64px); z-index: 4; margin: 0 -16px; padding: 4px 16px 8px;
+  background: rgba(11,10,31,.97); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); }

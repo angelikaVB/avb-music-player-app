@@ -21,7 +21,7 @@ const songGet = id => new Promise((ok, no) => { const t = db.transaction("songs"
 const lib = {
   queue: await kvGet("queue", []), index: await kvGet("index", -1), favorites: await kvGet("favorites", []),
   recent: await kvGet("recent", []), playlists: await kvGet("playlists", []), notes: await kvGet("notes", {}), lyrics: await kvGet("lyrics", {}), eq: await kvGet("eq", null), lyrH: await kvGet("lyrH", 300), lyrFold: await kvGet("lyrFold", false), mkOpen: await kvGet("mkOpen", true), mkCat: await kvGet("mkCat", "idea"), recInput: await kvGet("recInput", ""), recFmt: await kvGet("recFmt", { sr: 48000, bits: 24 }), shuffle: await kvGet("shuffle", false), mono: false,
-  balance: await kvGet("balance", 0), fix: await kvGet("fix", {}), marks: await kvGet("marks", {}), hidden: await kvGet("hidden", []), sort: await kvGet("sort", "default"), mmOffered: await kvGet("mmOffered", false), renamed: await kvGet("renamed", {}),
+  balance: await kvGet("balance", 0), fix: await kvGet("fix", {}), marks: await kvGet("marks", {}), hidden: await kvGet("hidden", []), seenVersion: await kvGet("seenVersion", ""), sort: await kvGet("sort", "default"), mmOffered: await kvGet("mmOffered", false), renamed: await kvGet("renamed", {}),
   repeat: await kvGet("repeat", "off"), volume: await kvGet("volume", 1), keepVoice: await kvGet("keepVoice", true),
 };
 const save = k => kvSet(k, lib[k]);
@@ -2705,6 +2705,9 @@ $("#files3").onchange = e => { addFiles([...e.target.files], true); e.target.val
 $("#recBtn").onclick = recordStart; $("#recPause").onclick = recordPause;
 $("#recStop").onclick = () => recordStop(true);
 $("#recCancel").onclick = async () => { const was = rec && rec.paused; if (rec && !was) recordPause(); if (await confirmBox("Throw this take away?", "It has not been saved.", "Discard", "Keep recording")) recordStop(false); else if (rec && !was) recordPause(); };
+// the pinned search sits right under the header, whatever the header's height on this phone
+const setTopH = () => document.documentElement.style.setProperty("--toph", $(".top").offsetHeight + "px");
+setTopH(); window.addEventListener("resize", setTopH);
 // typing a search: the song panel steps aside so the matches show right under the box (the mini player keeps playing)
 $("#filter").oninput = () => { document.body.classList.toggle("searching", !!$("#filter").value.trim()); renderList(); };
 window.addEventListener("resize", () => { drawWave(); drawLoud(); drawEq(); drawRecorder(); drawMeter(); });
@@ -2926,3 +2929,11 @@ document.addEventListener("visibilitychange", () => {
 $("#updBtn").onclick = startUpdate;
 $("#updLater").onclick = () => { try { sessionStorage.setItem("updLater", String(updateInfo && updateInfo.code)); } catch (_) { } showUpdateBar(); };
 if (ANDROID && ANDROID.updateCheck) setTimeout(() => ANDROID.updateCheck(), 3000);
+// the first start after an update says so (Android closes the app while it installs the new version)
+if (ANDROID && ANDROID.version) {
+  const nowVer = ANDROID.version();
+  // (a version from before this was remembered: Android's own "last updated" time, within the last 10 minutes)
+  const justUpdated = lib.seenVersion ? lib.seenVersion !== nowVer : (ANDROID.updatedAgo ? (t => t >= 0 && t < 600000)(+ANDROID.updatedAgo()) : false);
+  if (nowVer && justUpdated) setTimeout(() => snack(`Updated to AVB Player ${nowVer}`, "", null), 800);
+  if (nowVer && lib.seenVersion !== nowVer) { lib.seenVersion = nowVer; save("seenVersion"); }
+}
