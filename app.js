@@ -20,7 +20,7 @@ const songGet = id => new Promise((ok, no) => { const t = db.transaction("songs"
 
 const lib = {
   queue: await kvGet("queue", []), index: await kvGet("index", -1), favorites: await kvGet("favorites", []),
-  recent: await kvGet("recent", []), playlists: await kvGet("playlists", []), notes: await kvGet("notes", {}), lyrics: await kvGet("lyrics", {}), eq: await kvGet("eq", null), mkOpen: await kvGet("mkOpen", true), mkCat: await kvGet("mkCat", "idea"), recInput: await kvGet("recInput", ""), recFmt: await kvGet("recFmt", { sr: 48000, bits: 24 }), shuffle: await kvGet("shuffle", false), mono: false,
+  recent: await kvGet("recent", []), playlists: await kvGet("playlists", []), notes: await kvGet("notes", {}), lyrics: await kvGet("lyrics", {}), eq: await kvGet("eq", null), lyrH: await kvGet("lyrH", 300), mkOpen: await kvGet("mkOpen", true), mkCat: await kvGet("mkCat", "idea"), recInput: await kvGet("recInput", ""), recFmt: await kvGet("recFmt", { sr: 48000, bits: 24 }), shuffle: await kvGet("shuffle", false), mono: false,
   balance: await kvGet("balance", 0), fix: await kvGet("fix", {}), marks: await kvGet("marks", {}), hidden: await kvGet("hidden", []),
   repeat: await kvGet("repeat", "off"), volume: await kvGet("volume", 1), keepVoice: await kvGet("keepVoice", true),
 };
@@ -1118,7 +1118,7 @@ async function deleteFromPhone(phoneId, shownId) {
   renderList(); renderRecList();
   toast(`Deleted “${s0.name}” from your phone`);
 }
-function toggleFav(id) { if (!id) return; const i = lib.favorites.indexOf(id); if (i >= 0) lib.favorites.splice(i, 1); else lib.favorites.unshift(id); save("favorites"); $("#heart").textContent = lib.favorites.includes(st.id) ? "♥" : "♡"; renderList(); }
+function toggleFav(id) { if (!id) return; const i = lib.favorites.indexOf(id); if (i >= 0) lib.favorites.splice(i, 1); else lib.favorites.unshift(id); save("favorites"); if (id === st.id) $("#hHeart").classList.toggle("on", lib.favorites.includes(id)); $("#heart").textContent = lib.favorites.includes(st.id) ? "♥" : "♡"; renderList(); }
 function newPlaylist(items = []) {
   ask("New playlist", "", `Playlist ${lib.playlists.length + 1}`, "Create").then(name => { if (!name) return; newPlaylistNamed(name, items); });
 }
@@ -1137,10 +1137,13 @@ function parseLrc(text) {
   let timed = false;
   for (const raw of text.replace(/\r/g, "").split("\n")) {
     const tags = [...raw.matchAll(/\[(\d{1,2}):(\d{1,2}(?:[.:]\d{1,3})?)\]/g)];
-    const words = raw.replace(/\[[^\]]*\]/g, "").trim();
+    const body = raw.replace(/\[[^\]]*\]/g, "");
+    // word times: "<00:12.34>word" (enhanced LRC)
+    const wt = [...body.matchAll(/<(\d{1,2}):(\d{1,2}(?:[.:]\d{1,3})?)>\s*([^<]*)/g)].map(m => ({ t: +m[1] * 60 + parseFloat(m[2].replace(":", ".")), w: m[3].trim() })).filter(x => x.w);
+    const words = body.replace(/<[^>]*>/g, "").replace(/\s+/g, " ").trim();
     if (tags.length) {
       timed = true;
-      for (const t of tags) lines.push({ t: +t[1] * 60 + parseFloat(t[2].replace(":", ".")), text: words });
+      for (const t of tags) lines.push({ t: +t[1] * 60 + parseFloat(t[2].replace(":", ".")), text: words, wt: wt.length ? wt : null });
     } else if (!/^\[(ar|ti|al|by|offset|length|re|ve):/i.test(raw)) lines.push({ t: null, text: words });
   }
   if (timed) lines.sort((a, b) => (a.t ?? 1e9) - (b.t ?? 1e9));
@@ -1150,12 +1153,14 @@ function showLyrics(text, source, id) {
   lyr = { id, text: text || "", source, ...parseLrc(text || "") };
   const el = $("#lyrics");
   if (!lyr.text.trim()) {
-    el.innerHTML = `<div class="empty">${source === "searching" ? "Looking for lyrics…" : "No lyrics found: they come from inside the file or from LRCLIB (released songs only). Tap Edit to paste them once; they stay with the song."}</div>`;
+    el.innerHTML = `<div class="empty">${source === "searching" ? "Looking for lyrics…" : "No lyrics found."}</div>`;
   } else {
-    el.innerHTML = lyr.lines.map((l, i) => l.text ? `<div class="l" data-i="${i}">${l.text.replace(/&/g, "&amp;").replace(/</g, "&lt;")}</div>` : `<div class="l gap"></div>`).join("");
+    el.innerHTML = lyr.lines.map((l, i) => l.text ? `<div class="l" data-i="${i}">${l.text.split(" ").map(w => `<span class="w">${w.replace(/&/g, "&amp;").replace(/</g, "&lt;")}</span>`).join(" ")}</div>` : `<div class="l gap"></div>`).join("");
+    lyr.wordTimes = lyricWordTimes();
     if (lyr.timed) el.querySelectorAll(".l[data-i]").forEach(d => d.onclick = () => { const t = lyr.lines[+d.dataset.i].t; if (t != null) seek(t); });
   }
   $("#lyrSource").textContent = { mine: "Your lyrics", file: "From the file", lrclib: "From LRCLIB (online)", searching: "", none: "" }[source] || "";
+  $("#lyrSync").hidden = !lyr.text.trim() || lyr.timed;            // no times yet: tap along once to time them
   $("#lyrCopy").disabled = !lyr.text.trim();
 }
 function tagTitleArtist(name) {
@@ -1193,16 +1198,80 @@ async function findLyrics(id, rec, preTags) {
   } catch (_) { if (st.id === id) showLyrics("", "none", id); }
 }
 function openLyricsTab() { /* lyrics live under the controls in Now Playing → Listen */ }
+let syncing = null;
+function syncStart() {
+  if (!st.buffer || !lyr.text.trim()) return;
+  const idx = lyr.lines.map((l, i) => l.text ? i : -1).filter(i => i >= 0);
+  if (!idx.length) return;
+  syncing = { idx, n: 0, times: [] };
+  $("#lyrSyncBar").hidden = false; $("#lyrSync").hidden = true;
+  seek(0); if (!st.playing) play();
+  syncShow();
+}
+function syncShow() {
+  const s = syncing; if (!s) return;
+  $("#lyrics").querySelectorAll(".l").forEach(d => d.classList.remove("now", "next"));
+  const i = s.idx[s.n];
+  const el = i != null && $("#lyrics").querySelector(`.l[data-i="${i}"]`);
+  if (el) { el.classList.add("next"); const box = $("#lyrics"); box.scrollTop = el.offsetTop - box.offsetTop - box.clientHeight / 3; }
+  $("#syncInfo").textContent = s.n < s.idx.length ? `Line ${s.n + 1} of ${s.idx.length}: tap Next line when it starts` : "All lines timed: tap Save";
+  $("#syncNext").disabled = s.n >= s.idx.length; $("#syncUndo").disabled = !s.n;
+}
+function syncEnd(saveIt) {
+  const s = syncing; syncing = null;
+  $("#lyrSyncBar").hidden = true;
+  if (!s) return;
+  if (saveIt && s.times.length) {
+    const lrc = lyr.lines.map((l, i) => { const k = s.idx.indexOf(i); return k >= 0 && s.times[k] != null ? `[${lrcTime(s.times[k])}]${l.text}` : l.text; }).join("\n");
+    lib.lyrics[st.id] = lrc; save("lyrics"); showLyrics(lrc, "mine", st.id); toast("Lyrics timed: the words now light up as they are sung");
+  } else showLyrics(lyr.text, lyr.source, st.id);
+}
+const lrcTime = t => `${String(Math.floor(t / 60)).padStart(2, "0")}:${(t % 60).toFixed(2).padStart(5, "0")}`;
+$("#lyrSync").onclick = syncStart;
+$("#syncNext").onclick = () => { const s = syncing; if (!s || s.n >= s.idx.length) return; s.times[s.n] = Math.max(0, st.pos - 0.1); s.n++; syncShow(); };
+$("#syncUndo").onclick = () => { const s = syncing; if (!s || !s.n) return; s.n--; s.times.length = s.n; seek(Math.max(0, (s.times[s.n - 1] ?? 0))); syncShow(); };
+$("#syncSave").onclick = () => syncEnd(true);
+$("#syncCancel").onclick = () => syncEnd(false);
+// drag the handle under the lyrics to make the box taller or shorter
+(function lyricsHandle() {
+  const h = $("#lyrHandle"), box = $("#lyrics");
+  box.style.setProperty("--lyrh", lib.lyrH + "px");
+  let y0 = 0, h0 = 0, on = false;
+  h.addEventListener("pointerdown", e => { on = true; y0 = e.clientY; h0 = box.getBoundingClientRect().height; try { h.setPointerCapture(e.pointerId); } catch (_) { } e.preventDefault(); });
+  h.addEventListener("pointermove", e => { if (!on) return; const v = Math.max(120, Math.min(window.innerHeight * 1.5, h0 + e.clientY - y0)); box.style.setProperty("--lyrh", v + "px"); lib.lyrH = Math.round(v); });
+  const up = () => { if (!on) return; on = false; save("lyrH"); };
+  h.addEventListener("pointerup", up); h.addEventListener("pointercancel", up);
+  h.addEventListener("dblclick", () => { lib.lyrH = lib.lyrH > 600 ? 300 : 2000; box.style.setProperty("--lyrh", lib.lyrH + "px"); save("lyrH"); });
+})();
 function lyricsTick(t) {
   const seen = !$("#homeLyrics").hidden || (!$("#np").hidden && npMode === "listen");   // home screen or Listen
-  if (!lyr.timed || !seen) return;
+  if (!lyr.timed || !seen || syncing) return;
   let k = -1;
   for (let i = 0; i < lyr.lines.length; i++) if (lyr.lines[i].t != null && lyr.lines[i].t <= t + 0.15) k = i;
-  if (k === lyr.now) return;
-  lyr.now = k;
-  $("#lyrics").querySelectorAll(".l.now").forEach(d => d.classList.remove("now"));
-  const cur = $("#lyrics").querySelector(`.l[data-i="${k}"]`);
-  if (cur) { cur.classList.add("now"); const box = $("#lyrics"); box.scrollTop = cur.offsetTop - box.offsetTop - box.clientHeight / 3; }
+  if (k !== lyr.now) {
+    lyr.now = k;
+    $("#lyrics").querySelectorAll(".l.now").forEach(d => { d.classList.remove("now"); d.querySelectorAll(".w.sung").forEach(w => w.classList.remove("sung")); });
+    const cur = $("#lyrics").querySelector(`.l[data-i="${k}"]`);
+    if (cur) { cur.classList.add("now"); const box = $("#lyrics"); box.scrollTop = cur.offsetTop - box.offsetTop - box.clientHeight / 3; }
+  }
+  // the words of the current line turn orange as they are sung
+  const times = lyr.wordTimes && lyr.wordTimes[k], cur = k >= 0 && $("#lyrics").querySelector(`.l[data-i="${k}"]`);
+  if (times && cur) cur.querySelectorAll(".w").forEach((w, j) => w.classList.toggle("sung", times[j] != null && times[j] <= t + 0.05));
+}
+// when each word starts: the lyrics' own word times, or the line's words spread over the
+// time to the next line (by their length, at most ~0.45 s a syllable-ish character group)
+function lyricWordTimes() {
+  if (!lyr.timed) return null;
+  return lyr.lines.map((l, i) => {
+    if (!l.text || l.t == null) return null;
+    const words = l.text.split(" ");
+    if (l.wt && l.wt.length === words.length) return l.wt.map(x => x.t);
+    const next = lyr.lines.slice(i + 1).find(x => x.t != null);
+    const span = Math.max(0.6, Math.min((next ? next.t : l.t + 6) - l.t, 0.32 * l.text.length + 0.8) * 0.92);
+    const total = words.reduce((a, w) => a + w.length + 1, 0);
+    let acc = 0;
+    return words.map(w => { const at = l.t + span * acc / total; acc += w.length + 1; return at; });
+  });
 }
 async function copyText(text) {
   try { await navigator.clipboard.writeText(text); return true; } catch (_) { }
@@ -1902,6 +1971,7 @@ $("#libBack").onclick = closeDrill;
 // under the song's name: format tag, artist, length, BPM (teal = the song's own, yellow = changed), size
 function fillHomeSub() {
   if (!st.id || !songs[st.id]) return;
+  $("#hHeart").innerHTML = HEART; $("#hHeart").classList.toggle("on", lib.favorites.includes(st.id));
   if (!st.buffer) { $("#hSub").textContent = st.loadErr || "Loading…"; return; }
   const s0 = songs[st.id], f = fmtOf(s0.name), sp = +$("#speed").value, b = effBpm();
   const kind = { WAV: "wav", MP3: "mp3", FLAC: "flac", M4A: "m4a", AAC: "m4a", MP4: "m4a", OGG: "ogg", OPUS: "ogg", AIFF: "aif", AIF: "aif", AIFC: "aif" }[f] || "other";
@@ -2007,6 +2077,9 @@ function openCut() {
 }
 function closeCut() { cutMode = false; st.a = st.b = null; st.loopOn = false; syncMarkers(); placeWave(); }
 $("#hCut").onclick = () => cutMode ? closeCut() : openCut();
+// the heart and ⋯ beside the song's name at the top
+$("#hHeart").onclick = () => { if (!st.id) return; const on = !lib.favorites.includes(st.id); toggleFav(st.id); toast(on ? "Added to Favorites" : "Removed from Favorites"); };
+$("#hMore").onclick = () => { if (st.id && songs[st.id]) songMenu(st.id); };
 // the tools, one tap from the home screen: Now Playing opens on that tool
 $("#homeTools").querySelectorAll("button").forEach(b => b.onclick = () => {
   const t = b.dataset.tool;

@@ -721,3 +721,25 @@ body.hasmini .snack { bottom: calc(76px + env(safe-area-inset-bottom)); }
 .wskip:active { transform: translateY(-40%) scale(.92); background: rgba(255,106,0,.55); }
 .wskip.back { left: 6px; } .wskip.fwd { right: 6px; }
 .tgrid { grid-template-columns: repeat(4, 1fr); }
+
+/* lyrics: words turn orange as they are sung */
+.lyrics .w { transition: color .12s; }
+.lyrics .l.now .w.sung { color: #FF7A1A; text-shadow: 0 0 10px rgba(255,122,26,.45); }
+.lyrics .l.next { color: #fff; background: rgba(255,122,26,.12); border-radius: 8px; }
+/* the box height is draggable */
+.homelyrics .lyrics, .lyrblock .lyrics { max-height: var(--lyrh, 300px); overflow-y: auto; }
+.lyrhandle { height: 22px; display: flex; align-items: center; justify-content: center; cursor: ns-resize; touch-action: none; margin-top: 2px; }
+.lyrhandle span { width: 44px; height: 5px; border-radius: 3px; background: rgba(255,255,255,.25); }
+.lyrhandle:active span { background: #FF7A1A; }
+/* Sync: tap along to time the lines */
+.syncbar { margin: 8px 0 4px; padding: 10px; border-radius: 14px; background: rgba(255,122,26,.08); box-shadow: inset 0 0 0 1px rgba(255,122,26,.35); }
+.syncbar .faint { margin: 0 0 8px; color: var(--text2); }
+.syncrow { display: flex; gap: 8px; align-items: center; }
+.syncrow .cutbtn { flex: 2; }
+.syncrow .ghost { flex: 1; height: 42px; }
+/* heart and ⋯ beside the song's name */
+.hometitle { display: flex; align-items: center; gap: 6px; }
+.hometitle .htcol { flex: 1; min-width: 0; }
+.htbtn { width: 38px; height: 38px; border-radius: 50%; border: 0; background: rgba(255,255,255,.07); color: #fff; font-size: 18px; display: flex; align-items: center; justify-content: center; padding: 0; flex: none; }
+.htbtn.fav svg { width: 20px; height: 20px; fill: none; stroke: #FF1744; stroke-width: 1.9; }
+.htbtn.fav.on svg { fill: #FF1744; filter: drop-shadow(0 0 6px rgba(255,23,68,.5)); }

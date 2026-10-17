@@ -26,7 +26,7 @@
 
 <!-- MUSIC: the library is the home screen -->
 <main id="page-music" class="page on">
-  <div class="hometitle" id="homeTitle" hidden><div class="htname" id="hTitle"></div><div class="htsub" id="hSub"></div></div>
+  <div class="hometitle" id="homeTitle" hidden><div class="htcol"><div class="htname" id="hTitle"></div><div class="htsub" id="hSub"></div></div><button class="htbtn fav" id="hHeart" title="Favorite"></button><button class="htbtn" id="hMore" title="More: share, playlist, remove, delete">⋯</button></div>
   <section class="homewave" id="homeWave" hidden></section>
   <section class="htrans" id="homeTransport" hidden>
     <button class="hbtn hcut" id="hCut" title="Cut a piece"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="#fff" stroke-width="1.9" stroke-linecap="round"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M8.6 7.6 20 18M8.6 16.4 20 6"/></svg></button>
@@ -206,8 +206,13 @@
 
     <section class="lyrblock listen-only" id="tab-lyrics">
       <div class="lyrhead"><h3>Lyrics</h3><span class="faint" id="lyrSource"></span><span class="spacer"></span>
-        <button class="textbtn" id="lyrCopy">Copy</button><button class="textbtn" id="lyrEdit">Edit</button></div>
+        <button class="textbtn" id="lyrSync" hidden>Sync</button><button class="textbtn" id="lyrCopy">Copy</button><button class="textbtn" id="lyrEdit">Edit</button></div>
+      <div class="syncbar" id="lyrSyncBar" hidden>
+        <div class="faint" id="syncInfo"></div>
+        <div class="syncrow"><button class="ghost" id="syncUndo">Back</button><button class="cutbtn keep" id="syncNext">Next line ▸</button><button class="ghost" id="syncSave">Save</button><button class="rst" id="syncCancel" title="Stop syncing">✕</button></div>
+      </div>
       <div class="lyrics" id="lyrics"></div>
+      <div class="lyrhandle" id="lyrHandle" title="Drag to make the lyrics taller or shorter"><span></span></div>
       <textarea id="lyrText" hidden placeholder="Paste or type the lyrics. Lines like [01:23.45] make them follow the song."></textarea>
       <div class="row end" id="lyrEditBtns" hidden><button class="ghost" id="lyrCancel">Cancel</button><button class="primary" id="lyrSave">Save lyrics</button></div>
     </section>
