@@ -21,7 +21,7 @@ const songGet = id => new Promise((ok, no) => { const t = db.transaction("songs"
 const lib = {
   queue: await kvGet("queue", []), index: await kvGet("index", -1), favorites: await kvGet("favorites", []),
   recent: await kvGet("recent", []), playlists: await kvGet("playlists", []), notes: await kvGet("notes", {}), lyrics: await kvGet("lyrics", {}), eq: await kvGet("eq", null), lyrH: await kvGet("lyrH", 300), lyrFold: await kvGet("lyrFold", false), mkOpen: await kvGet("mkOpen", true), mkCat: await kvGet("mkCat", "idea"), recInput: await kvGet("recInput", ""), recFmt: await kvGet("recFmt", { sr: 48000, bits: 24 }), shuffle: await kvGet("shuffle", false), mono: false,
-  balance: await kvGet("balance", 0), fix: await kvGet("fix", {}), marks: await kvGet("marks", {}), hidden: await kvGet("hidden", []), renamed: await kvGet("renamed", {}),
+  balance: await kvGet("balance", 0), fix: await kvGet("fix", {}), marks: await kvGet("marks", {}), hidden: await kvGet("hidden", []), mmOffered: await kvGet("mmOffered", false), renamed: await kvGet("renamed", {}),
   repeat: await kvGet("repeat", "off"), volume: await kvGet("volume", 1), keepVoice: await kvGet("keepVoice", true),
 };
 const save = k => kvSet(k, lib[k]);
@@ -984,7 +984,9 @@ async function deleteMany(ids) {
   const onPhone = [...new Set([...target.values()].filter(Boolean))];
   const appOnly = ids.filter(id => !target.get(id));
   const names = ids.slice(0, 4).map(id => `“${songs[id].name}”`).join(", ") + (n > 4 ? ` and ${n - 4} more` : "");
-  if (!(await confirmBox(ANDROID && onPhone.length ? `Delete ${n} ${word} from your phone completely?` : `Delete ${n} ${word}?`,
+  // one question only: Android's own when it will ask (files other apps made), else ours
+  const androidAsks = ANDROID && onPhone.length && !phoneManaged();
+  if (!androidAsks && !(await confirmBox(ANDROID && onPhone.length ? `Delete ${n} ${word} from your phone completely?` : `Delete ${n} ${word}?`,
       `${names} ${n === 1 ? "is" : "are"} erased${ANDROID && onPhone.length ? " from the phone itself, not only from this app" : ""}. This cannot be undone.`, "Delete", "Cancel"))) return;
   if (ANDROID && onPhone.length) {
     const token = ++deleteToken;
@@ -1002,6 +1004,7 @@ async function deleteMany(ids) {
   phoneIds = phoneIds.filter(x => !gone.has(x)); recordingIds = recordingIds.filter(x => !gone.has(x));
   selEnd(true); renderList(); renderRecList();
   toast(`Deleted ${n} ${word}${ANDROID && onPhone.length ? " from your phone" : ""}`);
+  if (androidAsks) offerManaged();
 }
 async function shareMany(ids) {
   if (ANDROID && ANDROID.shareMediaMany) {
@@ -1126,13 +1129,22 @@ async function removeFromApp(id, quiet) {
   if (!quiet) toast("Removed from AVB Player. The file is still on your phone.");
 }
 let erasing = false;      // forget() inside a delete: the markers go as well
+// "Media management" (Android 12+): once the user turns it on, Android deletes and renames without its question
+const phoneManaged = () => { try { return !!(ANDROID && ANDROID.canManageMedia && ANDROID.canManageMedia()); } catch (_) { return false; } };
+const canAskManaged = () => !!(ANDROID && ANDROID.askManageMedia) && !phoneManaged();
+function offerManaged() {
+  if (!canAskManaged() || lib.mmOffered) return;          // offered once; it stays in Settings
+  lib.mmOffered = true; save("mmOffered");
+  setTimeout(() => snack("Skip Android's question when you delete or rename?", "Turn on", () => ANDROID.askManageMedia()), 1200);
+}
 // deleting a file from the phone: our question first, then Android's own confirmation
 const deleteWaiters = {};
 let deleteToken = 0;
 window.avbDeleted = (token, ok) => { const f = deleteWaiters[token]; delete deleteWaiters[token]; if (f) f(!!ok); };
 async function deleteFromPhone(phoneId, shownId) {
   const s0 = songs[shownId] || songs[phoneId];
-  if (!(await confirmBox(isRecording(shownId) ? "Delete this recording from your phone?" : "Delete from your phone completely?",
+  const androidAsks = !phoneManaged();                  // Android shows its own question: ours is skipped
+  if (!androidAsks && !(await confirmBox(isRecording(shownId) ? "Delete this recording from your phone?" : "Delete from your phone completely?",
       `“${s0.name}” is erased from the phone itself, not only from this app. This cannot be undone.`, "Delete", "Cancel"))) return;
   const token = ++deleteToken;
   const done = new Promise(r => deleteWaiters[token] = r);
@@ -1147,6 +1159,7 @@ async function deleteFromPhone(phoneId, shownId) {
   phoneIds = phoneIds.filter(x => x !== phoneId && x !== shownId); recordingIds = recordingIds.filter(x => x !== phoneId && x !== shownId);
   renderList(); renderRecList();
   toast(`Deleted “${s0.name}” from your phone`);
+  if (androidAsks) offerManaged();
 }
 function toggleFav(id) { if (!id) return; const i = lib.favorites.indexOf(id); if (i >= 0) lib.favorites.splice(i, 1); else lib.favorites.unshift(id); save("favorites"); if (id === st.id) $("#hHeart").classList.toggle("on", lib.favorites.includes(id)); $("#heart").textContent = lib.favorites.includes(st.id) ? "♥" : "♡"; renderList(); }
 function newPlaylist(items = []) {
@@ -2072,6 +2085,7 @@ $("#settingsBtn").onclick = () => {
     { label: `Recording format: ${$("#recFmtText").textContent}`, run: chooseFormat },
   ];
   items.push({ label: "Export all markers and notes (CSV)", run: exportAllMarks });
+  if (canAskManaged()) items.push({ label: "Delete and rename without Android asking", run: () => { ANDROID.askManageMedia(); toast("Turn on “Allow media management” for AVB Player, then come back"); } });
   if (lib.hidden.length) items.push({ label: `Show removed songs again (${lib.hidden.length})`, run: () => { const n = lib.hidden.length; lib.hidden = []; save("hidden"); renderList(); renderRecList(); toast(`${n} back in the player`); } });
   if (ANDROID && ANDROID.shareApp) items.push({ label: "Share AVB Player with a friend (WhatsApp, text…)", run: () => ANDROID.shareApp(APK_URL) });
   else if (/Android/.test(navigator.userAgent)) items.push({ label: "Download the Android app", run: () => { location.href = APK_URL; } });
