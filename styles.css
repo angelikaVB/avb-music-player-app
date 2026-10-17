@@ -503,3 +503,16 @@ body.recording .mini { display: none; }
 .snack span { flex: 1; min-width: 0; }
 .snack button { border: 0; background: #7C3AED; color: #fff; border-radius: 10px; padding: 8px 14px; font-weight: 800; font-size: 13.5px; flex: none; }
 .tgrid select { -webkit-appearance: none; appearance: none; background-image: none; padding: 0 4px; }
+
+/* scrolling: only the page scrolls. (overflow-x: hidden on html AND body made the body its own
+   scroll box; with overscroll-behavior: none a finger swipe never reached the page.) */
+html, body { overflow-x: visible; overscroll-behavior: auto; }
+body { overflow-x: clip; }
+html { overscroll-behavior-y: none; }
+/* header: the page names give way, the gear and + always fit (also with large phone fonts) */
+.top .spacer { display: none; }
+.top .tabs { flex: 1 1 auto; min-width: 0; overflow-x: auto; scrollbar-width: none; }
+.top .tabs::-webkit-scrollbar { display: none; }
+.tabs button { font-size: 20px; flex: none; }
+.top { gap: 10px; }
+@media (max-width: 400px) { .top .logo { display: none; } }
