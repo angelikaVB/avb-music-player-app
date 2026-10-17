@@ -709,3 +709,7 @@ body.hasmini .snack { bottom: calc(76px + env(safe-area-inset-bottom)); }
 .hometitle .hbpm.moved { color: #FFE600; }
 /* the song's name at the top: lighter weight, its own color */
 .hometitle .htname { font-weight: 600; color: #C4B5FD; letter-spacing: -.01em; font-size: 18.5px; }
+/* play / pause at the top: a wide glossy pill */
+.hbtn.hplay.gloss { width: 116px; height: 56px; border-radius: 999px !important; }
+.hbtn.hplay.gloss::before { left: 8%; right: 8%; border-radius: 999px; }
+.htrans { gap: 8px; }
