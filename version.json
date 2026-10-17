@@ -1,7 +1,7 @@
 {
- "code": 71,
- "name": "6.1",
+ "code": 72,
+ "name": "6.2",
  "url": "https://angelikavb.github.io/avb-music-player-app/AVB-Player.apk",
- "sha256": "e66480bf7df3a9bf520cc30969e12de222c61a45561d6abf42194fb36f7dbc05",
- "notes": "Default player: one Android question for all kinds of audio"
+ "sha256": "4110d3680e3b9efef92af0f29f3b783074d2a98f2c61d59948321c9599a6081a",
+ "notes": "Automatic microphone; one recording-quality list; default player in one question"
 }

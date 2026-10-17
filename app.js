@@ -1950,7 +1950,8 @@ async function recordStart() {
   rec.t0 = rctx.currentTime; rec.pausedSum = 0; rec.pausedAt = null;     // the recording clock: audio time minus pauses
   showPage("recs");
   $("#recName").value = takeName(rec.started);
-  rec.infoText = `${nch === 1 ? "Mono" : "Stereo"} · ${(rctx.sampleRate / 1000).toFixed(1).replace(".0", "")} kHz`;
+  const micName = ((stream.getAudioTracks()[0] || {}).label || "").replace(/\s*\(.*?\)\s*$/, "");
+  rec.infoText = `${micName ? micName + " · " : ""}${nch === 1 ? "Mono" : "Stereo"} · ${(rctx.sampleRate / 1000).toFixed(1).replace(".0", "")} kHz`;
   $("#recInfo").textContent = rec.infoText; $("#recInfo").classList.remove("warn");
   setFmtChip(rctx.sampleRate);
   setRecUi(); renderRecMarks();
@@ -2133,17 +2134,25 @@ async function chooseInput() {
     try { const s2 = await navigator.mediaDevices.getUserMedia({ audio: true }); s2.getTracks().forEach(t => t.stop()); devs = (await navigator.mediaDevices.enumerateDevices()).filter(d => d.kind === "audioinput"); } catch (_) { }
   }
   const nice = d => d.deviceId === "default" || !d.label ? "Phone microphone" : d.label.replace(/\s*\(.*?\)\s*$/, "") || "Microphone";
-  const items = [{ label: `Phone microphone (default)${!lib.recInput ? "  ✓" : ""}`, run: () => { lib.recInput = ""; save("recInput"); $("#recInputName").textContent = "Phone microphone"; } }];
+  // Automatic = Android's choice: a plugged-in headset, USB microphone or audio interface, else the phone's own
+  const items = [{ label: `Automatic: any connected microphone, else the phone's${!lib.recInput ? "  ✓" : ""}`, run: () => { lib.recInput = ""; save("recInput"); $("#recInputName").textContent = "Automatic"; } }];
   for (const d of devs) if (d.deviceId && d.deviceId !== "default" && d.deviceId !== "communications")
     items.push({ label: `${nice(d)}${lib.recInput === d.deviceId ? "  ✓" : ""}`, run: () => { lib.recInput = d.deviceId; save("recInput"); $("#recInputName").textContent = nice(d); } });
   sheet(items, "Record from");
 }
 function chooseFormat() {
   if (rec) return;
-  const f = lib.recFmt, items = [];
-  for (const sr of [44100, 48000]) items.push({ label: `${(sr / 1000).toFixed(1).replace(".0", "")} kHz${f.sr === sr ? "  ✓" : ""}`, run: () => { lib.recFmt = { ...f, sr }; save("recFmt"); setFmtChip(); } });
-  for (const bits of [16, 24]) items.push({ label: `${bits}-bit WAV${f.bits === bits ? "  ✓" : ""}`, run: () => { lib.recFmt = { ...f, bits }; save("recFmt"); setFmtChip(); } });
-  sheet(items, "Recording format");
+  const f = lib.recFmt;
+  const items = [
+    [48000, 24, "best: phones and video use 48 kHz, 24-bit has the most room before it distorts"],
+    [48000, 16, "smaller files"],
+    [44100, 24, "CD rate, more room before it distorts"],
+    [44100, 16, "CD quality, smallest files"],
+  ].map(([sr, bits, why]) => ({
+    label: `${(sr / 1000).toFixed(1).replace(".0", "")} kHz · ${bits}-bit WAV (${why})${f.sr === sr && f.bits === bits ? "  ✓" : ""}`,
+    run: () => { lib.recFmt = { sr, bits }; save("recFmt"); setFmtChip(); },
+  }));
+  sheet(items, "Recording quality for new recordings");
 }
 $("#recInputBtn").onclick = chooseInput; $("#recFmtBtn").onclick = chooseFormat;
 $("#recMarkBtn").onclick = () => addMarker(recMk); $("#recMarkAdd").onclick = () => addMarker(recMk);
@@ -2151,13 +2160,11 @@ setFmtChip();
 // a saved input that is gone falls back to the phone's microphone
 if (lib.recInput && navigator.mediaDevices && navigator.mediaDevices.enumerateDevices) navigator.mediaDevices.enumerateDevices().then(ds => {
   const d = ds.find(x => x.deviceId === lib.recInput);
-  if (!d) { lib.recInput = ""; save("recInput"); } else if (d.label) $("#recInputName").textContent = d.label.replace(/\s*\(.*?\)\s*$/, "");
+  if (!d) { lib.recInput = ""; save("recInput"); $("#recInputName").textContent = "Automatic"; } else if (d.label) $("#recInputName").textContent = d.label.replace(/\s*\(.*?\)\s*$/, "");
 }).catch(() => { });
 // settings
 $("#settingsBtn").onclick = () => {
   const items = [
-    { label: `Record from: ${$("#recInputName").textContent}`, run: chooseInput },
-    { label: `Recording format: ${$("#recFmtText").textContent}`, run: chooseFormat },
   ];
   items.push({ label: "Export all markers and notes (CSV)", run: exportAllMarks });
   if (ANDROID && ANDROID.updateCheck) items.push(updateInfo
