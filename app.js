@@ -803,8 +803,7 @@ function subLine(s) {
   if (s.duration) bits.push(fmtTime(s.duration));
   bits.push(fmtOf(s.name));
   if (s.size > 0) bits.push((s.size / 1e6).toFixed(1) + " MB");
-  if (s.folder) bits.push(s.folder.replace(/\/$/, ""));
-  return bits.join(" · ");
+  return bits.join(" · ");                    // the folder is in the song's ⋯ menu, not here
 }
 function emptyText() {
   if (view === "phone") return phoneState === "denied" ? "Allow AVB Music Player to see your music: tap All music again, then Allow."
@@ -827,6 +826,7 @@ function renderGroups(key, filter) {
   $("#storage").textContent = `${rows.length} ${key === "artist" ? "artist" : "album"}${rows.length === 1 ? "" : "s"}`;
   $("#views").querySelectorAll(":scope > button").forEach(b => { b.classList.toggle("on", b.dataset.view === view); b.onclick = () => { view = b.dataset.view; listName = b.dataset.name || ""; if (view === "phone" && phoneState === "denied") loadPhone(true); renderList(); }; });
 }
+const HEART = `<svg viewBox="0 0 24 24" width="20" height="20"><path d="M12 20.3s-7.6-4.6-9.2-9.3C1.7 7.6 4 4.5 7.3 4.5c2 0 3.4 1.1 4.7 2.8 1.3-1.7 2.7-2.8 4.7-2.8 3.3 0 5.6 3.1 4.5 6.5-1.6 4.7-9.2 9.3-9.2 9.3z"/></svg>`;
 function renderList() {
   renderShelves();
   const filter = $("#filter").value.toLowerCase();
@@ -838,7 +838,7 @@ function renderList() {
   ids = ids.filter(id => !isRecording(id) && !String(id).startsWith("r:"));
   ids = ids.filter(id => songs[id] && ((songs[id].name + " " + (songs[id].artist || "") + " " + (songs[id].album || "")).toLowerCase().includes(filter)));
   const el = $("#list");
-  el.innerHTML = ids.map((id, i) => { const s = songs[id]; return `<li data-id="${id}" class="${id === st.id ? "now" : ""}"><div class="num">${id === st.id ? "♪" : i + 1}</div><div class="n"><div class="name">${lib.favorites.includes(id) ? "♥ " : ""}${s.name.replace(/\.[^.]+$/, "")}</div><div class="sub">${subLine(s)}</div></div>${rowEnd(id, "music")}</li>`; }).join("")
+  el.innerHTML = ids.map((id, i) => { const s = songs[id]; return `<li data-id="${id}" class="${id === st.id ? "now" : ""}"><div class="num">${id === st.id ? "♪" : i + 1}</div><button class="fav${lib.favorites.includes(id) ? " on" : ""}" title="Favourite">${HEART}</button><div class="n"><div class="name">${s.name.replace(/\.[^.]+$/, "")}</div><div class="sub">${subLine(s)}</div></div>${rowEnd(id, "music")}</li>`; }).join("")
     || `<li class="muted">${emptyText()}</li>`;
   shownIds.music = ids; el.style.setProperty("--numw", String(ids.length).length + "ch");
   el.querySelectorAll("li[data-id]").forEach(li => {
@@ -847,6 +847,7 @@ function renderList() {
       if (st.id === id && st.buffer) { if (!st.playing) play(); return; }        // the loaded song: carry on, never restart
       if (view === "queue") playIndex(lib.queue.indexOf(id), true); else { lib.queue = ids.slice(); save("queue"); playIndex(ids.indexOf(id), true); } };
     wireRow(li, "music");
+    li.querySelector(".fav").onclick = e => { e.stopPropagation(); const on = !lib.favorites.includes(li.dataset.id); toggleFav(li.dataset.id); toast(on ? "Added to Favourites" : "Removed from Favourites"); };
   });
   el.classList.toggle("selecting", sel.where === "music"); updateSelbar();
   $("#listTabs").innerHTML = lib.playlists.map((p, i) => `<button data-pl="list" data-i="${i}" class="${view === "list" && listName === p.name ? "on" : ""}">${esc(p.name)}</button>`).join("") + `<button data-pl="new">＋ Playlist</button>`;
@@ -1063,7 +1064,8 @@ function songMenu(id) {
   else if (rec) items.push({ label: "Delete this recording", danger: true, run: async () => {
     if (await confirmBox("Delete this recording?", `“${songs[id].name}” is erased. This cannot be undone.`, "Delete")) removeFromApp(id, true);
   } });
-  sheet(items);
+  const s0 = songs[id];
+  sheet(items, s0 ? s0.name.replace(/\.[^.]+$/, "") + (s0.folder ? `  ·  in ${s0.folder.replace(/\/$/, "")}` : "") : "");
 }
 // an app copy (opened through + Open files / Share) and the same file in All music: same name and size
 function phoneTwin(id) {
