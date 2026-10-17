@@ -21,7 +21,7 @@ const songGet = id => new Promise((ok, no) => { const t = db.transaction("songs"
 const lib = {
   queue: await kvGet("queue", []), index: await kvGet("index", -1), favorites: await kvGet("favorites", []),
   recent: await kvGet("recent", []), playlists: await kvGet("playlists", []), notes: await kvGet("notes", {}), lyrics: await kvGet("lyrics", {}), eq: await kvGet("eq", null), lyrH: await kvGet("lyrH", 300), lyrFold: await kvGet("lyrFold", false), mkOpen: await kvGet("mkOpen", true), mkCat: await kvGet("mkCat", "idea"), recInput: await kvGet("recInput", ""), recFmt: await kvGet("recFmt", { sr: 48000, bits: 24 }), shuffle: await kvGet("shuffle", false), mono: false,
-  balance: await kvGet("balance", 0), fix: await kvGet("fix", {}), marks: await kvGet("marks", {}), hidden: await kvGet("hidden", []), mmOffered: await kvGet("mmOffered", false), renamed: await kvGet("renamed", {}),
+  balance: await kvGet("balance", 0), fix: await kvGet("fix", {}), marks: await kvGet("marks", {}), hidden: await kvGet("hidden", []), sort: await kvGet("sort", "default"), mmOffered: await kvGet("mmOffered", false), renamed: await kvGet("renamed", {}),
   repeat: await kvGet("repeat", "off"), volume: await kvGet("volume", 1), keepVoice: await kvGet("keepVoice", true),
 };
 const save = k => kvSet(k, lib[k]);
@@ -876,6 +876,30 @@ function renderGroups(key, filter) {
   $("#views").querySelectorAll(":scope > button").forEach(b => { b.classList.toggle("on", b.dataset.view === view); b.onclick = () => { view = b.dataset.view; listName = b.dataset.name || ""; if (view === "phone" && phoneState === "denied") loadPhone(true); renderList(); }; });
 }
 const HEART = `<svg viewBox="0 0 24 24" width="20" height="20"><path d="M12 20.3s-7.6-4.6-9.2-9.3C1.7 7.6 4 4.5 7.3 4.5c2 0 3.4 1.1 4.7 2.8 1.3-1.7 2.7-2.8 4.7-2.8 3.3 0 5.6 3.1 4.5 6.5-1.6 4.7-9.2 9.3-9.2 9.3z"/></svg>`;
+// sorting the song list (remembered); "default" keeps each list's own order (newest added, last played, playlist order)
+const FORMAT_ORDER = ["WAV", "AIFF", "AIF", "FLAC", "ALAC", "M4A", "MP3", "AAC", "OGG", "OPUS"];
+const SORTS = {
+  default: { label: "Default order", short: "Sort" },
+  newest: { label: "Newest first", short: "Newest", cmp: (a, b) => (b.added || 0) - (a.added || 0) },
+  oldest: { label: "Oldest first", short: "Oldest", cmp: (a, b) => (a.added || 0) - (b.added || 0) },
+  az: { label: "Name A–Z", short: "A–Z", cmp: (a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: "base" }) },
+  za: { label: "Name Z–A", short: "Z–A", cmp: (a, b) => b.name.localeCompare(a.name, undefined, { numeric: true, sensitivity: "base" }) },
+  largest: { label: "Largest first", short: "Largest", cmp: (a, b) => (b.size || 0) - (a.size || 0) },
+  smallest: { label: "Smallest first", short: "Smallest", cmp: (a, b) => (a.size || 0) - (b.size || 0) },
+  longest: { label: "Longest first", short: "Longest", cmp: (a, b) => (b.duration || 0) - (a.duration || 0) },
+  format: { label: "Format: WAV, AIFF, FLAC, M4A, MP3…", short: "Format", cmp: (a, b) => {
+    const r = f => { const i = FORMAT_ORDER.indexOf(fmtOf(f.name)); return i < 0 ? 99 : i; };
+    return r(a) - r(b) || (b.added || 0) - (a.added || 0);
+  } },
+};
+function sortIds(ids) {
+  const s = SORTS[lib.sort];
+  if (!s || !s.cmp) return ids;
+  return ids.slice().sort((x, y) => s.cmp(songs[x], songs[y]));
+}
+$("#sortMusic").onclick = () => sheet(Object.entries(SORTS).map(([k, s]) => ({
+  label: s.label + (lib.sort === k ? "  ✓" : ""), run: () => { lib.sort = k; save("sort"); renderList(); },
+})), "Sort songs");
 function renderList() {
   renderShelves();
   const filter = $("#filter").value.toLowerCase();
@@ -886,6 +910,8 @@ function renderList() {
     : view === "recent" ? lib.recent : (lib.playlists.find(p => p.name === listName) || { items: [] }).items;
   ids = ids.filter(id => !isRecording(id) && !String(id).startsWith("r:"));
   ids = ids.filter(id => songs[id] && ((songs[id].name + " " + (songs[id].artist || "") + " " + (songs[id].album || "")).toLowerCase().includes(filter)));
+  ids = sortIds(ids);
+  $("#sortMusic").textContent = lib.sort === "default" ? "Sort" : SORTS[lib.sort].short + " ▾";
   const el = $("#list");
   el.innerHTML = ids.map((id, i) => { const s = songs[id]; return `<li data-id="${id}" class="${id === st.id ? "now" : ""}"><div class="nf"><div class="num">${i + 1}</div><button class="fav${lib.favorites.includes(id) ? " on" : ""}" title="Favorite">${HEART}</button></div><div class="n"><div class="name">${s.name.replace(/\.[^.]+$/, "")}</div><div class="sub">${subLine(s)}</div></div>${rowEnd(id, "music")}</li>`; }).join("")
     || `<li class="muted">${emptyText()}</li>`;

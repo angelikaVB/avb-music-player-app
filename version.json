@@ -1,7 +1,7 @@
 {
- "code": 68,
- "name": "5.8",
+ "code": 69,
+ "name": "5.9",
  "url": "https://angelikavb.github.io/avb-music-player-app/AVB-Player.apk",
- "sha256": "582b88d268d9f7fba5f5c81d1d2517bcc7dbdcd345e0d7adcf983b9e5771d7b9",
- "notes": "Update from inside the app; online lyrics on the phone"
+ "sha256": "288264eb4aa740f04f18638835977c0ceab2720ef2aabe2708d80ce9898d744b",
+ "notes": "Sort the song list"
 }
