@@ -2130,6 +2130,9 @@ $("#settingsBtn").onclick = () => {
     { label: `Recording format: ${$("#recFmtText").textContent}`, run: chooseFormat },
   ];
   items.push({ label: "Export all markers and notes (CSV)", run: exportAllMarks });
+  if (ANDROID && ANDROID.updateCheck) items.push(updateInfo
+    ? { label: `Update to AVB Player ${updateInfo.name}`, run: startUpdate }
+    : { label: "Check for updates", run: () => { updateManual = true; ANDROID.updateCheck(); } });
   if (canAskManaged()) items.push({ label: "Delete and rename without Android asking", run: () => { ANDROID.askManageMedia(); toast("Turn on “Allow media management” for AVB Player, then come back"); } });
   if (lib.hidden.length) items.push({ label: `Show removed songs again (${lib.hidden.length})`, run: () => { const n = lib.hidden.length; lib.hidden = []; save("hidden"); renderList(); renderRecList(); toast(`${n} back in the player`); } });
   if (ANDROID && ANDROID.shareApp) items.push({ label: "Share AVB Player with a friend (WhatsApp, text…)", run: () => ANDROID.shareApp(APK_URL) });
@@ -2811,3 +2814,41 @@ if (demo && ["localhost", "127.0.0.1"].includes(location.hostname)) {
   await addFiles([f]);
 }
 window.avb = { st, lib, eqResponse: f => eqResponse(f), fitEqToLine: (p, w, h) => fitEqToLine(p, w, h), songMk, recMk, addMarker, editMarker, marksCsv, marksText, shareSong, loadSong, applyChange, saveCopy, seek, play, pause, markButton, loopRange };
+
+// ---------------------------------------------------------------- updates (Android app)
+// version.json on the download page names the newest APK; Update downloads it inside the app and
+// hands it to Android's installer (which asks once to allow installs from AVB Player)
+var updateInfo = null, updateManual = false, updateBusy = false;
+window.avbUpdateInfo = text => {
+  let v = null;
+  try { v = text ? JSON.parse(text) : null; } catch (_) { }
+  const mine = ANDROID && ANDROID.versionCode ? +ANDROID.versionCode() : 0;
+  updateInfo = v && +v.code > mine && v.url ? v : null;
+  showUpdateBar();
+  if (updateManual) { updateManual = false; if (!updateInfo) toast(v ? "AVB Player is up to date" : "Could not check for updates. Are you online?"); }
+};
+function showUpdateBar(text) {
+  const later = updateInfo && sessionStorage.getItem("updLater") === String(updateInfo.code);
+  $("#updBar").hidden = !updateInfo || (later && !updateBusy);
+  $("#updText").textContent = text || (updateInfo ? `New version: AVB Player ${updateInfo.name}` : "");
+  $("#updBtn").hidden = updateBusy; $("#updLater").hidden = updateBusy;
+}
+function startUpdate() {
+  if (!updateInfo || updateBusy) return;
+  const r = ANDROID.updateInstall(updateInfo.url, updateInfo.sha256 || "");
+  if (r === "permission") {
+    ask("Allow updates once", "Android needs your OK one time: turn on “Allow from this source” for AVB Player, come back here and tap Update again.", "", "Open settings", "Cancel", false)
+      .then(ok => { if (ok) ANDROID.openInstallSettings(); });
+    return;
+  }
+  if (r !== "ok") { toast("This update cannot be installed from here"); return; }
+  updateBusy = true; showUpdateBar("Downloading the update… 0%");
+}
+window.avbUpdateProgress = pct => {
+  updateBusy = true;
+  showUpdateBar(+pct >= 100 ? "Installing… tap Update when Android asks. The app then closes: open it again." : `Downloading the update… ${pct}%`);
+};
+window.avbUpdateError = text => { updateBusy = false; showUpdateBar(); toast(text); };
+$("#updBtn").onclick = startUpdate;
+$("#updLater").onclick = () => { try { sessionStorage.setItem("updLater", String(updateInfo && updateInfo.code)); } catch (_) { } showUpdateBar(); };
+if (ANDROID && ANDROID.updateCheck) setTimeout(() => ANDROID.updateCheck(), 3000);
