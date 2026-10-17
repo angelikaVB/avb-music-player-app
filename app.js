@@ -99,7 +99,7 @@ async function loadSong(id, autoplay = true) {
   send({ cmd: "unload" }); send({ cmd: "loop", loop: null });
   $("#title").textContent = rec.name.replace(/\.[^.]+$/, "");
   $("#npArtist").textContent = songs[id] && songs[id].artist && !/^<unknown>$/i.test(songs[id].artist) ? songs[id].artist : "";
-  $("#miniPlay").textContent = "▶";
+  setMiniPlay(false);
   $("#listen").textContent = "Reading…";
   $("#cover").style.background = coverFor(rec.name);
   syncMarkers(); refreshMusic(); fillSections(); drawWave();
@@ -230,12 +230,12 @@ async function sniffHeader(blob, name) {
 
 // ---------------------------------------------------------------- transport
 const ANDROID = window.AVBAndroid || null;
-function play() { if (!st.buffer) return; audio().then(() => { send({ cmd: "play" }); st.playing = true; $("#play").textContent = "❚❚"; $("#miniPlay").textContent = "❚❚"; if (ANDROID) ANDROID.playing(true); if (navigator.mediaSession) navigator.mediaSession.playbackState = "playing"; }); }
-function pause() { send({ cmd: "pause" }); st.playing = false; $("#play").textContent = "▶"; $("#miniPlay").textContent = "▶"; if (ANDROID) ANDROID.playing(false); if (navigator.mediaSession) navigator.mediaSession.playbackState = "paused"; }
+function play() { if (!st.buffer) return; audio().then(() => { send({ cmd: "play" }); st.playing = true; $("#play").textContent = "❚❚"; setMiniPlay(true); if (ANDROID) ANDROID.playing(true); if (navigator.mediaSession) navigator.mediaSession.playbackState = "playing"; }); }
+function pause() { send({ cmd: "pause" }); st.playing = false; $("#play").textContent = "▶"; setMiniPlay(false); if (ANDROID) ANDROID.playing(false); if (navigator.mediaSession) navigator.mediaSession.playbackState = "paused"; }
 function togglePlay() { if (!st.buffer) { if (lib.queue.length) playIndex(Math.max(0, lib.index), true); else $("#files2").click(); return; } st.playing ? pause() : play(); }
 function seek(t) { if (!st.buffer) return; t = Math.max(0, Math.min(st.duration, t)); st.pos = t; send({ cmd: "seek", frame: Math.round(t * st.sr) }); drawWave(); }
 function onEnded() {
-  st.playing = false; $("#play").textContent = "▶"; $("#miniPlay").textContent = "▶"; if (ANDROID) ANDROID.playing(false);
+  st.playing = false; $("#play").textContent = "▶"; setMiniPlay(false); if (ANDROID) ANDROID.playing(false);
   if (lib.repeat === "one") { seek(0); play(); } else if (!isRecording(st.id)) nextTrack(true);
 }
 // choosing a song only loads it: playing is the user's ▶ (autoplay only when the music was already going)
@@ -1189,7 +1189,6 @@ async function showCover(id, tags) {
   if (st.id !== id) return;
   if (blob) { coverUrl = URL.createObjectURL(blob); el.style.background = `center / cover no-repeat url("${coverUrl}")`; el.classList.add("art"); }
   else { el.style.background = coverFor(songs[id] ? songs[id].name : ""); el.classList.remove("art"); }
-  $("#miniCover").style.background = el.style.background;
 }
 // ---- tags inside the file
 const dec = (bytes, enc) => {
@@ -1868,8 +1867,16 @@ function updateMini() {
   if (!st.id || !songs[st.id]) return;
   $("#miniTitle").textContent = $("#title").textContent;
   $("#miniSub").textContent = $("#npArtist").textContent || (isRecording(st.id) ? "Recording" : (st.info && st.info.fmt) || "");
-  $("#miniCover").style.background = $("#cover").style.background || coverFor(songs[st.id].name);
-  $("#miniPlay").textContent = st.playing ? "❚❚" : "▶";
+  const dur = st.duration || songs[st.id].duration || 0, fmt = (st.info && st.info.fmt) || fmtOf(songs[st.id].name);
+  $("#miniSub").textContent = [$("#npArtist").textContent, fmt, dur ? fmtTime(dur) : ""].filter(Boolean).join(" · ");
+  setMiniPlay(st.playing);
+}
+// the round play / pause icon, and the equaliser moves only while music plays
+function setMiniPlay(on) {
+  $("#miniPlay").innerHTML = on
+    ? `<svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="9.5"/><path d="M10 8.5v7M14 8.5v7"/></svg>`
+    : `<svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="#fff" stroke-width="1.8" stroke-linejoin="round"><circle cx="12" cy="12" r="9.5"/><path d="M10 8.3v7.4l6-3.7z"/></svg>`;
+  $("#mini").classList.toggle("playing", !!on);
 }
 let npMode = "listen";
 function setNpMode(m) {
@@ -1887,8 +1894,11 @@ function openNP(mode) {
 function closeNP() { $("#np").hidden = true; document.body.classList.remove("npopen"); updateMini(); }
 $("#npClose").onclick = closeNP;
 $("#npMode").querySelectorAll("button").forEach(b => b.onclick = () => setNpMode(b.dataset.mode));
-$("#mini").onclick = e => { if (e.target.closest("#miniPlay")) return; openNP(); };
+$("#mini").onclick = e => { if (e.target.closest(".minibtn")) return; openNP(); };
 $("#miniPlay").onclick = () => togglePlay();
+$("#miniPrev").onclick = () => prevTrack();
+$("#miniNext").onclick = () => nextTrack(false);
+setMiniPlay(false);
 
 // ---------------------------------------------------------------- ui wiring
 function showPage(p) {

@@ -552,3 +552,26 @@ body.selecting { padding-bottom: 140px; }
 /* menus: no tall empty strip under Cancel */
 .sheet { padding-bottom: calc(6px + env(safe-area-inset-bottom)); }
 .sheet button:last-child { padding: 12px 10px; margin-top: 2px; }
+
+/* the mini player as drawn: equaliser, title + format · length, thin icons, pink line */
+.mini { height: 62px; gap: 12px; padding: 0 10px 4px 16px; border-radius: 16px; background: rgba(28, 20, 66, .96); }
+.minieq { display: flex; align-items: center; gap: 2px; width: 20px; height: 22px; flex: none; }
+.minieq span { flex: 1; height: 30%; border-radius: 1.5px; background: linear-gradient(180deg, #F472B6, #A855F7); }
+.minieq span:nth-child(2) { height: 70%; } .minieq span:nth-child(3) { height: 100%; } .minieq span:nth-child(4) { height: 55%; } .minieq span:nth-child(5) { height: 35%; }
+.mini.playing .minieq span { animation: eqbar .9s ease-in-out infinite alternate; }
+.mini.playing .minieq span:nth-child(2) { animation-delay: -.3s; } .mini.playing .minieq span:nth-child(3) { animation-delay: -.6s; }
+.mini.playing .minieq span:nth-child(4) { animation-delay: -.15s; } .mini.playing .minieq span:nth-child(5) { animation-delay: -.45s; }
+@keyframes eqbar { 0% { height: 20%; } 100% { height: 100%; } }
+.minititle { font-size: 14px; font-weight: 700; }
+.minisub { font-size: 12px; margin-top: 1px; }
+.minibtn { width: 38px; height: 38px; border: 0; background: none; padding: 0; display: flex; align-items: center; justify-content: center; flex: none; border-radius: 50%; }
+.minibtn:active { background: rgba(255,255,255,.08); }
+.miniprog { left: 14px; right: 14px; bottom: 7px; height: 3px; border-radius: 2px; background: rgba(255,255,255,.14); overflow: hidden; }
+.miniprog div { background: #EC4899; border-radius: 2px; }
+/* docked, not floating: the bar sits on the bottom edge, the page ends above it */
+.mini { left: 0; right: 0; bottom: 0; border-radius: 16px 16px 0 0; height: calc(64px + env(safe-area-inset-bottom)); padding-bottom: calc(4px + env(safe-area-inset-bottom));
+  background: #1C1442; box-shadow: 0 -6px 20px rgba(0,0,0,.45); backdrop-filter: none; -webkit-backdrop-filter: none; }
+.miniprog { bottom: calc(7px + env(safe-area-inset-bottom)); }
+body.hasmini { padding-bottom: calc(72px + env(safe-area-inset-bottom)); }
+body.hasmini .toast { bottom: calc(80px + env(safe-area-inset-bottom)); }
+body.hasmini .snack { bottom: calc(76px + env(safe-area-inset-bottom)); }
