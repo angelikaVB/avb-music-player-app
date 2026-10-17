@@ -798,12 +798,13 @@ async function addFiles(files, playNow = false) {
 let view = ANDROID ? "phone" : "queue", listName = "";
 let phoneIds = [], recordingIds = [], phoneState = ANDROID ? "loading" : "web";
 function subLine(s) {
+  // the format as a coloured tag (WAV blue, MP3 pink …), then artist, length, size
+  const f = fmtOf(s.name), kind = { WAV: "wav", MP3: "mp3", FLAC: "flac", M4A: "m4a", AAC: "m4a", MP4: "m4a", OGG: "ogg", OPUS: "ogg", AIFF: "aif", AIF: "aif", AIFC: "aif" }[f] || "other";
   const bits = [];
-  if (s.artist && !/unknown/i.test(s.artist)) bits.push(s.artist);
+  if (s.artist && !/unknown/i.test(s.artist)) bits.push(esc(s.artist));
   if (s.duration) bits.push(fmtTime(s.duration));
-  bits.push(fmtOf(s.name));
   if (s.size > 0) bits.push((s.size / 1e6).toFixed(1) + " MB");
-  return bits.join(" · ");                    // the folder is in the song's ⋯ menu, not here
+  return `<span class="ft ft-${kind}">${esc(f)}</span>` + bits.join(" · ");   // the folder is in the song's ⋯ menu, not here
 }
 function emptyText() {
   if (view === "phone") return phoneState === "denied" ? "Allow AVB Music Player to see your music: tap All music again, then Allow."
