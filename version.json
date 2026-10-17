@@ -1,7 +1,7 @@
 {
- "code": 82,
- "name": "7.2",
+ "code": 83,
+ "name": "7.3",
  "url": "https://angelikavb.github.io/avb-music-player-app/AVB-Player.apk",
- "sha256": "c475f37f3348258807c4517ba603bb54b9e183cfb59e05c9e9aadd785be07ad4",
- "notes": "Search pinned inside the header"
+ "sha256": "53bc2a50cf375242eec850b31e3be66ad250ee731e2bc4d15db4a3cbe989a590",
+ "notes": "Update opens Android's normal installer screen"
 }
