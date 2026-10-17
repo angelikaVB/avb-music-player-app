@@ -810,7 +810,7 @@ function subLine(s) {
   if (s.artist && !/unknown/i.test(s.artist)) bits.push(esc(s.artist));
   if (s.duration) bits.push(fmtTime(s.duration));
   if (s.size > 0) bits.push((s.size / 1e6).toFixed(1) + " MB");
-  return `<span class="ft ft-${kind}">${esc(f)}</span>` + bits.join(" · ");   // the folder is in the song's ⋯ menu, not here
+  return `<span class="ft ft-${kind}">${esc(f)}</span>` + bits.join(" · ");   // no folder: the user does not want "Download" anywhere
 }
 function emptyText() {
   if (view === "phone") return phoneState === "denied" ? "Allow AVB Music Player to see your music: tap All music again, then Allow."
@@ -1072,7 +1072,7 @@ function songMenu(id) {
     if (await confirmBox("Delete this recording?", `“${songs[id].name}” is erased. This cannot be undone.`, "Delete")) removeFromApp(id, true);
   } });
   const s0 = songs[id];
-  sheet(items, s0 ? s0.name.replace(/\.[^.]+$/, "") + (s0.folder ? `  ·  in ${s0.folder.replace(/\/$/, "")}` : "") : "");
+  sheet(items, s0 ? s0.name.replace(/\.[^.]+$/, "") : "");
 }
 // an app copy (opened through + Open files / Share) and the same file in All music: same name and size
 function phoneTwin(id) {
