@@ -1,7 +1,7 @@
 // Offline shell.  Online: always the newest files from the site (and the
 // cache refreshed with them).  Offline: the cached copy.  So an update
 // shows up the first time the app is opened with a connection.
-const VERSION = "avb-player-v109";
+const VERSION = "avb-player-v111";
 const FILES = ["./", "index.html", "styles.css", "app.js", "analysis-worker.js", "stretch-worker.js", "player-worklet.js",
   "manifest.webmanifest", "icons/icon-192.png", "icons/icon-512.png", "icons/maskable-192.png", "icons/maskable-512.png",
   "vendor/rubberband.esm.js", "vendor/rubberband.wasm", "encode-worker.js", "vendor/lame.min.js",
@@ -33,6 +33,7 @@ self.addEventListener("fetch", e => {
     return;
   }
   if (req.method !== "GET" || new URL(req.url).origin !== location.origin) return;
+  if (new URL(req.url).pathname.startsWith("/__")) return;          // songs handed over by the computer program
   e.respondWith((async () => {
     const cache = await caches.open(VERSION);
     try {

@@ -901,12 +901,21 @@ function sortIds(ids) {
 $("#sortMusic").onclick = () => sheet(Object.entries(SORTS).map(([k, s]) => ({
   label: s.label + (lib.sort === k ? "  ✓" : ""), run: () => { lib.sort = k; save("sort"); renderList(); },
 })), "Sort songs");
+// All music: the phone's songs, plus every favorite kept inside the app (opened from Drive, WhatsApp...),
+// so a heart always puts a song in the main list; mixed in by the date it was added
+function allMusicIds() {
+  const phone = phoneIds.filter(x => !lib.hidden.includes(x));
+  const inPhone = new Set(phone);
+  const extra = lib.favorites.filter(id => songs[id] && !songs[id].url && !isRecording(id) && !inPhone.has(id) && !phoneTwin(id));
+  if (!extra.length) return phone;
+  return [...phone, ...extra].sort((a, b) => (songs[b].added || 0) - (songs[a].added || 0));
+}
 function renderList() {
   renderShelves();
   const filter = $("#filter").value.toLowerCase();
   if (view === "artists" || view === "albums") { renderGroups(view === "artists" ? "artist" : "album", filter); return; }
   let ids = view === "group" ? phoneIds.filter(x => !lib.hidden.includes(x) && (songs[x][groupBy] || "Unknown") === groupName)
-    : view === "phone" ? phoneIds.filter(x => !lib.hidden.includes(x)) : view === "recordings" ? recordingIds : view === "queue" ? lib.queue : view === "favorites" ? lib.favorites
+    : view === "phone" ? allMusicIds() : view === "recordings" ? recordingIds : view === "queue" ? lib.queue : view === "favorites" ? lib.favorites
     : view === "added" ? Object.keys(songs).filter(id => !songs[id].url && !isRecording(id)).sort((a, b) => (songs[b].added || 0) - (songs[a].added || 0))
     : view === "recent" ? lib.recent : (lib.playlists.find(p => p.name === listName) || { items: [] }).items;
   ids = ids.filter(id => !isRecording(id) && !String(id).startsWith("r:"));
@@ -1032,6 +1041,7 @@ $("#selMore").onclick = () => {
   if (sel.where === "music") {
     items.push({ label: allFav ? "Remove from favorites" : "Add to favorites", run: () => {
       if (allFav) lib.favorites = lib.favorites.filter(x => !ids.includes(x)); else lib.favorites = [...ids.filter(x => !lib.favorites.includes(x)), ...lib.favorites];
+      if (!allFav && !ANDROID) { for (const x of ids) if (songs[x] && !isRecording(x) && !lib.queue.includes(x)) lib.queue.push(x); save("queue"); }   // in My songs too
       save("favorites"); $("#heart").textContent = lib.favorites.includes(st.id) ? "♥" : "♡"; selEnd(); toast(allFav ? `${n} removed from favorites` : `${n} added to favorites`);
     } });
     for (const p of lib.playlists) items.push({ label: `Add to ${p.name}`, run: () => { for (const id of ids) if (!p.items.includes(id)) p.items.push(id); save("playlists"); selEnd(); toast(`${n} added to ${p.name}`); } });
@@ -1234,7 +1244,9 @@ async function deleteFromPhone(phoneId, shownId) {
   toast(`Deleted “${s0.name}” from your phone`);
   if (androidAsks) offerManaged();
 }
-function toggleFav(id) { if (!id) return; const i = lib.favorites.indexOf(id); if (i >= 0) lib.favorites.splice(i, 1); else lib.favorites.unshift(id); save("favorites"); if (id === st.id) $("#hHeart").classList.toggle("on", lib.favorites.includes(id)); $("#heart").textContent = lib.favorites.includes(st.id) ? "♥" : "♡"; renderList(); }
+function toggleFav(id) { if (!id) return; const i = lib.favorites.indexOf(id); if (i >= 0) lib.favorites.splice(i, 1); else lib.favorites.unshift(id); save("favorites");
+  // a new favorite is in the main list too: on a computer that is My songs (on the phone All music adds it itself)
+  if (i < 0 && !ANDROID && songs[id] && !isRecording(id) && !lib.queue.includes(id)) { lib.queue.push(id); save("queue"); } if (id === st.id) $("#hHeart").classList.toggle("on", lib.favorites.includes(id)); $("#heart").textContent = lib.favorites.includes(st.id) ? "♥" : "♡"; renderList(); }
 function newPlaylist(items = []) {
   ask("New playlist", "", `Playlist ${lib.playlists.length + 1}`, "Create").then(name => { if (!name) return; newPlaylistNamed(name, items); });
 }
@@ -2864,6 +2876,27 @@ if ("launchQueue" in window) {
     const files = await Promise.all(params.files.map(h => h.getFile()));
     await addFiles(files, true);
   });
+}
+
+// on a computer: "AVB Music Player.exe" serves this page at localhost:47812 and hands over the songs
+// Windows opens with it - ?open=<ids> at the start, more through /__events while the window is up
+if (["localhost", "127.0.0.1"].includes(location.hostname) && location.port === "47812") {
+  const takeLocal = async list => {
+    const files = [];
+    for (const n of list) {
+      try {
+        const r = await fetch(`/__open/${n}`, { cache: "no-store" });
+        if (!r.ok) continue;
+        const b = await r.blob();
+        files.push(new File([b], decodeURIComponent(r.headers.get("X-Name") || "Song"), { type: b.type || "audio/*", lastModified: Date.now() }));
+      } catch (_) { }
+    }
+    if (files.length) await addFiles(files, true);
+  };
+  const first = new URLSearchParams(location.search).get("open");
+  if (first) { history.replaceState(null, "", "/"); takeLocal(first.split(",")); }
+  const events = new EventSource("/__events");
+  events.onmessage = e => { if (e.data) takeLocal(e.data.split(",")); };
 }
 
 // a test hook: ?demo=<url> loads a file without a file picker (used only on localhost)

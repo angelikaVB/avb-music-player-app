@@ -1,7 +1,7 @@
 {
- "code": 84,
- "name": "7.4",
+ "code": 85,
+ "name": "7.5",
  "url": "https://angelikavb.github.io/avb-music-player-app/AVB-Player.apk",
- "sha256": "0df559ba58cb6488ca1b423d7e4300183705c6ef94c51f3578ddccbb9c0650cf",
- "notes": "Wider tempo slider"
+ "sha256": "d5090d1b6e313a111e9f10a22282bb7d9899c4839730fcedb99f6d068aede7a6",
+ "notes": "Favorites always in the main list"
 }
