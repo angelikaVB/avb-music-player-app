@@ -249,7 +249,7 @@
       </div>
 
       <div class="tab" id="tab-mix">
-        <div class="row" id="rowTempo"><span class="tempocol"><label>Tempo</label><span class="tempotrack"><input type="range" id="speed" min="50" max="150" value="100"><button class="tempomid" id="tempoMid" title="Back to the original tempo" aria-label="Back to the original tempo"></button></span></span><span class="val" id="speedval">100%</span><button class="bpmchip" id="speedBpm" title="Tap to type a tempo">— BPM</button><button class="rst" id="tempoReset" title="Tempo back to 100%"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12a8 8 0 1 0 2.4-5.7"/><path d="M4 4v5h5"/></svg></button></div>
+        <div class="row" id="rowTempo"><label>Tempo</label><span class="pmpair"><button class="ghost" id="tempoDown" title="Slower">−</button><button class="ghost" id="tempoUp" title="Faster">+</button></span><span class="tempocol" hidden><span class="tempotrack"><input type="range" id="speed" min="50" max="150" step="any" value="100"><button class="tempomid" id="tempoMid" title="Back to the original tempo" aria-label="Back to the original tempo"></button></span></span><span class="val" id="speedval">100%</span><button class="bpmchip" id="speedBpm" title="Tap to type a tempo">— BPM</button><button class="rst" id="tempoReset" title="Tempo back to 100%"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12a8 8 0 1 0 2.4-5.7"/><path d="M4 4v5h5"/></svg></button></div>
         <div class="row"><label>Target BPM</label><input type="number" id="bpmTarget" step="0.1" min="20" max="400"><span class="val" id="bpmFrom"></span></div>
         <div class="row" id="rowKey"><label>Pitch</label><span class="pmpair"><button class="ghost" id="keyDown">−</button><button class="ghost" id="keyUp">+</button></span><span class="val" id="semis">±0 st</span><span class="val" id="keyResult"></span><button class="rst" id="keyReset" title="Pitch back to the original"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12a8 8 0 1 0 2.4-5.7"/><path d="M4 4v5h5"/></svg></button></div>
         <label class="check"><input type="checkbox" id="keepVoice" checked> Keep the voice's character when the key moves</label>
@@ -347,6 +347,7 @@
 </div>
 <div class="sheet" id="sheet"></div>
 <div class="shade" id="shade"></div>
+<script src="desktop-bridge.js"></script>
 <script type="module" src="app.js"></script>
 </body>
 </html>

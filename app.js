@@ -100,7 +100,7 @@ async function loadSong(id, autoplay = true) {
     try {
       const blob = await (await fetch(songs[id].url)).blob();
       rec = { ...songs[id], blob, size: songs[id].size > 0 ? songs[id].size : blob.size };
-    } catch (err) { if (token === loadSeq) { st.loadErr = "Cannot read this song"; updateMini(); drawWave(); toast("Cannot read that song from the phone"); } return; }
+    } catch (err) { if (token === loadSeq) { st.loadErr = "Cannot read this song"; updateMini(); drawWave(); toast(`Cannot read that song from the ${DEV}`); } return; }
   } else rec = await songGet(id).catch(() => null);
   if (token !== loadSeq) return;                                   // another song was tapped meanwhile
   if (!rec || !rec.blob) { st.loadErr = "No longer in the app"; updateMini(); toast("That song is no longer in the app"); return; }
@@ -244,6 +244,10 @@ async function sniffHeader(blob, name) {
 
 // ---------------------------------------------------------------- transport
 const ANDROID = window.AVBAndroid || null;
+// the same app on a computer (desktop-bridge.js): "phone" in the words becomes "computer", delete goes to the Recycle Bin
+const DESKTOP = !!(ANDROID && ANDROID.platform && ANDROID.platform() === "desktop");
+const DEV = DESKTOP ? "computer" : "phone";
+const RECS_PLACE = DESKTOP ? "Music\\AVB Player Recordings" : "Recordings/AVB Music Player on your phone";
 function play() {
   if (!st.buffer) return;
   // the phone's audio first: other music apps pause; during a call Android says no
@@ -375,15 +379,15 @@ function effKey() { const f = fixOf(); return f.key || (st.music && st.music.key
 // (the teal circle in the tempo slider marks the original tempo once it has moved; tap it to go back)
 function refreshMusic() {
   const m = st.music || {}; const sp = +$("#speed").value; const fx = fixOf();
-  $("#speedval").textContent = sp + "%"; $("#speedBtn").textContent = `${+(sp / 100).toFixed(2)}×`; $("#speedBtn").classList.toggle("on", sp !== 100);
-  { const b0 = effBpm(); $("#speedBpm").textContent = (b0 ? `${(b0 * sp / 100).toFixed(1)} BPM` : "— BPM") + (sp !== 100 ? ` · ${sp}%` : ""); }
+  $("#speedval").textContent = Math.round(sp) + "%"; $("#speedBtn").textContent = `${+(sp / 100).toFixed(2)}×`; $("#speedBtn").classList.toggle("on", sp !== 100);
+  { const b0 = effBpm(); $("#speedBpm").textContent = (b0 ? `${(b0 * sp / 100).toFixed(1)} BPM` : "— BPM") + (sp !== 100 ? ` · ${Math.round(sp)}%` : ""); }
   $("#speedBpm").classList.toggle("moved", sp !== 100);
   fillHomeSub();              // the song's own tempo teal, a changed one yellow
   $("#semis").textContent = st.semis ? `${st.semis > 0 ? "+" : ""}${st.semis} st` : "±0 st";
   $("#tempoReset").classList.toggle("on", sp !== 100); $("#tempoMid").hidden = sp === 100; $("#keyReset").classList.toggle("on", !!st.semis);
   const bpm = effBpm();
   $("#bpm").textContent = bpm ? (bpm * sp / 100).toFixed(1) : "—";
-  $("#bpmnote").textContent = bpm ? (sp !== 100 ? `${bpm.toFixed(1)} as recorded, at ${sp}%` : fx.bpm ? (fx.bpmHow === "tap" ? "tapped by you" : "set by you") : `beat ${m.confidence || ""}`) : "";
+  $("#bpmnote").textContent = bpm ? (sp !== 100 ? `${bpm.toFixed(1)} as recorded, at ${Math.round(sp)}%` : fx.bpm ? (fx.bpmHow === "tap" ? "tapped by you" : "set by you") : `beat ${m.confidence || ""}`) : "";
   $("#fixReset").hidden = !(fx.bpm || fx.key);
   $("#bpmTarget").value = bpm ? (bpm * sp / 100).toFixed(1) : ""; $("#bpmTarget").disabled = !bpm;
   $("#bpmFrom").textContent = bpm ? `of ${bpm.toFixed(1)}` : "";
@@ -711,7 +715,8 @@ async function shareSong(id) {
     if (why) continue;                                                          // identical: that is the Original
     options.push({ label: label + tail, run: () => shareCopy(f) });
   }
-  sheet(options, `Share “${s0.name.replace(/\.[^.]+$/, "")}”`);
+  if (DESKTOP) options[0].label = options[0].label.replace("Original file", "Show the file in its folder");
+  sheet(options, `${DESKTOP ? "Show or save" : "Share"} “${s0.name.replace(/\.[^.]+$/, "")}”`);
 }
 async function shareOriginal(id) {
   const s0 = songs[id];
@@ -857,7 +862,7 @@ function subLine(s) {
 }
 function emptyText() {
   if (view === "phone") return phoneState === "denied" ? "Allow AVB Player to see your music: tap All music again, then Allow."
-    : phoneState === "loading" ? "Looking for music on your phone…" : "No music found on this phone.";
+    : phoneState === "loading" ? `Looking for music on your ${DEV}…` : DESKTOP ? "No music found in Music, Downloads or Desktop." : "No music found on this phone.";
   if (view === "recordings") return "No recordings yet: tap ● Record on the Play page.";
   if (view === "queue") return ANDROID ? "Pick songs in All music, or + Open files." : "Open files to start.";
   if (view === "favorites") return "No favorites yet: tap ♡ on a song.";
@@ -943,10 +948,10 @@ function renderList() {
   });
   if (ANDROID) $("#viewAdded").hidden = !Object.keys(songs).some(id => !songs[id].url && !isRecording(id));
   const n = ids.length;
-  if (view === "phone") $("#storage").textContent = phoneState === "ok" ? `${n} song${n === 1 ? "" : "s"} on this phone` : "";
+  if (view === "phone") $("#storage").textContent = phoneState === "ok" ? `${n} song${n === 1 ? "" : "s"} on this ${DEV}` : "";
   else if (view === "added") $("#storage").textContent = `${n} song${n === 1 ? "" : "s"} opened with +, kept in the app`;
   else if (drill || view === "group") $("#storage").textContent = `${n} song${n === 1 ? "" : "s"}`;
-  else if (view === "recordings") $("#storage").textContent = ANDROID ? `${n} recording${n === 1 ? "" : "s"} · saved in Recordings/AVB Music Player on your phone` : `${n} recording${n === 1 ? "" : "s"} · kept in the app`;
+  else if (view === "recordings") $("#storage").textContent = ANDROID ? `${n} recording${n === 1 ? "" : "s"} · saved in ${RECS_PLACE}` : `${n} recording${n === 1 ? "" : "s"} · kept in the app`;
   else if (!ANDROID && navigator.storage && navigator.storage.estimate) navigator.storage.estimate().then(e => $("#storage").textContent = `${Object.keys(songs).length} songs stored in the app · ${(e.usage / 1e6).toFixed(0)} MB of ${(e.quota / 1e9).toFixed(1)} GB`);
   else $("#storage").textContent = "";
 }
@@ -1007,7 +1012,7 @@ function updateSelbar() {
   $("#selDel").disabled = !n; $("#selMore").disabled = !n; $("#selRemove").disabled = !n;
   const webRecs = !ANDROID && sel.where === "recs";              // in the browser a recording lives only in the app
   $("#selRemove").hidden = webRecs;
-  $("#selDel").textContent = ANDROID ? "Delete from phone" : "Delete";
+  $("#selDel").textContent = ANDROID ? `Delete from ${DEV}` : "Delete";
 }
 $("#selMusic").onclick = () => sel.where === "music" ? selEnd() : selStart("music");
 $("#selRecs").onclick = () => sel.where === "recs" ? selEnd() : selStart("recs");
@@ -1028,7 +1033,7 @@ async function removeMany(ids) {
   const hiddenOnly = ids.every(id => songs[id].url);
   for (const id of ids) await removeFromApp(id, true);
   selEnd(true); renderList(); renderRecList();
-  snack(`${n} ${word} removed from the player. The files are still on your phone.`, hiddenOnly ? "Undo" : "", () => {
+  snack(`${n} ${word} removed from the player. The files are still on your ${DEV}.`, hiddenOnly ? "Undo" : "", () => {
     lib.hidden = lib.hidden.filter(x => !ids.includes(x)); save("hidden"); renderList(); renderRecList();
   });
 }
@@ -1065,8 +1070,9 @@ async function deleteMany(ids) {
   const names = ids.slice(0, 4).map(id => `“${songs[id].name}”`).join(", ") + (n > 4 ? ` and ${n - 4} more` : "");
   // one question only: Android's own when it will ask (files other apps made), else ours
   const androidAsks = ANDROID && onPhone.length && !phoneManaged();
-  if (!androidAsks && !(await confirmBox(ANDROID && onPhone.length ? `Delete ${n} ${word} from your phone completely?` : `Delete ${n} ${word}?`,
-      `${names} ${n === 1 ? "is" : "are"} erased${ANDROID && onPhone.length ? " from the phone itself, not only from this app" : ""}. This cannot be undone.`, "Delete", "Cancel"))) return;
+  if (!androidAsks && !(await confirmBox(DESKTOP && onPhone.length ? `Move ${n} ${word} to the Recycle Bin?` : ANDROID && onPhone.length ? `Delete ${n} ${word} from your phone completely?` : `Delete ${n} ${word}?`,
+      DESKTOP && onPhone.length ? `${names} ${n === 1 ? "goes" : "go"} to the computer's Recycle Bin: from there ${n === 1 ? "it" : "they"} can still be put back.`
+        : `${names} ${n === 1 ? "is" : "are"} erased${ANDROID && onPhone.length ? " from the phone itself, not only from this app" : ""}. This cannot be undone.`, "Delete", "Cancel"))) return;
   if (ANDROID && onPhone.length) {
     const token = ++deleteToken;
     const done = new Promise(r => deleteWaiters[token] = r);
@@ -1082,13 +1088,13 @@ async function deleteMany(ids) {
   erasing = false;
   phoneIds = phoneIds.filter(x => !gone.has(x)); recordingIds = recordingIds.filter(x => !gone.has(x));
   selEnd(true); renderList(); renderRecList();
-  toast(`Deleted ${n} ${word}${ANDROID && onPhone.length ? " from your phone" : ""}`);
+  toast(DESKTOP && onPhone.length ? `${n} ${word} moved to the Recycle Bin` : `Deleted ${n} ${word}${ANDROID && onPhone.length ? " from your phone" : ""}`);
   if (androidAsks) offerManaged();
 }
 async function shareMany(ids) {
   if (ANDROID && ANDROID.shareMediaMany) {
     const media = [...new Set(ids.map(id => /^[mr]:/.test(id) ? id : phoneTwin(id)).filter(Boolean))];
-    if (media.length < ids.length) toast(`${ids.length - media.length} of them ${ids.length - media.length === 1 ? "is" : "are"} not on the phone and ${ids.length - media.length === 1 ? "was" : "were"} left out`);
+    if (media.length < ids.length) toast(`${ids.length - media.length} of them ${ids.length - media.length === 1 ? "is" : "are"} not on the ${DEV} and ${ids.length - media.length === 1 ? "was" : "were"} left out`);
     if (media.length) ANDROID.shareMediaMany(media.map(x => x.slice(2)).join(","));
     selEnd(); return;
   }
@@ -1145,12 +1151,12 @@ function songMenu(id) {
   ];
   if (view === "queue") items.push({ label: "Remove from queue", run: () => { const i = lib.queue.indexOf(id); if (i >= 0) { lib.queue.splice(i, 1); if (i < lib.index) lib.index--; else if (i === lib.index) lib.index = -1; } save("queue"); save("index"); renderList(); } });
   if (view === "list") items.push({ label: "Remove from this playlist", run: () => { const p = lib.playlists.find(p => p.name === listName); p.items = p.items.filter(x => x !== id); save("playlists"); renderList(); } });
-  items.unshift({ label: "Share", run: () => shareSong(id) }, { label: "Rename", run: () => renameSong(id) });
+  items.unshift({ label: DESKTOP ? "Show in folder / save a copy" : "Share", run: () => shareSong(id) }, { label: "Rename", run: () => renameSong(id) });
   const rec = isRecording(id);
   const twin = phoneTwin(id);                         // the phone file behind an app copy, when it can be found
-  if (!rec || (ANDROID && songs[id] && songs[id].url)) items.push({ label: "Remove from player (the file stays on your phone)", run: () => removeFromApp(id) });
+  if (!rec || (ANDROID && songs[id] && songs[id].url)) items.push({ label: `Remove from player (the file stays on your ${DEV})`, run: () => removeFromApp(id) });
   if (ANDROID && (id.startsWith("m:") || id.startsWith("r:") || twin))
-    items.push({ label: rec ? "Delete this recording from the phone" : "Delete from phone completely", danger: true, run: () => deleteFromPhone(twin || id, id) });
+    items.push({ label: DESKTOP ? (rec ? "Delete this recording (to the Recycle Bin)" : "Delete from computer (to the Recycle Bin)") : rec ? "Delete this recording from the phone" : "Delete from phone completely", danger: true, run: () => deleteFromPhone(twin || id, id) });
   else if (rec) items.push({ label: "Delete this recording", danger: true, run: async () => {
     if (await confirmBox("Delete this recording?", `“${songs[id].name}” is erased. This cannot be undone.`, "Delete")) { erasing = true; await removeFromApp(id, true); erasing = false; }
   } });
@@ -1171,7 +1177,7 @@ async function renameSong(id) {
   if (!v || v === stem) return;
   let name = v + ext;
   if (/^[mr]:/.test(id) && ANDROID) {
-    if (!ANDROID.renamePhone) { toast("Update AVB Player to rename files on the phone"); return; }
+    if (!ANDROID.renamePhone) { toast(`Update AVB Player to rename files on the ${DEV}`); return; }
     const token = ++renameToken;
     const done = new Promise(r => renameWaiters[token] = r);
     ANDROID.renamePhone(id.slice(2), name, token);
@@ -1209,7 +1215,7 @@ async function removeFromApp(id, quiet) {
   else { await tx("songs", "readwrite", s2 => s2.delete(id)); delete songs[id]; recordingIds = recordingIds.filter(x => x !== id); }
   forget(id);
   renderList(); renderRecList();
-  if (!quiet) toast("Removed from AVB Player. The file is still on your phone.");
+  if (!quiet) toast(`Removed from AVB Player. The file is still on your ${DEV}.`);
 }
 let erasing = false;      // forget() inside a delete: the markers go as well
 // "Media management" (Android 12+): once the user turns it on, Android deletes and renames without its question
@@ -1227,8 +1233,9 @@ window.avbDeleted = (token, ok) => { const f = deleteWaiters[token]; delete dele
 async function deleteFromPhone(phoneId, shownId) {
   const s0 = songs[shownId] || songs[phoneId];
   const androidAsks = !phoneManaged();                  // Android shows its own question: ours is skipped
-  if (!androidAsks && !(await confirmBox(isRecording(shownId) ? "Delete this recording from your phone?" : "Delete from your phone completely?",
-      `“${s0.name}” is erased from the phone itself, not only from this app. This cannot be undone.`, "Delete", "Cancel"))) return;
+  if (!androidAsks && !(await confirmBox(DESKTOP ? "Move it to the Recycle Bin?" : isRecording(shownId) ? "Delete this recording from your phone?" : "Delete from your phone completely?",
+      DESKTOP ? `“${s0.name}” goes to the computer's Recycle Bin: from there it can still be put back.`
+        : `“${s0.name}” is erased from the phone itself, not only from this app. This cannot be undone.`, "Delete", "Cancel"))) return;
   const token = ++deleteToken;
   const done = new Promise(r => deleteWaiters[token] = r);
   ANDROID.deletePhone(phoneId.slice(2), token);
@@ -1241,7 +1248,7 @@ async function deleteFromPhone(phoneId, shownId) {
   erasing = false;
   phoneIds = phoneIds.filter(x => x !== phoneId && x !== shownId); recordingIds = recordingIds.filter(x => x !== phoneId && x !== shownId);
   renderList(); renderRecList();
-  toast(`Deleted “${s0.name}” from your phone`);
+  toast(DESKTOP ? `“${s0.name}” moved to the Recycle Bin` : `Deleted “${s0.name}” from your phone`);
   if (androidAsks) offerManaged();
 }
 function toggleFav(id) { if (!id) return; const i = lib.favorites.indexOf(id); if (i >= 0) lib.favorites.splice(i, 1); else lib.favorites.unshift(id); save("favorites");
@@ -1325,7 +1332,7 @@ async function findLyrics(id, rec, preTags) {
   const artistRaw = tags.artist || songs[id]?.artist || guess.artist, artist = unknown(artistRaw) ? "" : artistRaw;
   const done = () => { if (st.id === id && !filePlain) { showLyrics("", "none", id); lyr.why = why; } };
   if (isRecording(id)) { why.push("Recordings are not looked up online."); return done(); }
-  if (!navigator.onLine) { why.push("Online search skipped: the phone is offline."); return done(); }
+  if (!navigator.onLine) { why.push(`Online search skipped: the ${DEV} is offline.`); return done(); }
   if (!title) { why.push("Online search skipped: the song has no title."); return done(); }
   const dur0 = songs[id]?.duration || st.duration || 0;
   if (dur0 && dur0 < 30) { why.push("Online search skipped: shorter than 30 seconds."); return done(); }
@@ -2056,7 +2063,7 @@ function renderRecList() {
   $("#recSeeAll").hidden = ids.length <= 5 || recAll;
   el.innerHTML = shown.map((id, i) => { const s = songs[id]; return `<li data-id="${id}" class="${id === st.id ? "now" : ""} ${id === freshTake ? "fresh" : ""}"><div class="num">${i + 1}</div><div class="n"><div class="name">${esc(s.name.replace(/\.[^.]+$/, ""))}</div><div class="sub">${[when(s.added), s.duration ? clock(s.duration) : "", s.size > 0 ? (s.size / 1e6).toFixed(1) + " MB" : ""].filter(Boolean).join(" · ")}</div></div>${sel.where === "recs" ? "" : `<button class="rowplay" title="Play">▶</button>`}${rowEnd(id, "recs")}</li>`; }).join("")
     || `<li class="muted">No recordings yet: tap ● Record.</li>`;
-  $("#recsInfo").textContent = ids.length ? (ANDROID ? `${ids.length} recording${ids.length === 1 ? "" : "s"} · Recordings/AVB Music Player on your phone` : `${ids.length} recording${ids.length === 1 ? "" : "s"}`) : "";
+  $("#recsInfo").textContent = ids.length ? (ANDROID ? `${ids.length} recording${ids.length === 1 ? "" : "s"} · ${RECS_PLACE}` : `${ids.length} recording${ids.length === 1 ? "" : "s"}`) : "";
   shownIds.recs = ids; el.style.setProperty("--numw", String(shown.length).length + "ch");
   el.querySelectorAll("li[data-id]").forEach(li => {
     li.querySelector(".n").onclick = () => { if (pickRow(li, "recs")) return; loadSong(li.dataset.id, false); };
@@ -2150,9 +2157,9 @@ async function chooseInput() {
     // the names show only once the microphone has been allowed: ask once, then list
     try { const s2 = await navigator.mediaDevices.getUserMedia({ audio: true }); s2.getTracks().forEach(t => t.stop()); devs = (await navigator.mediaDevices.enumerateDevices()).filter(d => d.kind === "audioinput"); } catch (_) { }
   }
-  const nice = d => d.deviceId === "default" || !d.label ? "Phone microphone" : d.label.replace(/\s*\(.*?\)\s*$/, "") || "Microphone";
+  const nice = d => d.deviceId === "default" || !d.label ? (DESKTOP ? "Built-in microphone" : "Phone microphone") : d.label.replace(/\s*\(.*?\)\s*$/, "") || "Microphone";
   // Automatic = Android's choice: a plugged-in headset, USB microphone or audio interface, else the phone's own
-  const items = [{ label: `Automatic: any connected microphone, else the phone's${!lib.recInput ? "  ✓" : ""}`, run: () => { lib.recInput = ""; save("recInput"); $("#recInputName").textContent = "Automatic"; } }];
+  const items = [{ label: `Automatic: any connected microphone, else the ${DEV}'s${!lib.recInput ? "  ✓" : ""}`, run: () => { lib.recInput = ""; save("recInput"); $("#recInputName").textContent = "Automatic"; } }];
   for (const d of devs) if (d.deviceId && d.deviceId !== "default" && d.deviceId !== "communications")
     items.push({ label: `${nice(d)}${lib.recInput === d.deviceId ? "  ✓" : ""}`, run: () => { lib.recInput = d.deviceId; save("recInput"); $("#recInputName").textContent = nice(d); } });
   sheet(items, "Record from");
@@ -2184,17 +2191,23 @@ $("#settingsBtn").onclick = () => {
   updateRecheck(false);                                 // the update line below refreshes itself if a newer one appeared
   // the user's order: Home screen, default player, share, updates, open a song, markers and notes; then the rest
   const items = [];
-  if (ANDROID && ANDROID.addToHome) items.push({ label: "Add AVB Player to the Home screen", run: () => {
+  if (ANDROID && ANDROID.addToHome) items.push({ label: DESKTOP ? "Add AVB Player to the desktop and Start menu" : "Add AVB Player to the Home screen", run: () => {
     if (!ANDROID.addToHome()) toast("This home screen does not allow it: long-press AVB Player in the apps list and drag it to the Home screen");
+    else if (DESKTOP) toast("AVB Player is on the desktop and in the Start menu");
   } });
   else if (!ANDROID && !$("#installBtn").hidden) items.push({ label: "Install the app on this phone", run: () => $("#installBtn").click() });
-  if (ANDROID && ANDROID.askDefault) items.push({ label: "Make AVB Player your default player", run: () => ANDROID.askDefault() });
-  if (ANDROID && ANDROID.shareApp) items.push({ label: "Share AVB Player (WhatsApp, text)", run: () => ANDROID.shareApp(APK_URL) });
+  if (ANDROID && ANDROID.askDefault) items.push({ label: "Make AVB Player your default player", run: () => {
+    ANDROID.askDefault();
+    if (DESKTOP) ask("Default player", "In the Default apps window: type .wav in the box at the top, click the app shown, pick AVB Music Player and Set default. Then the same for .mp3 (and .flac).", "", "OK", "", false);
+  } });
+  if (ANDROID && ANDROID.shareApp) items.push(DESKTOP
+    ? { label: "Copy the link to the phone app", run: () => { ANDROID.shareApp(APK_URL); toast("Link copied: paste it into a message") ; } }
+    : { label: "Share AVB Player (WhatsApp, text)", run: () => ANDROID.shareApp(APK_URL) });
   else if (/Android/.test(navigator.userAgent)) items.push({ label: "Download the Android app", run: () => { location.href = APK_URL; } });
   if (ANDROID && ANDROID.updateCheck) items.push(updateInfo
     ? { label: `Update to AVB Player ${updateInfo.name}`, run: startUpdate }
     : { label: "Check for updates", run: () => { updateManual = true; toast("Checking for updates"); ANDROID.updateCheck(); } });
-  items.push({ label: ANDROID ? "Open a song from Drive or another app" : "Add music from your files", run: () => $("#files2").click() });
+  items.push({ label: DESKTOP ? "Add a song from another folder" : ANDROID ? "Open a song from Drive or another app" : "Add music from your files", run: () => $("#files2").click() });
   items.push({ label: "Save the markers and notes of every song in one spreadsheet (to Downloads)", run: exportAllMarks });
   if (canAskManaged()) items.push({ label: "Delete and rename without Android asking", run: () => { ANDROID.askManageMedia(); toast("Turn on “Allow media management” for AVB Player, then come back"); } });
   if (lib.hidden.length) items.push({ label: `Show removed songs again (${lib.hidden.length})`, run: () => { const n = lib.hidden.length; lib.hidden = []; save("hidden"); renderList(); renderRecList(); toast(`${n} back in the player`); } });
@@ -2276,13 +2289,34 @@ function fillHomeSub() {
     s0.size > 0 ? (s0.size / 1e6).toFixed(1) + " MB" : ""].filter(Boolean);
   $("#hSub").innerHTML = `<span class="ft ft-${kind}">${esc(f)}</span>` + parts.join(" · ");
 }
+// a name too long for its line slowly runs to its end and back, so the whole name can be read
+function runName(el, text) {
+  if (el.dataset.name === text && el.firstElementChild) return;     // same name: the running goes on
+  el.dataset.name = text;
+  el.classList.add("mqhost"); el.classList.remove("run");
+  el.innerHTML = `<span class="mq">${esc(text)}</span>`;
+  requestAnimationFrame(() => fitName(el));
+}
+function fitName(el) {
+  const sp = el.firstElementChild; if (!sp) return;
+  el.classList.remove("run");
+  const over = sp.scrollWidth - el.clientWidth;
+  if (el.clientWidth > 0 && over > 4) {
+    el.style.setProperty("--mq", `-${over + 6}px`);
+    el.style.setProperty("--mqt", `${(4 + over / 35).toFixed(1)}s`);      // about 35 px a second, with pauses at both ends
+    el.classList.add("run");
+  }
+}
+// measured again whenever the box changes size (shown after being hidden, a turned phone, a wider window)
+if ("ResizeObserver" in window) { const ro = new ResizeObserver(es => { for (const e of es) if (e.contentRect.width > 0) fitName(e.target); }); ro.observe($("#miniTitle")); ro.observe($("#hTitle")); }
+else window.addEventListener("resize", () => { for (const id of ["#miniTitle", "#hTitle"]) fitName($(id)); });
 function updateMini() {
   const show = !!st.id && songs[st.id] && $("#np").hidden && !rec && !sel.where;
   $("#mini").hidden = !show; document.body.classList.toggle("hasmini", !!show);
   if (!st.id || !songs[st.id]) return;
-  $("#miniTitle").textContent = $("#title").textContent;
+  runName($("#miniTitle"), $("#title").textContent);
   // the song's name at the top of the home screen, with its format tag and length
-  $("#hTitle").textContent = $("#title").textContent;
+  runName($("#hTitle"), $("#title").textContent);
   fillHomeSub();
   $("#miniSub").textContent = $("#npArtist").textContent || (isRecording(st.id) ? "Recording" : (st.info && st.info.fmt) || "");
   const dur = st.duration || songs[st.id].duration || 0, fmt = (st.info && st.info.fmt) || fmtOf(songs[st.id].name);
@@ -2693,7 +2727,23 @@ $("#speedBtn").onclick = () => {
   sheet([0.5, 0.75, 0.9, 1, 1.1, 1.25, 1.5].map(v => ({ label: `${v}×${v === 1 ? "  (original)" : ""}${Math.abs(v - cur) < .001 ? "  ✓" : ""}`,
     run: () => { $("#speed").value = Math.round(v * 100); applyChange(); refreshMusic(); refreshSave(); } })), "Speed");
 };
-$("#bpmTarget").onchange = e => { const bpm = effBpm(); if (bpm) { $("#speed").value = Math.max(50, Math.min(150, Math.round(+e.target.value / bpm * 100))); refreshMusic(); changeSoon(50); } };
+$("#bpmTarget").onchange = e => { const bpm = effBpm(); if (bpm) { $("#speed").value = Math.max(50, Math.min(150, +e.target.value / bpm * 100)); refreshMusic(); changeSoon(50); } };
+// Tempo - / +: one BPM a tap (1 % when the song's tempo is not known); held, it keeps stepping
+function tempoStep(dir) {
+  const bpm = effBpm(), sp = +$("#speed").value;
+  let next;
+  if (bpm) { const now = bpm * sp / 100; next = (dir > 0 ? Math.floor(now + 1e-6) + 1 : Math.ceil(now - 1e-6) - 1) / bpm * 100; }   // to the next whole BPM
+  else next = Math.round(sp) + dir;
+  $("#speed").value = Math.max(50, Math.min(150, next));
+  refreshMusic(); changeSoon();
+}
+for (const [id, dir] of [["#tempoDown", -1], ["#tempoUp", 1]]) {
+  const b = $(id); let hold = 0, rep = 0;
+  const stop = () => { clearTimeout(hold); clearInterval(rep); };
+  b.addEventListener("pointerdown", e => { e.preventDefault(); tempoStep(dir); stop(); hold = setTimeout(() => { rep = setInterval(() => tempoStep(dir), 90); }, 450); });
+  for (const ev of ["pointerup", "pointerleave", "pointercancel"]) b.addEventListener(ev, stop);
+  b.addEventListener("click", e => e.preventDefault());
+}
 $("#keyDown").onclick = () => { st.semis = Math.max(-12, st.semis - 1); refreshMusic(); changeSoon(); };
 $("#keyUp").onclick = () => { st.semis = Math.min(12, st.semis + 1); refreshMusic(); changeSoon(); };
 

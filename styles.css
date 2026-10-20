@@ -855,3 +855,23 @@ body.onrecs .topsearch { display: none; }
 .tempocol { flex: 1; min-width: 0; display: flex; flex-direction: column; justify-content: center; gap: 0; }
 #rowTempo .tempocol label { min-width: 0; font-size: 11.5px; line-height: 1; letter-spacing: .02em; margin: 0 0 1px 2px; color: var(--text3); font-weight: 700; }
 #rowTempo .tempocol .tempotrack { flex: none; height: 18px; }
+
+/* Tempo - / + like Pitch */
+#rowTempo .pmpair { margin-right: 2px; }
+#rowTempo .tempocol[hidden] { display: none !important; }
+/* the waveform on the home screen, about a fifth shorter */
+.homewave #wave { height: 152px; }
+
+/* names in the list: regular weight (the playing one a little stronger, in its purple) */
+.list li .name { font-weight: 500; }
+.list li.now .name { font-weight: 650; }
+/* a long song name runs: to its end, a pause, back, a pause */
+.mqhost { overflow: hidden; white-space: nowrap; text-overflow: clip !important; }
+.mqhost .mq { display: inline-block; white-space: nowrap; }
+.mqhost.run .mq { animation: mqrun var(--mqt, 8s) ease-in-out infinite alternate; }
+@keyframes mqrun { 0%, 18% { transform: translateX(0); } 82%, 100% { transform: translateX(var(--mq)); } }
+/* the top title's purple gradient travels with its letters */
+.hometitle .htname.mqhost { background-image: none; filter: none; color: inherit; }
+.hometitle .htname.mqhost .mq { color: transparent; -webkit-background-clip: text; background-clip: text; padding-bottom: 2px;
+  background-image: linear-gradient(180deg, #F3E8FF 0%, #D8B4FE 22%, #B65CFF 48%, #9D2BFF 72%, #7A12E8 100%);
+  filter: drop-shadow(0 0 8px rgba(157,43,255,.45)); }
