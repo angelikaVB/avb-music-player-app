@@ -952,7 +952,7 @@ function renderList() {
   else if (view === "added") $("#storage").textContent = `${n} song${n === 1 ? "" : "s"} opened with +, kept in the app`;
   else if (drill || view === "group") $("#storage").textContent = `${n} song${n === 1 ? "" : "s"}`;
   else if (view === "recordings") $("#storage").textContent = ANDROID ? `${n} recording${n === 1 ? "" : "s"} · saved in ${RECS_PLACE}` : `${n} recording${n === 1 ? "" : "s"} · kept in the app`;
-  else if (!ANDROID && navigator.storage && navigator.storage.estimate) navigator.storage.estimate().then(e => $("#storage").textContent = `${Object.keys(songs).length} songs stored in the app · ${(e.usage / 1e6).toFixed(0)} MB of ${(e.quota / 1e9).toFixed(1)} GB`);
+  else if (!ANDROID && navigator.storage && navigator.storage.estimate) navigator.storage.estimate().then(e => $("#storage").textContent = `${Object.keys(songs).length} song${Object.keys(songs).length === 1 ? "" : "s"} stored in the app · ${(e.usage / 1e6).toFixed(0)} MB of ${(e.quota / 1e9).toFixed(1)} GB`);
   else $("#storage").textContent = "";
 }
 // ---------------------------------------------------------------- selecting many

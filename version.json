@@ -1,7 +1,7 @@
 {
- "code": 86,
- "name": "7.6",
+ "code": 87,
+ "name": "7.7",
  "url": "https://angelikavb.github.io/avb-music-player-app/AVB-Player.apk",
- "sha256": "a4c15132db41eb6962118c9b550bf8b70006fb15547c75f42db22a3df1308c0d",
- "notes": "Tempo - and +, shorter waveform, running song names"
+ "sha256": "c515d0d0b74c1d886ba39900c8a0ea4e4b95791dfc05453b88379488f6da2be3",
+ "notes": "No Library line; Sort and Select on the count line"
 }

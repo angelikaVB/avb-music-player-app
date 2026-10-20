@@ -875,3 +875,9 @@ body.onrecs .topsearch { display: none; }
 .hometitle .htname.mqhost .mq { color: transparent; -webkit-background-clip: text; background-clip: text; padding-bottom: 2px;
   background-image: linear-gradient(180deg, #F3E8FF 0%, #D8B4FE 22%, #B65CFF 48%, #9D2BFF 72%, #7A12E8 100%);
   filter: drop-shadow(0 0 8px rgba(157,43,255,.45)); }
+
+/* no "Library" line (only the way back inside an artist / album); Sort and Select sit on the count line */
+body:not(.drill) #libHead { display: none; }
+.countrow { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 8px 0 2px; }
+.countrow #storage { margin: 0; flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.countrow .libbtns { flex: none; }
