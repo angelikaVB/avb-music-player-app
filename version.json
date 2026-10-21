@@ -1,7 +1,7 @@
 {
- "code": 90,
- "name": "8.0",
- "url": "https://angelikavb.github.io/avb-music-player-app/AVB-Player.apk",
- "sha256": "c07b6eef12dbd0d853c38b8ed131aaf511149a61342ec2d27ce0d02d17a451b0",
- "notes": "Bright saturated orange buttons"
+ "code": 91,
+ "name": "8.1",
+ "url": "https://angelikavb.github.io/avb-music-player-app/AVB-Player-8.1.apk",
+ "sha256": "0bd5bd3898c6f2a5f5330ac061c4d8f525bf6ce9e22e95164a63c76b92c90dd2",
+ "notes": "Updates download their own file"
 }

@@ -3012,6 +3012,8 @@ window.avbUpdateProgress = pct => {
 // problems are shown in a box (not a passing toast) so they can be read and reported
 window.avbUpdateError = text => {
   updateBusy = false; showUpdateBar();
+  // a newer version was published while this one was offered: look again and offer that one
+  if (/damaged/i.test(text || "")) { updateRecheck(true); toast("A newer version is out: tap Update again"); return; }
   if (/cancel/i.test(text || "")) toast(text); else ask("Update did not finish", text || "Update failed", "", "OK", "", false);
 };
 // back from Android's install screen without the new version: Update can be tapped again
