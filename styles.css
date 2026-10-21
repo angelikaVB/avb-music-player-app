@@ -881,3 +881,22 @@ body:not(.drill) #libHead { display: none; }
 .countrow { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 8px 0 2px; }
 .countrow #storage { margin: 0; flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .countrow .libbtns { flex: none; }
+/* orange buttons: shorter, flatter, rectangles with soft corners (no more glossy balls) */
+.gloss { border-radius: 11px !important;
+  background: linear-gradient(180deg, #FF9A3A 0%, #FF7A10 48%, #F26200 100%) !important;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.45), inset 0 -1px 0 rgba(150,40,0,.35), 0 2px 7px rgba(255,90,0,.32) !important; }
+.gloss::before { left: 0; right: 0; top: 0; height: 48%; border-radius: 11px 11px 0 0;
+  background: linear-gradient(180deg, rgba(255,255,255,.28), rgba(255,255,255,0)); }
+.gloss:active { transform: scale(.97); }
+/* sizes: the Music page */
+.hbtn.gloss { width: 46px; height: 34px; }
+.hbtn.hplay.gloss { width: 96px; height: 40px; border-radius: 12px !important; }
+.hbtn.hplay.gloss::before { left: 0; right: 0; border-radius: 12px 12px 0 0; }
+/* the bottom player */
+.minibtn.gloss { width: 38px; height: 28px; border-radius: 9px !important; }
+.minibtn.gloss.mplay { width: 48px; height: 30px; }
+.minibtn.gloss::before { border-radius: 9px 9px 0 0; }
+/* the full-screen player */
+.controls .ctl.gloss { width: 56px; height: 38px; }
+.controls .play.gloss { width: 96px; height: 48px; border-radius: 13px !important; }
+.np.studio .controls .play.gloss { width: 80px; height: 42px; }
