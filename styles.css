@@ -900,3 +900,6 @@ body:not(.drill) #libHead { display: none; }
 .controls .ctl.gloss { width: 56px; height: 38px; }
 .controls .play.gloss { width: 96px; height: 48px; border-radius: 13px !important; }
 .np.studio .controls .play.gloss { width: 80px; height: 42px; }
+/* orange buttons: bright, saturated orange */
+.gloss { background: linear-gradient(180deg, #FF9500 0%, #FF7A00 52%, #FF6200 100%) !important;
+  box-shadow: inset 0 1px 0 rgba(255,236,200,.55), inset 0 -1px 0 rgba(190,60,0,.35), 0 2px 9px rgba(255,110,0,.5) !important; }
