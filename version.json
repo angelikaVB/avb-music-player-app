@@ -1,7 +1,7 @@
 {
- "code": 92,
- "name": "8.2",
- "url": "https://angelikavb.github.io/avb-music-player-app/AVB-Player-8.2.apk",
- "sha256": "743debade6f5a96304358a061a9bd5976a80347e35cbc38822bdfaba754fc10a",
- "notes": "Music keeps playing between songs; short Bluetooth dropouts resume"
+ "code": 93,
+ "name": "8.3",
+ "url": "https://angelikavb.github.io/avb-music-player-app/AVB-Player-8.3.apk",
+ "sha256": "3475139268be5e17811ebf460bbd94126f0c43cceb3634bae2d77b26cbbe2674",
+ "notes": "New copper AVB Player icon"
 }
