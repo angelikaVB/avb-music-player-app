@@ -1,7 +1,7 @@
 {
- "code": 99,
- "name": "8.9",
- "url": "https://angelikavb.github.io/avb-music-player-app/AVB-Player-8.9.apk",
- "sha256": "42d20bb7dec30bc4e4fb6c57ddb28f50f7db6c9d4e791c6fcb1e5ea5af194e0f",
- "notes": "Shuffle, repeat and cut in gold"
+ "code": 100,
+ "name": "9.0",
+ "url": "https://angelikavb.github.io/avb-music-player-app/AVB-Player-9.0.apk",
+ "sha256": "18807fb4cf9eb560d6858477b32b3ae3180ee3aec0cfd97ee4d3587ef522bd9f",
+ "notes": "The song name at the top as before (no frame)"
 }

@@ -926,11 +926,6 @@ body:not(.drill) #libHead { display: none; }
   background: linear-gradient(90deg, #F3DB9C, #D5A049); box-shadow: 0 0 8px rgba(232,195,115,.45); }
 /* search: a framed field */
 .searchbar input { background-color: rgba(255,255,255,.05); border: 1px solid rgba(139,128,255,.28); }
-/* the song at the top: a card with a music tile */
-.hometitle { background: var(--card); border: 1px solid var(--line); border-radius: 18px; padding: 10px 10px 10px 10px; gap: 10px; }
-.hometitle::before { content: ""; flex: none; width: 46px; height: 46px; border-radius: 12px;
-  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23E9D5FF' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M9 18V5l11-2v13'/%3E%3Ccircle cx='6' cy='18' r='3'/%3E%3Ccircle cx='17' cy='16' r='3'/%3E%3C/svg%3E") center / 24px no-repeat, linear-gradient(135deg, #7C3AED, #3B1676); box-shadow: inset 0 1px 0 rgba(255,255,255,.15); }
-.htbtn { background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.06); }
 /* the waveform in a card */
 .homewave { background: var(--card); border: 1px solid var(--line); border-radius: 18px; padding: 6px; }
 /* transport: back / forward dark with gold arrows, play gold; shuffle gold, repeat violet (brighter when on) */
