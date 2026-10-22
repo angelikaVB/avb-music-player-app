@@ -1,7 +1,7 @@
 {
- "code": 110,
- "name": "10.0",
- "url": "https://angelikavb.github.io/avb-music-player-app/AVB-Player-10.0.apk",
- "sha256": "611ed921912563a54abc3dd865ba7be60f1d5783ac4b2f7f1e97a3d42b56f217",
- "notes": "Gold BPM under the song name; less rounded blocks"
+ "code": 111,
+ "name": "10.1",
+ "url": "https://angelikavb.github.io/avb-music-player-app/AVB-Player-10.1.apk",
+ "sha256": "8ff12adc2628c6da953c6c9f380b1a398e18dc9fffb5c5b83cd4c6832be90d3e",
+ "notes": "No Added list: those songs are in All music"
 }

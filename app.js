@@ -925,11 +925,15 @@ $("#sortMusic").onclick = () => sheet(Object.entries(SORTS).map(([k, s]) => ({
 function allMusicIds() {
   const phone = phoneIds.filter(x => !lib.hidden.includes(x));
   const inPhone = new Set(phone);
-  const extra = lib.favorites.filter(id => songs[id] && !songs[id].url && !isRecording(id) && !inPhone.has(id) && !phoneTwin(id));
+  // songs kept in the app (opened from Drive or another app) and favorites not on the phone: in All music too
+  // (there is no separate "Added" list any more)
+  const kept = Object.keys(songs).filter(id => !songs[id].url && !isRecording(id) && !String(id).startsWith("r:"));
+  const extra = [...new Set([...lib.favorites, ...kept])].filter(id => songs[id] && !songs[id].url && !isRecording(id) && !inPhone.has(id) && !phoneTwin(id));
   if (!extra.length) return phone;
   return [...phone, ...extra].sort((a, b) => (songs[b].added || 0) - (songs[a].added || 0));
 }
 function renderList() {
+  if (view === "added") view = ANDROID ? "phone" : "queue";        // no "Added" list any more: its songs are in All music
   renderShelves();
   const filter = $("#filter").value.toLowerCase();
   if (view === "artists" || view === "albums") { renderGroups(view === "artists" ? "artist" : "album", filter); return; }
@@ -960,7 +964,7 @@ function renderList() {
     if (b.dataset.pl === "new") return newPlaylist();
     const p = lib.playlists[+b.dataset.i]; if (p) { selEnd(true); view = "list"; listName = p.name; renderList(); }
   });
-  if (ANDROID) $("#viewAdded").hidden = !Object.keys(songs).some(id => !songs[id].url && !isRecording(id));
+  $("#viewAdded").hidden = true;                                   // the user does not want an "Added" list
   const n = ids.length;
   if (view === "phone") $("#storage").textContent = phoneState === "ok" ? `${n} song${n === 1 ? "" : "s"} on this ${DEV}` : "";
   else if (view === "added") $("#storage").textContent = `${n} song${n === 1 ? "" : "s"} opened with +, kept in the app`;
