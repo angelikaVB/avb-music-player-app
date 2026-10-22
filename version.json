@@ -1,7 +1,7 @@
 {
- "code": 100,
- "name": "9.0",
- "url": "https://angelikavb.github.io/avb-music-player-app/AVB-Player-9.0.apk",
- "sha256": "18807fb4cf9eb560d6858477b32b3ae3180ee3aec0cfd97ee4d3587ef522bd9f",
- "notes": "The song name at the top as before (no frame)"
+ "code": 101,
+ "name": "9.1",
+ "url": "https://angelikavb.github.io/avb-music-player-app/AVB-Player-9.1.apk",
+ "sha256": "19980e20f8afd760d9e7dfdd44141f9bbe61f72763c592ddef45f28bae353a1a",
+ "notes": "No icons beside the words"
 }
