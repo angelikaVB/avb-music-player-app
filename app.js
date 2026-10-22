@@ -2928,15 +2928,21 @@ window.avbPhoneReady = () => { loadPhone(false); loadRecordings(); };
 if (ANDROID) { $("#viewQueue").hidden = true; if (view === "queue") view = "phone"; $("#viewPhone").hidden = false; $("#viewArtists").hidden = false; $("#viewAlbums").hidden = false; setTimeout(() => { loadPhone(true); loadRecordings(); }, 300); }
 else recordingIds = Object.values(songs).filter(x => x.kind === "recording").sort((a, b) => b.added - a.added).map(x => x.id);
 if (ANDROID && ANDROID.askDefault) { $("#makeDefault").hidden = false; $("#makeDefault").onclick = () => ANDROID.askDefault(); }
+// the phone's Back key: one step back at a time; only from the plain Music page does it leave (music keeps playing)
 window.avbBack = () => {
   if ($("#sheet").classList.contains("on")) { $("#sheet").classList.remove("on"); return true; }
+  if (!$("#dialog").hidden) { ($("#dlgNo").hidden ? $("#dlgYes") : $("#dlgNo")).click(); return true; }
   if (!$("#mkEdit").hidden) { closeMarkEdit(); return true; }
   if (!$("#mkPop").hidden) { hideMarkPop(); return true; }
   if (sel.where) { selEnd(); return true; }
   if (!$("#np").hidden && !rec) { closeNP(); return true; }
-  if ($("#page-music").classList.contains("on") && closeDrill()) return true;
   if (!$("#installHint").hidden) { $("#installHint").hidden = true; return true; }
   if ($("#page-recs").classList.contains("on")) { showPage("music"); return true; }
+  if (cutMode) { closeCut(); return true; }
+  if ($("#filter").value) { $("#filter").value = ""; $("#filter").oninput(); $("#filter").blur(); return true; }
+  if (closeDrill()) return true;
+  const home = ANDROID ? "phone" : "queue";
+  if (view !== home) { $("#views").querySelector(`:scope > button[data-view="${home}"]`).click(); window.scrollTo({ top: 0 }); return true; }
   return false;
 };
 await takeAndroid();

@@ -1,7 +1,7 @@
 {
- "code": 102,
- "name": "9.2",
- "url": "https://angelikavb.github.io/avb-music-player-app/AVB-Player-9.2.apk",
- "sha256": "aa90b0ed7a6dfbaaba2f628941129d86418946bbce0553350f643bbd4ca47247",
- "notes": "Icons back on Info, EQ and the other buttons; none by Tempo and Pitch"
+ "code": 103,
+ "name": "9.3",
+ "url": "https://angelikavb.github.io/avb-music-player-app/AVB-Player-9.3.apk",
+ "sha256": "7e3fb46c9e8266a58bb243b40593611a8c22b378156f3f4f212c7f9cedb3ce9f",
+ "notes": "The Back key steps back; Info after Loudness"
 }
