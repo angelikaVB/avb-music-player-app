@@ -907,3 +907,6 @@ body:not(.drill) #libHead { display: none; }
   box-shadow: inset 0 1px 0 rgba(255,236,200,.55), inset 0 -1px 0 rgba(190,60,0,.35), 0 2px 9px rgba(255,110,0,.5) !important; }
 /* boxes with several lines (Why did the music stop?) keep their line breaks */
 #dlgText { white-space: pre-line; }
+/* Music / Recordings in the banner's gold: the open page bright like the lettering, the other muted */
+.top .tabs button { color: rgba(213,160,73,.45); }
+.top .tabs button.on { color: #E8C373; background: linear-gradient(180deg, #FCF5D6 0%, #F3DB9C 35%, #D5A049 100%); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; }
