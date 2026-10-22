@@ -983,3 +983,7 @@ body:not(.drill) #libHead { display: none; }
 .homemix #keyResult:not(:empty) { padding: 4px 7px; white-space: nowrap; }
 .homewave { padding: 0; }
 @media (max-width: 380px) { .homemix .rst { width: 28px; height: 28px; } .homemix .ghost, #rowTempo .ghost, #rowKey .ghost { min-width: 30px; padding: 0 6px; } .homemix #keyResult:not(:empty) { padding: 4px 5px; } }
+/* shuffle, repeat (all / one) and cut: all gold, dimmed when off, glowing when on */
+#hRepeat, #repeat { color: var(--gold) !important; }
+#hRepeat.on, #repeat.on { filter: drop-shadow(0 0 6px rgba(232,195,115,.6)); }
+#hCut svg { stroke: var(--gold); }
