@@ -910,3 +910,10 @@ body:not(.drill) #libHead { display: none; }
 /* Music / Recordings in the banner's gold: the open page bright like the lettering, the other muted */
 .top .tabs button { color: rgba(213,160,73,.45); }
 .top .tabs button.on { color: #E8C373; background: linear-gradient(180deg, #FCF5D6 0%, #F3DB9C 35%, #D5A049 100%); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; }
+/* the buttons in the banner's gold (were orange), with dark icons so they read on the light gold */
+.gloss { background: linear-gradient(180deg, #FBE29A 0%, #EEC25A 40%, #DCA23A 76%, #B8822A 100%) !important;
+  box-shadow: inset 0 1px 0 rgba(255,250,228,.7), inset 0 -1px 0 rgba(120,80,20,.4), 0 2px 9px rgba(232,195,115,.35) !important; }
+.gloss::before { background: linear-gradient(180deg, rgba(255,255,255,.35), rgba(255,255,255,0)); }
+.gloss svg { fill: #3B2507; filter: drop-shadow(0 1px 0 rgba(255,244,210,.45)); }
+.ctl#repeat.on, .ctl#shuffle.on, .hbtn.hmode.on { color: #E8C373; filter: drop-shadow(0 0 6px rgba(232,195,115,.5)); }
+#eqDraw.on { background: rgba(232,195,115,.22); border-color: #E8C373; color: #F3DB9C; }

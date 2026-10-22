@@ -1726,7 +1726,7 @@ function drawEq() {
   }
   // the line being drawn
   if (eqStroke && eqStroke.length > 1) {
-    c.strokeStyle = "#fff"; c.lineWidth = 3; c.lineJoin = c.lineCap = "round"; c.shadowColor = "#FF8A1E"; c.shadowBlur = 8;
+    c.strokeStyle = "#fff"; c.lineWidth = 3; c.lineJoin = c.lineCap = "round"; c.shadowColor = "#E8C373"; c.shadowBlur = 8;
     c.beginPath(); eqStroke.forEach((p, i) => i ? c.lineTo(p.x, p.y) : c.moveTo(p.x, p.y)); c.stroke(); c.shadowBlur = 0;
   }
   // band dots
@@ -2346,7 +2346,7 @@ function updateMini() {
 }
 // the round play / pause icon, and the equaliser moves only while music plays
 function setMiniPlay(on) {
-  // white icons on the glossy orange balls
+  // the icons on the gold buttons (dark: the stylesheet colors them)
   const pause = w => `<svg viewBox="0 0 24 24" width="${w}" height="${w}" fill="#fff"><rect x="6.5" y="5" width="4" height="14" rx="1.2"/><rect x="13.5" y="5" width="4" height="14" rx="1.2"/></svg>`;
   const playI = w => `<svg viewBox="0 0 24 24" width="${w}" height="${w}" fill="#fff"><path d="M8 5.2v13.6L19 12z"/></svg>`;
   $("#miniPlay").innerHTML = on ? pause(18) : playI(18);
