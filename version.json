@@ -1,7 +1,7 @@
 {
- "code": 115,
- "name": "10.5",
- "url": "https://angelikavb.github.io/avb-music-player-app/AVB-Player-10.5.apk",
- "sha256": "4183a17fbd5b207140fd1a8183550e7d102b956c44d3146f5263748a2f2498b9",
- "notes": "Shorter waveform box, wave at full size"
+ "code": 116,
+ "name": "10.6",
+ "url": "https://angelikavb.github.io/avb-music-player-app/AVB-Player-10.6.apk",
+ "sha256": "1b162f8e6222f80178843ad71ce41d9b5867cc404d69d6271f3486aab6fdef9e",
+ "notes": "One EQ: the duplicate EQ tab in Tools removed"
 }
