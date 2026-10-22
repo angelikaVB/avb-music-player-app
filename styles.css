@@ -1040,3 +1040,11 @@ body:not(.drill) #libHead { display: none; }
 .chips button:not(.gloss) { border-radius: 8px !important; }
 .updbar { border-radius: 10px; }
 .updbar #updBtn { border-radius: 8px; }
+/* one consistent dark navy everywhere (user): no violet glow at the top, the pinned header the same blue as the
+   page, the bottom player and the full-screen player navy too; slightly deeper blue toward the bottom */
+:root { --bg: #0B0B20; --navy-lo: #11123A; }
+body { background: linear-gradient(180deg, #0B0B20 0%, #0D0D27 50%, #11123A 100%) fixed !important; }
+.topbar, .top { background: rgba(11,11,32,.97) !important; }
+.topbar .top { background: none !important; }
+.mini { background: rgba(19,20,52,.97) !important; box-shadow: 0 -1px 0 rgba(139,128,255,.14), 0 -8px 24px rgba(0,0,0,.35); }
+.np { background: linear-gradient(180deg, #0B0B20 0%, #0D0D27 50%, #11123A 100%) !important; }

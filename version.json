@@ -1,7 +1,7 @@
 {
- "code": 111,
- "name": "10.1",
- "url": "https://angelikavb.github.io/avb-music-player-app/AVB-Player-10.1.apk",
- "sha256": "8ff12adc2628c6da953c6c9f380b1a398e18dc9fffb5c5b83cd4c6832be90d3e",
- "notes": "No Added list: those songs are in All music"
+ "code": 112,
+ "name": "10.2",
+ "url": "https://angelikavb.github.io/avb-music-player-app/AVB-Player-10.2.apk",
+ "sha256": "bf6542ff2ce3368d3f7009a0c81da8f79b5dc97641e48a67338c9a40f01893f1",
+ "notes": "One consistent dark blue background"
 }
