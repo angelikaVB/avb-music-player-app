@@ -1,7 +1,7 @@
 {
- "code": 101,
- "name": "9.1",
- "url": "https://angelikavb.github.io/avb-music-player-app/AVB-Player-9.1.apk",
- "sha256": "19980e20f8afd760d9e7dfdd44141f9bbe61f72763c592ddef45f28bae353a1a",
- "notes": "No icons beside the words"
+ "code": 102,
+ "name": "9.2",
+ "url": "https://angelikavb.github.io/avb-music-player-app/AVB-Player-9.2.apk",
+ "sha256": "aa90b0ed7a6dfbaaba2f628941129d86418946bbce0553350f643bbd4ca47247",
+ "notes": "Icons back on Info, EQ and the other buttons; none by Tempo and Pitch"
 }
