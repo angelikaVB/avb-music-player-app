@@ -989,3 +989,9 @@ body:not(.drill) #libHead { display: none; }
 .np .nphead .badges { justify-content: flex-start; margin-top: 4px; }
 .np:not(.studio) .wavecard { display: block; margin-top: 12px; }
 .np:not(.studio) .wavecard .tgrid { display: none; }
+
+/* running names go one way only, right to left like a ticker: a pause, then the name runs out and its copy runs in */
+.mqhost .mqb { display: none; padding-left: 48px; }
+.mqhost.run .mqb { display: inline; }
+.mqhost.run .mq { animation: mqrun1 var(--mqt, 8s) linear infinite; }
+@keyframes mqrun1 { 0%, 15% { transform: translateX(0); } 100% { transform: translateX(var(--mq)); } }

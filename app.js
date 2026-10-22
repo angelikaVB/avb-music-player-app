@@ -2314,16 +2314,18 @@ function runName(el, text) {
   if (el.dataset.name === text && el.firstElementChild) return;     // same name: the running goes on
   el.dataset.name = text;
   el.classList.add("mqhost"); el.classList.remove("run");
-  el.innerHTML = `<span class="mq">${esc(text)}</span>`;
+  // the name twice: it runs one way (right to left) and the second copy follows the first around
+  el.innerHTML = `<span class="mq"><span class="mqa">${esc(text)}</span><span class="mqb" aria-hidden="true">${esc(text)}</span></span>`;
   requestAnimationFrame(() => fitName(el));
 }
 function fitName(el) {
-  const sp = el.firstElementChild; if (!sp) return;
+  const sp = el.querySelector(".mqa"); if (!sp) return;
   el.classList.remove("run");
-  const over = sp.scrollWidth - el.clientWidth;
+  const w = sp.getBoundingClientRect().width, over = w - el.clientWidth;
   if (el.clientWidth > 0 && over > 4) {
-    el.style.setProperty("--mq", `-${over + 6}px`);
-    el.style.setProperty("--mqt", `${(4 + over / 35).toFixed(1)}s`);      // about 35 px a second, with pauses at both ends
+    const run = w + 48;                                                          // the name and the gap before its copy
+    el.style.setProperty("--mq", `-${run.toFixed(1)}px`);
+    el.style.setProperty("--mqt", `${(run / 35 / 0.85).toFixed(1)}s`);           // about 35 px a second, after a pause at the start
     el.classList.add("run");
   }
 }
