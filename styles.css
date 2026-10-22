@@ -776,7 +776,9 @@ body.hasmini .snack { bottom: calc(76px + env(safe-area-inset-bottom)); }
 /* what the moving band does, in words */
 .eqhint { min-height: 38px; margin: 4px 0 2px; padding: 8px 12px; border-radius: 12px; background: rgba(255,138,30,.08); color: #FFD3A8; font-size: 13.5px; font-weight: 600; line-height: 1.35; }
 /* the AVB Player logo at the top-left of the player, on every screen size */
-.top img.logo { display: block !important; width: 36px; height: 36px; border-radius: 10px; flex: none; background: none; object-fit: cover; box-shadow: 0 2px 10px rgba(157,43,255,.45); }
+.top img.logo { display: block !important; width: auto; height: 40px; border-radius: 0; flex: none; background: none; box-shadow: none; filter: drop-shadow(0 2px 8px rgba(255,180,40,.25)); }
+/* narrow phones: the banner, Music, Recordings and the gear fit on one row */
+@media (max-width: 400px) { .top { gap: 8px; } .top img.logo { height: 35px; } .top .tabs button { font-size: 19px; padding: 4px; } }
 #dlgText { white-space: pre-line; }
 .lyrblock.nolyr #lyrSource { text-decoration: underline dotted; cursor: pointer; }
 /* the song that is playing: glossy saturated purple in the list, like the title at the top */

@@ -1,7 +1,7 @@
 {
- "code": 94,
- "name": "8.4",
- "url": "https://angelikavb.github.io/avb-music-player-app/AVB-Player-8.4.apk",
- "sha256": "7f1723ba4626a565a29e3bd2d87af5de72fa6596350d610dd4eec7cbfdaf4ef3",
- "notes": "New golden icon: deeper gold AVB letters on a lighter panel"
+ "code": 95,
+ "name": "8.5",
+ "url": "https://angelikavb.github.io/avb-music-player-app/AVB-Player-8.5.apk",
+ "sha256": "0762802121ea22f9b9609cf3bd767f18dbf948494c3e7baed83a0a23c738aa06",
+ "notes": "Gold AVB Player banner at the top: bigger play button and letters, no tile around them"
 }
