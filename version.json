@@ -1,7 +1,7 @@
 {
- "code": 91,
- "name": "8.1",
- "url": "https://angelikavb.github.io/avb-music-player-app/AVB-Player-8.1.apk",
- "sha256": "0bd5bd3898c6f2a5f5330ac061c4d8f525bf6ce9e22e95164a63c76b92c90dd2",
- "notes": "Updates download their own file"
+ "code": 92,
+ "name": "8.2",
+ "url": "https://angelikavb.github.io/avb-music-player-app/AVB-Player-8.2.apk",
+ "sha256": "743debade6f5a96304358a061a9bd5976a80347e35cbc38822bdfaba754fc10a",
+ "notes": "Music keeps playing between songs; short Bluetooth dropouts resume"
 }

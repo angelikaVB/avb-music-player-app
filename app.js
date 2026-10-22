@@ -21,7 +21,7 @@ const songGet = id => new Promise((ok, no) => { const t = db.transaction("songs"
 const lib = {
   queue: await kvGet("queue", []), index: await kvGet("index", -1), favorites: await kvGet("favorites", []),
   recent: await kvGet("recent", []), playlists: await kvGet("playlists", []), notes: await kvGet("notes", {}), lyrics: await kvGet("lyrics", {}), eq: await kvGet("eq", null), lyrH: await kvGet("lyrH", 300), lyrFold: await kvGet("lyrFold", false), mkOpen: await kvGet("mkOpen", true), mkCat: await kvGet("mkCat", "idea"), recInput: await kvGet("recInput", ""), recFmt: await kvGet("recFmt", { sr: 48000, bits: 24 }), shuffle: await kvGet("shuffle", false), mono: false,
-  balance: await kvGet("balance", 0), fix: await kvGet("fix", {}), marks: await kvGet("marks", {}), hidden: await kvGet("hidden", []), seenVersion: await kvGet("seenVersion", ""), sort: await kvGet("sort", "default"), mmOffered: await kvGet("mmOffered", false), renamed: await kvGet("renamed", {}),
+  balance: await kvGet("balance", 0), fix: await kvGet("fix", {}), marks: await kvGet("marks", {}), hidden: await kvGet("hidden", []), stopLog: await kvGet("stopLog", []), seenVersion: await kvGet("seenVersion", ""), sort: await kvGet("sort", "default"), mmOffered: await kvGet("mmOffered", false), renamed: await kvGet("renamed", {}),
   repeat: await kvGet("repeat", "off"), volume: await kvGet("volume", 1), keepVoice: await kvGet("keepVoice", true),
 };
 const save = k => kvSet(k, lib[k]);
@@ -252,9 +252,10 @@ function play() {
   if (!st.buffer) return;
   // the phone's audio first: other music apps pause; during a call Android says no
   if (ANDROID && ANDROID.mediaFocus && !ANDROID.mediaFocus()) { toast("A call is using the audio. Play again after it."); return; }
-  audio().then(() => { send({ cmd: "play" }); st.playing = true; setMiniPlay(true); if (ANDROID) ANDROID.playing(true); if (navigator.mediaSession) navigator.mediaSession.playbackState = "playing"; mediaReport(); });
+  st.starting = true;                                    // until the sound runs, Android hears "playing" already
+  audio().then(() => { st.starting = false; send({ cmd: "play" }); st.playing = true; setMiniPlay(true); if (ANDROID) ANDROID.playing(true); if (navigator.mediaSession) navigator.mediaSession.playbackState = "playing"; mediaReport(); });
 }
-function pause() { send({ cmd: "pause" }); st.playing = false; setMiniPlay(false); if (ANDROID) ANDROID.playing(false); if (navigator.mediaSession) navigator.mediaSession.playbackState = "paused"; mediaReport(); }
+function pause() { send({ cmd: "pause" }); st.playing = false; st.starting = false; setMiniPlay(false); if (ANDROID) ANDROID.playing(false); if (navigator.mediaSession) navigator.mediaSession.playbackState = "paused"; mediaReport(); }
 // ---- the phone's side of playing (Android app): lock screen, notification, headset / car buttons, audio focus
 let mediaTimer = 0, duck = 1;
 function mediaReport() {
@@ -263,7 +264,7 @@ function mediaReport() {
   const s0 = st.id && songs[st.id];
   try {
     ANDROID.mediaState(JSON.stringify({
-      playing: !!st.playing, loaded: !!s0, id: st.id || "",
+      playing: !!(st.playing || st.starting), loaded: !!s0, id: st.id || "",
       title: s0 ? $("#title").textContent : "", artist: s0 ? ($("#npArtist").textContent || "") : "",
       album: (st.tags && st.tags.album) || (s0 && s0.album) || "",
       duration: st.buffer ? st.duration : 0, position: st.pos || 0, speed: 1,
@@ -275,7 +276,17 @@ const mediaReportSoon = (ms = 300) => { clearTimeout(mediaTimer); mediaTimer = s
 setInterval(() => { if (st.playing) mediaReport(); }, 15000);          // keeps the lock screen's clock honest
 const setVolume = () => { if (node) node.port.postMessage({ cmd: "volume", volume: lib.volume * duck }); };
 // what Android asks of the page (MediaHub.page)
+const STOP_WHY = {
+  device: "the headphones, car or speaker disconnected", focus: "another app started playing", call: "a call or another app's sound (it goes on after)",
+  button: "a headset, car or lock-screen button",
+};
+function stopLog(why) {
+  lib.stopLog = [{ t: Date.now(), why, song: st.id && songs[st.id] ? songs[st.id].name.replace(/\.[^.]+$/, "") : "" }, ...(lib.stopLog || [])].slice(0, 20);
+  save("stopLog");
+}
 window.avbMedia = (cmd, arg) => {
+  if (cmd === "pause" && st.playing && STOP_WHY[arg]) stopLog(STOP_WHY[arg]);
+  if (cmd === "pause" && arg === "focus-lost") { stopLog(STOP_WHY.focus); toast("Paused: another app started playing"); arg = "focus"; }
   if (cmd === "play") { if (!st.playing && (st.buffer || lib.queue.length)) togglePlay(); }
   else if (cmd === "pause") {
     if (arg === "device") { duck = 0; setVolume(); }                // silent at once: never out of the phone's speaker
@@ -294,8 +305,11 @@ function togglePlay() { if (!st.buffer) { if (lib.queue.length) playIndex(Math.m
 function seek(t) { if (!st.buffer) return; t = Math.max(0, Math.min(st.duration, t)); st.pos = t; send({ cmd: "seek", frame: Math.round(t * st.sr) }); drawWave(); mediaReportSoon();
   $("#miniProg").style.width = (t / st.duration * 100) + "%"; $("#tnow").textContent = fmtTime(t); $("#hNow").textContent = fmtTime(t); $("#seek").value = Math.round(t / st.duration * 1000); }
 function onEnded() {
-  st.playing = false; setMiniPlay(false); if (ANDROID) ANDROID.playing(false);
-  mediaReportSoon(1500);                                 // the next song usually starts before this reports "stopped"
+  st.playing = false; setMiniPlay(false);
+  // another song follows: Android keeps hearing "playing" (keep-awake lock, audio, car display) through the gap
+  const last = lib.index + 1 >= lib.queue.length && lib.repeat === "off" && !lib.shuffle;
+  const goesOn = lib.repeat === "one" || (!isRecording(st.id) && lib.queue.length && !last);
+  if (!goesOn) { if (ANDROID) ANDROID.playing(false); mediaReport(); if (!isRecording(st.id)) stopLog("the list ended"); }
   if (lib.repeat === "one") { seek(0); play(); } else if (!isRecording(st.id)) nextTrack(true);
 }
 // choosing a song only loads it: playing is the user's ▶ (autoplay only when the music was already going)
@@ -2209,6 +2223,12 @@ $("#settingsBtn").onclick = () => {
     : { label: "Check for updates", run: () => { updateManual = true; toast("Checking for updates"); ANDROID.updateCheck(); } });
   items.push({ label: DESKTOP ? "Add a song from another folder" : ANDROID ? "Open a song from Drive or another app" : "Add music from your files", run: () => $("#files2").click() });
   items.push({ label: "Save the markers and notes of every song in one spreadsheet (to Downloads)", run: exportAllMarks });
+  if (ANDROID) items.push({ label: "Why did the music stop?", run: () => {
+    const when = t => { const d = new Date(t); return d.toLocaleDateString(undefined, { month: "short", day: "numeric" }) + " " + d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" }); };
+    const log = lib.stopLog || [];
+    ask("Why did the music stop?", log.length ? log.slice(0, 10).map(e => `${when(e.t)} · ${e.why}${e.song ? ` · “${e.song}”` : ""}`).join("\n")
+      : "Nothing yet: the player has not stopped by itself.", "", "OK", "", false);
+  } });
   if (canAskManaged()) items.push({ label: "Delete and rename without Android asking", run: () => { ANDROID.askManageMedia(); toast("Turn on “Allow media management” for AVB Player, then come back"); } });
   if (lib.hidden.length) items.push({ label: `Show removed songs again (${lib.hidden.length})`, run: () => { const n = lib.hidden.length; lib.hidden = []; save("hidden"); renderList(); renderRecList(); toast(`${n} back in the player`); } });
   const ver = ANDROID && ANDROID.version ? ANDROID.version() : "";
