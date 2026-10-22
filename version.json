@@ -1,7 +1,7 @@
 {
- "code": 107,
- "name": "9.7",
- "url": "https://angelikavb.github.io/avb-music-player-app/AVB-Player-9.7.apk",
- "sha256": "d7d5f479976c9d32c3805b82383d109b83830fecda595865755c6dee5e852c70",
- "notes": "Gold Update button and bottom player"
+ "code": 108,
+ "name": "9.8",
+ "url": "https://angelikavb.github.io/avb-music-player-app/AVB-Player-9.8.apk",
+ "sha256": "52245a3977fb5e617f47b3680ccc7e1e0d4129d9239834a3a84323b0b19e274e",
+ "notes": "Shorter, aligned tempo and pitch block"
 }
