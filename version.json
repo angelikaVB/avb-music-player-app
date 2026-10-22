@@ -1,7 +1,7 @@
 {
- "code": 105,
- "name": "9.5",
- "url": "https://angelikavb.github.io/avb-music-player-app/AVB-Player-9.5.apk",
- "sha256": "f1d2326b3a02c9d105ef0bc8b70932979f63c3884b65f4619cf5b3dfbf7f09dc",
- "notes": "Long song names run one way, right to left"
+ "code": 106,
+ "name": "9.6",
+ "url": "https://angelikavb.github.io/avb-music-player-app/AVB-Player-9.6.apk",
+ "sha256": "8e9cf05ed82c591c30150740b03e0cfb686c6e853881ea29fb8d523ea7d9875f",
+ "notes": "Tempo and pitch in gold"
 }

@@ -944,7 +944,9 @@ body:not(.drill) #libHead { display: none; }
 .homemix .ghost, #rowTempo .ghost, #rowKey .ghost { border-radius: 11px; background: rgba(255,255,255,.03); border: 1px solid rgba(139,128,255,.32); }
 .bpmchip { border: 1px solid rgba(25,240,220,.35); border-radius: 12px; }
 .homemix #semis { border: 1px solid rgba(139,128,255,.32); border-radius: 11px; padding: 5px 9px; }
-.homemix #keyResult:not(:empty) { border: 1px solid rgba(25,240,220,.3); border-radius: 11px; padding: 5px 9px; }
+/* the key chip filled as the BPM chip is - teal, yellow once moved (the user: one had a fill, the other not) */
+.homemix #keyResult:not(:empty) { border: 1px solid rgba(25,240,220,.35); border-radius: 12px; padding: 5px 9px; background: rgba(25,240,220,.14); }
+.homemix #keyResult.moved:not(:empty) { background: rgba(255,230,0,.16); }
 .homemix .rst { border-radius: 10px; border: 1px solid rgba(139,128,255,.28); background: rgba(255,255,255,.03); color: #A5B4FC; }
 /* chips: framed; the open list gold */
 .chips button { background: rgba(255,255,255,.04); border: 1px solid var(--line); }
@@ -995,3 +997,8 @@ body:not(.drill) #libHead { display: none; }
 .mqhost.run .mqb { display: inline; }
 .mqhost.run .mq { animation: mqrun1 var(--mqt, 8s) linear infinite; }
 @keyframes mqrun1 { 0%, 15% { transform: translateX(0); } 100% { transform: translateX(var(--mq)); } }
+/* tempo and pitch in gold (user's mockup): BPM and key are gold chips, -/+ and reset framed in quiet grey;
+   a changed tempo or key shows brighter (lighter gold, stronger fill) */
+.bpmchip, .homemix #keyResult:not(:empty) { color: var(--gold) !important; background: rgba(232,195,115,.13) !important; border: 1px solid rgba(232,195,115,.55) !important; border-radius: 12px; }
+.bpmchip.moved, .homemix #keyResult.moved:not(:empty) { color: #FFF1C2 !important; background: rgba(232,195,115,.3) !important; border-color: var(--gold) !important; box-shadow: 0 0 8px rgba(232,195,115,.35); }
+.homemix .ghost, #rowTempo .ghost, #rowKey .ghost, .homemix .rst { border-color: rgba(255,255,255,.16) !important; background: rgba(255,255,255,.03); color: #E6E4F5; }
