@@ -1,7 +1,7 @@
 {
- "code": 113,
- "name": "10.3",
- "url": "https://angelikavb.github.io/avb-music-player-app/AVB-Player-10.3.apk",
- "sha256": "98bd32d14cff7c70282100d4236a8abee0f52fb149f2649bdce6e3da1e843e2f",
- "notes": "Changed tempo and key show clearly"
+ "code": 114,
+ "name": "10.4",
+ "url": "https://angelikavb.github.io/avb-music-player-app/AVB-Player-10.4.apk",
+ "sha256": "33b8c5757e5334d4c9511deb3c2213c6985a5edc59503a82b5b038373cfbd2ae",
+ "notes": "Shorter waveform on the Music page"
 }
