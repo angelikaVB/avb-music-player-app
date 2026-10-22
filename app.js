@@ -394,10 +394,13 @@ function effKey() { const f = fixOf(); return f.key || (st.music && st.music.key
 function refreshMusic() {
   const m = st.music || {}; const sp = +$("#speed").value; const fx = fixOf();
   $("#speedval").textContent = Math.round(sp) + "%"; $("#speedBtn").textContent = `${+(sp / 100).toFixed(2)}×`; $("#speedBtn").classList.toggle("on", sp !== 100);
-  { const b0 = effBpm(); $("#speedBpm").textContent = (b0 ? `${(b0 * sp / 100).toFixed(1)} BPM` : "— BPM") + (sp !== 100 ? ` · ${Math.round(sp)}%` : ""); }
+  // the chip shows the tempo it plays at; the % is in its tooltip (and beside the slider in Tools)
+  { const b0 = effBpm(); $("#speedBpm").textContent = b0 ? `${(b0 * sp / 100).toFixed(1)} BPM` : "— BPM";
+    $("#speedBpm").title = (sp !== 100 ? `${Math.round(sp)}% of the original${b0 ? ` (${b0.toFixed(1)} BPM)` : ""}. ` : "") + "Tap to type a tempo"; }
   $("#speedBpm").classList.toggle("moved", sp !== 100);
   fillHomeSub();              // the song's own tempo teal, a changed one yellow
   $("#semis").textContent = st.semis ? `${st.semis > 0 ? "+" : ""}${st.semis} st` : "±0 st";
+  $("#semis").classList.toggle("moved", !!st.semis);
   $("#tempoReset").classList.toggle("on", sp !== 100); $("#tempoMid").hidden = sp === 100; $("#keyReset").classList.toggle("on", !!st.semis);
   const bpm = effBpm();
   $("#bpm").textContent = bpm ? (bpm * sp / 100).toFixed(1) : "—";

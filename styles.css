@@ -1048,3 +1048,7 @@ body { background: linear-gradient(180deg, #0B0B20 0%, #0D0D27 50%, #11123A 100%
 .topbar .top { background: none !important; }
 .mini { background: rgba(19,20,52,.97) !important; box-shadow: 0 -1px 0 rgba(139,128,255,.14), 0 -8px 24px rgba(0,0,0,.35); }
 .np { background: linear-gradient(180deg, #0B0B20 0%, #0D0D27 50%, #11123A 100%) !important; }
+/* a changed tempo or key: the chip turns solid gold with dark text, a changed pitch's semitones gold */
+.bpmchip.moved, .homemix #keyResult.moved:not(:empty) { color: #2A1A04 !important; background: linear-gradient(180deg, #FBE29A 0%, #EEC25A 50%, #D5A049 100%) !important;
+  border-color: #F3DB9C !important; box-shadow: 0 0 10px rgba(232,195,115,.45); font-weight: 800; }
+.homemix #semis.moved { color: var(--gold); }
