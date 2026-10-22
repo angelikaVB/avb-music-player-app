@@ -479,6 +479,14 @@ function drawWave() {
   // waveform in the color run, played part brighter
   if (st.peaks) {
     const cols = st.peaks.length / 2;
+    // the Music page box is shorter (122 px) than it was (152 px) but its wave keeps the size it had there:
+    // drawn taller in the box, never past it (a loud song fills the box instead)
+    let boost = 1;
+    if (wave.closest("#homeWave")) {
+      if (st.peaks.peakMax === undefined) { let m = 0; for (let i = 0; i < st.peaks.length; i++) { const v = Math.abs(st.peaks[i]); if (v > m) m = v; } st.peaks.peakMax = m || 1; }
+      const amp152 = (152 - RULER_H - top) / 2 - 2;
+      boost = Math.max(1, Math.min(amp152 / amp, 0.98 / (st.peaks.peakMax * (st.vzoom || 1))));
+    }
     const g = wctx.createLinearGradient(0, 0, w, 0); RUN.forEach((c, i) => g.addColorStop(i / 5, c));
     const px = xOf(st.pos, w);
     for (const [alpha, from, to] of [[0.45, px, w], [1, 0, px]]) {
@@ -488,7 +496,7 @@ function drawWave() {
         const c0 = Math.max(0, Math.floor(t0 * cols)), c1 = Math.min(cols, Math.max(c0 + 1, Math.ceil(t1 * cols)));
         let mn = 0, mx = 0;
         for (let c = c0; c < c1; c++) { if (st.peaks[c * 2] < mn) mn = st.peaks[c * 2]; if (st.peaks[c * 2 + 1] > mx) mx = st.peaks[c * 2 + 1]; }
-        const vz = st.vzoom || 1, hi = Math.min(1, mx * vz), lo = Math.max(-1, mn * vz);
+        const vz = (st.vzoom || 1) * boost, hi = Math.min(1, mx * vz), lo = Math.max(-1, mn * vz);
         wctx.rect(x, mid - hi * amp, 1, Math.max(1, (hi - lo) * amp));
       }
       wctx.fill();

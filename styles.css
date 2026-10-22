@@ -1052,5 +1052,5 @@ body { background: linear-gradient(180deg, #0B0B20 0%, #0D0D27 50%, #11123A 100%
 .bpmchip.moved, .homemix #keyResult.moved:not(:empty) { color: #2A1A04 !important; background: linear-gradient(180deg, #FBE29A 0%, #EEC25A 50%, #D5A049 100%) !important;
   border-color: #F3DB9C !important; box-shadow: 0 0 10px rgba(232,195,115,.45); font-weight: 800; }
 .homemix #semis.moved { color: var(--gold); }
-/* the waveform on the Music page 20% shorter (152 -> 122 px); everything below moves up */
+/* the waveform box on the Music page 20% shorter (152 -> 122 px), the wave itself keeps its size (drawWave boost) */
 .homewave #wave { height: 122px !important; }

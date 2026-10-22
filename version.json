@@ -1,7 +1,7 @@
 {
- "code": 114,
- "name": "10.4",
- "url": "https://angelikavb.github.io/avb-music-player-app/AVB-Player-10.4.apk",
- "sha256": "33b8c5757e5334d4c9511deb3c2213c6985a5edc59503a82b5b038373cfbd2ae",
- "notes": "Shorter waveform on the Music page"
+ "code": 115,
+ "name": "10.5",
+ "url": "https://angelikavb.github.io/avb-music-player-app/AVB-Player-10.5.apk",
+ "sha256": "4183a17fbd5b207140fd1a8183550e7d102b956c44d3146f5263748a2f2498b9",
+ "notes": "Shorter waveform box, wave at full size"
 }
