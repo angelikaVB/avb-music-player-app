@@ -1,7 +1,7 @@
 {
- "code": 108,
- "name": "9.8",
- "url": "https://angelikavb.github.io/avb-music-player-app/AVB-Player-9.8.apk",
- "sha256": "52245a3977fb5e617f47b3680ccc7e1e0d4129d9239834a3a84323b0b19e274e",
- "notes": "Shorter, aligned tempo and pitch block"
+ "code": 109,
+ "name": "9.9",
+ "url": "https://angelikavb.github.io/avb-music-player-app/AVB-Player-9.9.apk",
+ "sha256": "a08359f25e3e57fa5c46abbeea75cfebc5b3c00fd45edbd809e00e39c8b62a7b",
+ "notes": "Tempo and pitch in tidy columns"
 }

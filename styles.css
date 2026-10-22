@@ -1019,3 +1019,12 @@ body:not(.drill) #libHead { display: none; }
 .homemix .bpmchip, .homemix #keyResult:not(:empty) { height: 30px; box-sizing: border-box; display: inline-flex; align-items: center; padding-top: 0 !important; padding-bottom: 0 !important; line-height: 1; }
 .homemix #semis { line-height: 30px; }
 .homemix .rst { width: 30px !important; height: 30px !important; }
+/* tempo / pitch in columns (user): "Pitch ±0 st" together, then -/+, the BPM or key chip (one width), reset -
+   all left-aligned so each column lines up between the two rows */
+.homemix .row > label { order: 0; }
+.homemix #semis { order: 1; flex: none; width: 46px; min-width: 0 !important; max-width: 46px; padding: 0; text-align: left; box-sizing: border-box; }
+.homemix .pmpair { order: 2; }
+.homemix .bpmchip, .homemix #keyResult { order: 3; flex: none; width: 86px; justify-content: center; padding-left: 4px !important; padding-right: 4px !important; overflow: hidden; }
+.homemix .rst { order: 4; margin-left: 0 !important; }
+.homemix #rowTempo > label { width: 99px; min-width: 99px !important; }
+.homemix #rowTempo .pmpair { margin-right: 0; }
