@@ -979,3 +979,13 @@ body:not(.drill) #libHead { display: none; }
 #views [data-view="recent"] { --ico: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='9'/%3E%3Cpath d='M12 7v5l3 2'/%3E%3C/svg%3E"); }
 #sortMusic { --ico: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 7h9M4 12h6M4 17h3M17 5v14M14 16l3 3 3-3'/%3E%3C/svg%3E"); }
 #selMusic { --ico: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='4' y='4' width='16' height='16' rx='3'/%3E%3Cpath d='M8 12l3 3 5-6'/%3E%3C/svg%3E"); }
+
+/* full-screen player, Listen: no big empty cover square - the header is one row (small tile, title, details)
+   as in Tools, and the waveform (with ±10 s) takes the space; A/B, Mono and speed stay in Tools */
+.np .nphead { flex-direction: row; text-align: left; gap: 12px; align-items: center; }
+.np .nphead .cover { width: 56px; height: 56px; border-radius: 12px; margin: 0; box-shadow: none; }
+.np .nphead .hrow { justify-content: flex-start; padding: 0 86px 0 0; }
+.np .nphead .hrow #title { text-align: left; font-size: 20px; }
+.np .nphead .badges { justify-content: flex-start; margin-top: 4px; }
+.np:not(.studio) .wavecard { display: block; margin-top: 12px; }
+.np:not(.studio) .wavecard .tgrid { display: none; }

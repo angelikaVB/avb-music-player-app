@@ -2362,7 +2362,7 @@ const MIX_ROWS = ["rowTempo", "rowKey", "rowChange"].map(id => { const el = $("#
 const LYR = (() => { const el = $("#tab-lyrics"), anchor = document.createComment("lyrics"); el.before(anchor); return { el, anchor }; })();
 function placeWave() {
   const inStudio = !$("#np").hidden && npMode === "studio";
-  const slot = inStudio ? $("#npWaveSlot") : $("#homeWave");
+  const slot = !$("#np").hidden ? $("#npWaveSlot") : $("#homeWave");          // full screen (Listen and Tools) or the home screen
   const box = $("#waveBox"); if (box.parentElement !== slot) slot.appendChild(box);      // the waveform with its ±10 s buttons
   const show = !!st.id && !!songs[st.id] && !inStudio;
   $("#homeWave").hidden = !show; $("#homeMix").hidden = !show; $("#homeTransport").hidden = !show; $("#homeTitle").hidden = !show;
