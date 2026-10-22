@@ -1,7 +1,7 @@
 {
- "code": 116,
- "name": "10.6",
- "url": "https://angelikavb.github.io/avb-music-player-app/AVB-Player-10.6.apk",
- "sha256": "1b162f8e6222f80178843ad71ce41d9b5867cc404d69d6271f3486aab6fdef9e",
- "notes": "One EQ: the duplicate EQ tab in Tools removed"
+ "code": 117,
+ "name": "10.7",
+ "url": "https://angelikavb.github.io/avb-music-player-app/AVB-Player-10.7.apk",
+ "sha256": "44523a9ad5e486eef6eabf7469290fa382cd0258efa15094a6beb32545eb9771",
+ "notes": "Same song menu for every song (FLAC too)"
 }

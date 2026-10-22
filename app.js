@@ -1183,9 +1183,15 @@ function songMenu(id) {
   items.unshift({ label: DESKTOP ? "Show in folder / save a copy" : "Share", run: () => shareSong(id) }, { label: "Rename", run: () => renameSong(id) });
   const rec = isRecording(id);
   const twin = phoneTwin(id);                         // the phone file behind an app copy, when it can be found
-  if (!rec || (ANDROID && songs[id] && songs[id].url)) items.push({ label: `Remove from player (the file stays on your ${DEV})`, run: () => removeFromApp(id) });
+  // a copy kept only in the app (opened from Drive or another app, no file of its own on the phone)
+  const appOnly = ANDROID && !rec && songs[id] && !songs[id].url && !twin;
+  if (!rec || (ANDROID && songs[id] && songs[id].url))
+    items.push({ label: appOnly ? "Remove from player (the original stays where you opened it from)" : `Remove from player (the file stays on your ${DEV})`, run: () => removeFromApp(id) });
   if (ANDROID && (id.startsWith("m:") || id.startsWith("r:") || twin))
     items.push({ label: DESKTOP ? (rec ? "Delete this recording (to the Recycle Bin)" : "Delete from computer (to the Recycle Bin)") : rec ? "Delete this recording from the phone" : "Delete from phone completely", danger: true, run: () => deleteFromPhone(twin || id, id) });
+  else if (appOnly) items.push({ label: DESKTOP ? "Delete from computer completely" : "Delete from phone completely", danger: true, run: async () => {
+    if (await confirmBox("Delete this song?", `“${songs[id].name}” is erased from AVB Player and the ${DEV}, with its markers and notes. This cannot be undone.`, "Delete")) { erasing = true; await removeFromApp(id, true); erasing = false; toast("Deleted"); }
+  } });
   else if (rec) items.push({ label: "Delete this recording", danger: true, run: async () => {
     if (await confirmBox("Delete this recording?", `“${songs[id].name}” is erased. This cannot be undone.`, "Delete")) { erasing = true; await removeFromApp(id, true); erasing = false; }
   } });
@@ -1224,7 +1230,12 @@ async function renameSong(id) {
 // an app copy (opened through + Open files / Share) and the same file in All music: same name and size
 function phoneTwin(id) {
   const s0 = songs[id]; if (!s0 || s0.url) return null;
-  return phoneIds.find(m => songs[m] && songs[m].name === s0.name && songs[m].size === s0.size) || null;
+  const same = phoneIds.find(m => songs[m] && songs[m].name === s0.name && songs[m].size === s0.size);
+  if (same) return same;
+  // renamed in the app: the one phone file of the same type and the very same size
+  const ext = (s0.name.match(/\.[^.]+$/) || [""])[0].toLowerCase();
+  const bySize = phoneIds.filter(m => songs[m] && songs[m].size === s0.size && s0.size > 0 && songs[m].name.toLowerCase().endsWith(ext));
+  return bySize.length === 1 ? bySize[0] : null;
 }
 function forget(id) {
   lib.queue = lib.queue.filter(x => x !== id); lib.favorites = lib.favorites.filter(x => x !== id); lib.recent = lib.recent.filter(x => x !== id);
