@@ -2420,9 +2420,10 @@ function openNP(mode) {
   $("#npScroll").scrollTop = 0;
   updateMini(); requestAnimationFrame(() => { drawWave(); if (st.buffer && st.duration) { $("#tnow").textContent = fmtTime(st.pos); $("#seek").value = Math.round(st.pos / st.duration * 1000); } });
 }
-function closeNP() { $("#np").hidden = true; document.body.classList.remove("npopen"); updateMini(); placeWave(); }
+function closeNP() { $("#np").hidden = true; $("#np").classList.remove("onetool"); document.body.classList.remove("npopen"); updateMini(); placeWave(); }
 $("#npClose").onclick = closeNP;
-$("#npMode").querySelectorAll("button").forEach(b => b.onclick = () => setNpMode(b.dataset.mode));
+// tapping Listen / Tools yourself shows the whole Tools page again (its tab row with every tool)
+$("#npMode").querySelectorAll("button").forEach(b => b.onclick = () => { $("#np").classList.remove("onetool"); setNpMode(b.dataset.mode); });
 $("#mini").onclick = e => { if (e.target.closest(".minibtn")) return; openNP(); };
 // drag along the bottom player's progress line to move forward or back; the song jumps on release
 var miniSeeking = false;
@@ -2484,7 +2485,8 @@ $("#homeTools").querySelectorAll("button").forEach(b => b.onclick = () => {
     $("#homeLyrics").scrollIntoView({ behavior: "smooth", block: "start" }); return;
   }
   openNP(t === "lyrics" ? "listen" : "studio");
-  if (t !== "lyrics") selectTool(t);
+  // opened from its button on the Music page: just that tool, without the row of the other tools' tabs
+  if (t !== "lyrics") { selectTool(t); $("#np").classList.add("onetool"); }
   requestAnimationFrame(() => { const el = t === "lyrics" ? $("#tab-lyrics") : $(".toolsbox"); $("#npScroll").scrollTop = el.offsetTop - 70; });
 });
 $("#cutClose").onclick = closeCut;

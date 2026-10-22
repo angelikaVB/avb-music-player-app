@@ -1054,3 +1054,5 @@ body { background: linear-gradient(180deg, #0B0B20 0%, #0D0D27 50%, #11123A 100%
 .homemix #semis.moved { color: var(--gold); }
 /* the waveform box on the Music page 20% shorter (152 -> 122 px), the wave itself keeps its size (drawWave boost) */
 .homewave #wave { height: 122px !important; }
+/* a tool opened from its button on the Music page shows alone: no tab row of the other tools */
+.np.onetool #tools { display: none; }
