@@ -1028,3 +1028,15 @@ body:not(.drill) #libHead { display: none; }
 .homemix .rst { order: 4; margin-left: 0 !important; }
 .homemix #rowTempo > label { width: 99px; min-width: 99px !important; }
 .homemix #rowTempo .pmpair { margin-right: 0; }
+/* the BPM in the line under the song's name: gold like the tempo chip, brighter when the tempo is changed */
+.hometitle .hbpm { color: var(--gold) !important; }
+.hometitle .hbpm.moved { color: #FFF1C2 !important; text-shadow: 0 0 8px rgba(232,195,115,.55); }
+/* blocks less rounded (user); the gold back / play / forward buttons (.gloss) keep their corners */
+.searchbar input { border-radius: 9px !important; }
+.homewave, .homewave #wave, .wavecard, .wavebox, #wave { border-radius: 9px !important; }
+.homemix { border-radius: 10px !important; }
+.homemix .ghost, #rowTempo .ghost, #rowKey .ghost, .homemix .rst { border-radius: 7px !important; }
+.bpmchip, .homemix #keyResult:not(:empty) { border-radius: 7px !important; }
+.chips button:not(.gloss) { border-radius: 8px !important; }
+.updbar { border-radius: 10px; }
+.updbar #updBtn { border-radius: 8px; }

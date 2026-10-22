@@ -1,7 +1,7 @@
 {
- "code": 109,
- "name": "9.9",
- "url": "https://angelikavb.github.io/avb-music-player-app/AVB-Player-9.9.apk",
- "sha256": "a08359f25e3e57fa5c46abbeea75cfebc5b3c00fd45edbd809e00e39c8b62a7b",
- "notes": "Tempo and pitch in tidy columns"
+ "code": 110,
+ "name": "10.0",
+ "url": "https://angelikavb.github.io/avb-music-player-app/AVB-Player-10.0.apk",
+ "sha256": "611ed921912563a54abc3dd865ba7be60f1d5783ac4b2f7f1e97a3d42b56f217",
+ "notes": "Gold BPM under the song name; less rounded blocks"
 }
