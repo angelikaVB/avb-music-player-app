@@ -1,7 +1,7 @@
 {
- "code": 119,
- "name": "10.9",
- "url": "https://angelikavb.github.io/avb-music-player-app/AVB-Player-10.9.apk",
- "sha256": "a7b95ec21b90a910e69e17ea36e050bf2332ee4895929ec9d73f2e414c276415",
- "notes": "Gold tool buttons, Loudness last"
+ "code": 120,
+ "name": "11.0",
+ "url": "https://angelikavb.github.io/avb-music-player-app/AVB-Player-11.0.apk",
+ "sha256": "94ed0e352ea80686eefc1421a2cd631a7b14ee7404a162f62a08cde03a74501a",
+ "notes": "The Lyrics button opens the lyrics full screen"
 }

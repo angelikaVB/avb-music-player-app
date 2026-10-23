@@ -2480,9 +2480,12 @@ $("#hMore").onclick = () => { if (st.id && songs[st.id]) songMenu(st.id); };
 $("#homeTools").querySelectorAll("button").forEach(b => b.onclick = () => {
   const t = b.dataset.tool;
   if (t === "lyrics") {
-    // no lyrics for this song: the chip opens (or closes) the lyrics box, to see why or to add them
-    if (document.body.classList.contains("nolyrics") && !document.body.classList.toggle("lyrforce")) return;
-    $("#homeLyrics").scrollIntoView({ behavior: "smooth", block: "start" }); return;
+    // the lyrics full screen (Listen), unfolded and in view: the sung line lights up there; a song without
+    // lyrics says so and offers Edit to paste them (the button used to only scroll the Music page, unnoticed)
+    if (lib.lyrFold) { lib.lyrFold = false; save("lyrFold"); setLyrFold(); }
+    openNP("listen"); $("#np").classList.remove("onetool");
+    requestAnimationFrame(() => requestAnimationFrame(() => { $("#npScroll").scrollTop = Math.max(0, $("#tab-lyrics").offsetTop - 70); }));
+    return;
   }
   openNP(t === "lyrics" ? "listen" : "studio");
   // opened from its button on the Music page: just that tool, without the row of the other tools' tabs
