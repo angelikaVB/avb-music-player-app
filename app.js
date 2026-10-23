@@ -132,7 +132,7 @@ async function loadSong(id, autoplay = true) {
   st.buffer = buf; st.sr = buf.sampleRate; st.duration = buf.duration;
   const hdr = await sniffHeader(rec.blob, rec.name);
   st.info = { fmt: fmtOf(rec.name), rate: hdr.rate || buf.sampleRate, channels: buf.numberOfChannels, size: rec.size, bits: hdr.bits || bitsOf(rec) };
-  fillBadges(); fillStats();
+  fillBadges(); fillStats(); refreshSave();
   const chans = channelsOf(buf);
   send({ cmd: "load", channels: chans });
   $("#tdur").textContent = fmtTime(buf.duration); $("#hDur").textContent = fmtTime(buf.duration); $("#hNow").textContent = "0:00";
@@ -660,8 +660,34 @@ function saveReason(part, f) {
   }
   return "";
 }
+// the size a copy will have, for one format: the length saved (the piece / without it, at the changed tempo), the
+// song's own rate and channels. WAV and MP3 are exact arithmetic; FLAC depends on the music, so it says "about"
+// (the song's own FLAC ratio when it is a FLAC, else a typical one)
+function copySize(part, value) {
+  if (!st.buffer) return "";
+  const [kind, n] = value.split("-"), bits = +n;
+  let dur = st.duration;
+  if (part !== "whole" && st.a !== null && st.b !== null) dur = part === "keep" ? st.b - st.a : st.duration - (st.b - st.a);
+  dur /= st.speed || 1;
+  const sr = st.info.rate || st.sr, ch = st.info.channels || 2;
+  let bytes, about = false;
+  if (kind === "mp3") bytes = dur * bits * 1000 / 8;
+  else {
+    bytes = dur * sr * ch * bits / 8 + 44;
+    if (kind === "flac") {
+      about = true;
+      const raw = st.duration * sr * ch * (st.info.bits || 16) / 8;
+      const own = st.info.fmt === "FLAC" && st.info.size > 0 && raw > 0 ? st.info.size / raw : 0;
+      bytes *= own > 0.2 && own < 1 ? own : bits >= 24 ? 0.7 : 0.6;
+    }
+  }
+  const mb = bytes / 1e6;
+  return `${about ? "about " : ""}${mb >= 100 ? mb.toFixed(0) : mb.toFixed(1)} MB`;
+}
+const fmtBase = o => o.dataset.label || (o.dataset.label = o.textContent);
 function refreshSave() {
   const part = $("#part").value, f = fmtChoice();
+  for (const o of $("#fmt").querySelectorAll("option")) { const sz = copySize(part, o.value); o.textContent = fmtBase(o) + (sz ? ` · ${sz}` : ""); }
   $("#partHint").hidden = part === "whole";
   // gray out the formats the rules do not allow for this song
   for (const o of $("#fmt").querySelectorAll("option")) { const [k, n] = o.value.split("-"); o.disabled = !!st.buffer && !!saveReason("whole", { kind: k, n: +n }) && !saveReason(part, { kind: k, n: +n }).startsWith("Mark"); }
@@ -2094,6 +2120,7 @@ function selectTool(name) {
   document.querySelectorAll(".tab").forEach(t => t.classList.toggle("on", t.id === "tab-" + name));
   if (name === "loud") drawLoud();
   if (name === "eq") { fillEqEdit(); drawEq(); }
+  if (name === "save") refreshSave();                      // the sizes beside each format, for this song
 }
 function renderRecList() {
   const el = $("#recList");
@@ -2455,7 +2482,7 @@ function defaultCutFmt() {
   const kb = sourceKbps() || 320;
   return "mp3-" + ([320, 256, 192, 128].find(n => n <= kb + 8) || 128);
 }
-const fmtLabel = v => { const o = $("#fmt").querySelector(`option[value="${v}"]`); return o ? o.textContent : v; };
+const fmtLabel = v => { const o = $("#fmt").querySelector(`option[value="${v}"]`); return o ? fmtBase(o) : v; };
 function updateCut() {
   if (!$("#cutA")) return;
   const both = st.a !== null && st.b !== null;
@@ -2501,7 +2528,8 @@ $("#cutFmt").onclick = () => {
   for (const o of $("#fmt").querySelectorAll("option")) {
     const [k, n] = o.value.split("-"), why = saveReason("keep", { kind: k, n: +n });
     if (why && !why.startsWith("Mark")) continue;                                // above the file's own quality
-    items.push({ label: o.textContent + (o.value === cutFmt ? "  ✓" : ""), run: () => { cutFmt = o.value; updateCut(); } });
+    const sz = copySize("keep", o.value);
+    items.push({ label: fmtBase(o) + (sz ? ` · ${sz}` : "") + (o.value === cutFmt ? "  ✓" : ""), run: () => { cutFmt = o.value; updateCut(); } });
   }
   sheet(items, "Save the piece as");
 };

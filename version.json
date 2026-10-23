@@ -1,7 +1,7 @@
 {
- "code": 120,
- "name": "11.0",
- "url": "https://angelikavb.github.io/avb-music-player-app/AVB-Player-11.0.apk",
- "sha256": "94ed0e352ea80686eefc1421a2cd631a7b14ee7404a162f62a08cde03a74501a",
- "notes": "The Lyrics button opens the lyrics full screen"
+ "code": 121,
+ "name": "11.1",
+ "url": "https://angelikavb.github.io/avb-music-player-app/AVB-Player-11.1.apk",
+ "sha256": "08709faee5cbc475c87c13b595a6cc3c1f7e448ffa911e673c8ee415809bd224",
+ "notes": "Save a copy shows the size of each format"
 }
