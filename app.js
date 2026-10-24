@@ -786,6 +786,45 @@ async function shareCopy(f) {
     await deliverShare(blob, name);
   } catch (err) { clearInterval(clock); toast("Could not make the copy: " + (err && err.message || err)); }
 }
+// Send to Music Tools by AVB on the PC (2026-10-24): the song, as it is, over the home Wi-Fi to the PC whose
+// Phone link is on - found by its 4-digit code (asked once, kept); it opens there on SONG MAP
+const pcWaiters = {};
+let pcToken = 0;
+window.avbPcSent = (token, ok, words) => { const f = pcWaiters[token]; delete pcWaiters[token]; if (f) f({ ok, words }); };
+async function sendToPc(id) {
+  const s0 = songs[id]; if (!s0) return;
+  let code = localStorage.getItem("avbPcCode") || "";
+  if (!/^\d{4}$/.test(code)) {
+    const v = await ask("Music Tools code", "On the PC: Music Tools → Phone (top right) → turn the link on; its code is shown there.", "", "Send");
+    if (v == null) return;
+    code = String(v).replace(/\D/g, "").slice(0, 4);
+    if (code.length !== 4) { toast("The code is 4 digits"); return; }
+    localStorage.setItem("avbPcCode", code);
+  }
+  const t0 = performance.now(); let stage = "Reading the song";
+  const clock = setInterval(() => toast(`${stage}… ${((performance.now() - t0) / 1000).toFixed(0)} s`), 600);
+  try {
+    const rec = await songGet(id).catch(() => null);
+    const blob = rec && rec.blob ? rec.blob : (s0.url ? await (await fetch(s0.url)).blob() : null);
+    if (!blob) throw new Error("cannot read that song");
+    const sid = ANDROID.pcSendBegin(s0.name);
+    if (sid < 0) throw new Error("could not prepare it");
+    const step = 768 * 1024;
+    for (let p = 0; p < blob.size; p += step) {
+      const bytes = new Uint8Array(await blob.slice(p, p + step).arrayBuffer());
+      let bin = ""; for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+      if (!ANDROID.saveChunk(sid, btoa(bin))) throw new Error("could not prepare it");
+    }
+    stage = "Sending to Music Tools";
+    const token = ++pcToken;
+    const done = new Promise(r => pcWaiters[token] = r);
+    ANDROID.pcSendEnd(sid, code, token);
+    const res = await done;
+    clearInterval(clock);
+    if (!res.ok && /refused the code/.test(res.words)) localStorage.removeItem("avbPcCode");   // asked again next time
+    toast(res.words);
+  } catch (err) { clearInterval(clock); toast("Not sent: " + (err && err.message || err)); }
+}
 async function deliverShare(blob, name) {
   if (ANDROID && ANDROID.shareBegin) {
     const id = ANDROID.shareBegin(name, blob.type || "audio/*");
@@ -1207,6 +1246,7 @@ function songMenu(id) {
   if (view === "queue") items.push({ label: "Remove from queue", run: () => { const i = lib.queue.indexOf(id); if (i >= 0) { lib.queue.splice(i, 1); if (i < lib.index) lib.index--; else if (i === lib.index) lib.index = -1; } save("queue"); save("index"); renderList(); } });
   if (view === "list") items.push({ label: "Remove from this playlist", run: () => { const p = lib.playlists.find(p => p.name === listName); p.items = p.items.filter(x => x !== id); save("playlists"); renderList(); } });
   items.unshift({ label: DESKTOP ? "Show in folder / save a copy" : "Share", run: () => shareSong(id) }, { label: "Rename", run: () => renameSong(id) });
+  if (ANDROID && !DESKTOP && ANDROID.pcSendBegin) items.splice(1, 0, { label: "Send to Music Tools by AVB", run: () => sendToPc(id) });
   const rec = isRecording(id);
   const twin = phoneTwin(id);                         // the phone file behind an app copy, when it can be found
   // a copy kept only in the app (opened from Drive or another app, no file of its own on the phone)

@@ -1,7 +1,7 @@
 {
- "code": 121,
- "name": "11.1",
- "url": "https://angelikavb.github.io/avb-music-player-app/AVB-Player-11.1.apk",
- "sha256": "08709faee5cbc475c87c13b595a6cc3c1f7e448ffa911e673c8ee415809bd224",
- "notes": "Save a copy shows the size of each format"
+ "code": 122,
+ "name": "11.2",
+ "url": "https://angelikavb.github.io/avb-music-player-app/AVB-Player-11.2.apk",
+ "sha256": "278fa5f557761b383d7499a019c6b81d16db4930e3f2da99b00b81e4a2eedb96",
+ "notes": "Send to Music Tools by AVB: a song's menu sends it to the PC over Wi-Fi"
 }
