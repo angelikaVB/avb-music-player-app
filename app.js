@@ -935,7 +935,8 @@ async function addFiles(files, playNow = false) {
   const before = lib.queue.length;
   for (const id of ids) if (!lib.queue.includes(id)) lib.queue.push(id);
   save("queue");
-  if ((playNow || !st.buffer) && ids.length) { playIndex(lib.queue.indexOf(ids[0])); showPage("music"); if (playNow) openNP("listen"); }
+  // a song you open plays at once: double-clicked in Windows, opened from another app, or picked with Add music
+  if ((playNow || !st.buffer) && ids.length) { playIndex(lib.queue.indexOf(ids[0]), playNow); showPage("music"); if (playNow) openNP("listen"); }
   else if (ids.length) toast(`Added ${lib.queue.length - before} to the queue`);
   renderList();
 }

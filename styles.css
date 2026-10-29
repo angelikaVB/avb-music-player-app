@@ -1059,3 +1059,12 @@ body { background: linear-gradient(180deg, #0B0B20 0%, #0D0D27 50%, #11123A 100%
 /* the tool buttons (EQ, Info, Notes, Save copy, Lyrics, Loudness): words and icons in gold */
 #homeTools button { color: var(--gold) !important; }
 #homeTools button::before { background: var(--gold) !important; }
+/* a wide window (the computer, maximized): the app keeps the phone's column, centered, instead of stretching
+   across the screen; the navy fills the sides */
+@media (min-width: 700px) {
+  .topbar, main.page { width: 100%; max-width: 520px; margin-left: auto !important; margin-right: auto !important; box-sizing: border-box; }
+  .updbar { max-width: 496px; margin-left: auto !important; margin-right: auto !important; }
+  .mini { left: calc(50% - 260px) !important; right: calc(50% - 260px) !important; }
+  .np .nptop, .np .npscroll { width: 100%; max-width: 520px; margin-left: auto; margin-right: auto; box-sizing: border-box; }
+  .sheet { left: calc(50% - 260px) !important; right: calc(50% - 260px) !important; max-width: 520px; }
+}
