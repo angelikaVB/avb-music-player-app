@@ -1,7 +1,7 @@
 {
- "code": 124,
- "name": "11.4",
- "url": "https://angelikavb.github.io/avb-music-player-app/AVB-Player-11.4.apk",
- "sha256": "c380a9335c77fc139613480dd557b0c93fd1da3bada281a62ace2cb2905fc357",
- "notes": "Tempo and key changes stay with their own song"
+ "code": 125,
+ "name": "11.5",
+ "url": "https://angelikavb.github.io/avb-music-player-app/AVB-Player-11.5.apk",
+ "sha256": "5a8d21908eaf1e523597f0f47d0b1faffc50197b2d95aef2280fe43b50c0ee94",
+ "notes": "Selecting songs no longer makes the list jump: the songs you are ticking stay where they are on the screen."
 }

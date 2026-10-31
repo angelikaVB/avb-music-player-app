@@ -1068,3 +1068,6 @@ body { background: linear-gradient(180deg, #0B0B20 0%, #0D0D27 50%, #11123A 100%
   .np .nptop, .np .npscroll { width: 100%; max-width: 520px; margin-left: auto; margin-right: auto; box-sizing: border-box; }
   .sheet { left: calc(50% - 260px) !important; right: calc(50% - 260px) !important; max-width: 520px; }
 }
+
+/* selecting songs: the tick takes no more room than the ⋯ it replaces, so no row grows and the list never moves */
+.list li .check { margin: 0 2px 0 4px; }
