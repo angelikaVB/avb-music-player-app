@@ -1,7 +1,7 @@
 {
- "code": 123,
- "name": "11.3",
- "url": "https://angelikavb.github.io/avb-music-player-app/AVB-Player-11.3.apk",
- "sha256": "9c5f692f9aa1491d68af0e645f3e31f96005fffedc1af155a6e8f421a4eaafee",
- "notes": "Opened songs play at once; a centered column on wide windows"
+ "code": 124,
+ "name": "11.4",
+ "url": "https://angelikavb.github.io/avb-music-player-app/AVB-Player-11.4.apk",
+ "sha256": "c380a9335c77fc139613480dd557b0c93fd1da3bada281a62ace2cb2905fc357",
+ "notes": "Tempo and key changes stay with their own song"
 }

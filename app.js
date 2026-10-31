@@ -21,7 +21,7 @@ const songGet = id => new Promise((ok, no) => { const t = db.transaction("songs"
 const lib = {
   queue: await kvGet("queue", []), index: await kvGet("index", -1), favorites: await kvGet("favorites", []),
   recent: await kvGet("recent", []), playlists: await kvGet("playlists", []), notes: await kvGet("notes", {}), lyrics: await kvGet("lyrics", {}), eq: await kvGet("eq", null), lyrH: await kvGet("lyrH", 300), lyrFold: await kvGet("lyrFold", false), mkOpen: await kvGet("mkOpen", true), mkCat: await kvGet("mkCat", "idea"), recInput: await kvGet("recInput", ""), recFmt: await kvGet("recFmt", { sr: 48000, bits: 24 }), shuffle: await kvGet("shuffle", false), mono: false,
-  balance: await kvGet("balance", 0), fix: await kvGet("fix", {}), marks: await kvGet("marks", {}), hidden: await kvGet("hidden", []), stopLog: await kvGet("stopLog", []), seenVersion: await kvGet("seenVersion", ""), sort: await kvGet("sort", "default"), mmOffered: await kvGet("mmOffered", false), renamed: await kvGet("renamed", {}),
+  balance: await kvGet("balance", 0), fix: await kvGet("fix", {}), marks: await kvGet("marks", {}), hidden: await kvGet("hidden", []), change: await kvGet("change", {}), stopLog: await kvGet("stopLog", []), seenVersion: await kvGet("seenVersion", ""), sort: await kvGet("sort", "default"), mmOffered: await kvGet("mmOffered", false), renamed: await kvGet("renamed", {}),
   repeat: await kvGet("repeat", "off"), volume: await kvGet("volume", 1), keepVoice: await kvGet("keepVoice", true),
 };
 const save = k => kvSet(k, lib[k]);
@@ -143,7 +143,10 @@ async function loadSong(id, autoplay = true) {
   if (!isRecording(id)) { lib.recent = [id, ...lib.recent.filter(x => x !== id)].slice(0, 60); save("recent"); }
   if ($("#page-recs").classList.contains("on")) renderRecList();
   analyse();
-  if (st.speed !== 1 || st.semis) applyChange();            // the sliders carry over to the next song
+  // tempo and key belong to the song: each song plays as it is, or with the change made for it before
+  if (st.rendering) { st.rendering.terminate(); st.rendering = null; $("#changeStatus").textContent = ""; }   // the last song's change, still being made
+  { const c = lib.change[id] || {}; $("#speed").value = c.speed || 100; st.semis = c.semis || 0; st.speed = (c.speed || 100) / 100; refreshMusic(); }
+  if (st.speed !== 1 || st.semis) applyChange();
   if (autoplay) play();
   updateMini(); placeWave();
   if ("mediaSession" in navigator) navigator.mediaSession.metadata = new MediaMetadata({ title: $("#title").textContent, artist: "AVB Player" });
@@ -354,6 +357,10 @@ function loopRange(a, b) { st.a = a; st.b = b; st.loopOn = true; syncMarkers(); 
 async function applyChange() {
   const speed = +$("#speed").value / 100, semis = st.semis, keepVoice = $("#keepVoice").checked, finer = $("#finer").checked;
   st.speed = speed;
+  if (st.id) {                                               // remembered for this song only
+    if (speed === 1 && !semis) delete lib.change[st.id]; else lib.change[st.id] = { speed: Math.round(speed * 1e6) / 1e4, semis };
+    save("change");
+  }
   if (!st.buffer) { $("#changeStatus").textContent = speed === 1 && !semis ? "" : "Applies to the next song you load"; return; }
   if (speed === 1 && semis === 0) {
     // back to the original: a change still being made must not land afterwards
