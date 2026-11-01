@@ -1,7 +1,7 @@
 {
- "code": 126,
- "name": "11.6",
- "url": "https://angelikavb.github.io/avb-music-player-app/AVB-Player-11.6.apk",
- "sha256": "5de0c333288a43be3b42a281a41f62f6a1dde676d9a68cb2b530b3240dcbef57",
- "notes": "Save as: from a song's \u22ef menu, save it as MP3 (320/192/128 kbps) or a smaller WAV (16-bit, 44.1 kHz, mono), each with its size; the menu first says the song's own format and size."
+ "code": 127,
+ "name": "11.7",
+ "url": "https://angelikavb.github.io/avb-music-player-app/AVB-Player-11.7.apk",
+ "sha256": "22f2db39b052991c2e09d35fcc1dc2ca2398f70dc84c32956f814a0142c21b33",
+ "notes": "Info now measures the song: summary, clarity, frequency balance, punch, loudness, spectrogram, stereo, a reference song to compare with, and markers & notes, one panel under another. Home tools: EQ, Info, Save copy, Lyrics."
 }

@@ -77,7 +77,7 @@ function analyse() {
     if (d.stage === "checks") { st.checks = d; fillStats(); drawWave(); }
     if (d.stage === "tempo") { st.music = { ...(st.music || {}), ...d }; refreshMusic(); }
     if (d.stage === "key") { st.music = { ...(st.music || {}), ...d }; refreshMusic(); }
-    if (d.stage === "sections") { st.sections = d.sections; drawWave(); fillSections(); $("#listen").textContent = `analyzed in ${((performance.now() - t0) / 1000).toFixed(0)} s`; }
+    if (d.stage === "sections") { st.analysed = true; insRender(); st.sections = d.sections; drawWave(); fillSections(); $("#listen").textContent = `analyzed in ${((performance.now() - t0) / 1000).toFixed(0)} s`; }
   };
   $("#listen").textContent = "Listening…";
   worker.postMessage({ channels: chans, sampleRate: st.sr, columns: 1600 }, chans.map(c => c.buffer));
@@ -108,6 +108,7 @@ async function loadSong(id, autoplay = true) {
   if (token !== loadSeq) return;
   st.id = id; st.name = rec.name; st.playing = false; st.pos = 0; st.a = st.b = null; st.loopOn = false; st.bpmScale = 1; st.changed = false;
   st.music = null; st.sections = []; st.peaks = null; st.loud = null; st.checks = null; st.tags = null; st.view = { a: 0, b: 1 }; st.vzoom = 1;
+  st.analysed = false; insReset();
   send({ cmd: "unload" }); send({ cmd: "loop", loop: null });
   $("#title").textContent = rec.name.replace(/\.[^.]+$/, "");
   $("#npArtist").textContent = songs[id] && songs[id].artist && !/^<unknown>$/i.test(songs[id].artist) ? songs[id].artist : "";
@@ -644,6 +645,366 @@ function drawLoud() {
   if (-14 > topDb - span && -14 < topDb) { c.strokeStyle = "rgba(34,197,94,.6)"; c.setLineDash([2, 3]); c.beginPath(); c.moveTo(left, y(-14)); c.lineTo(w, y(-14)); c.stroke(); c.setLineDash([]); c.fillStyle = "#22C55E"; c.textAlign = "left"; c.fillText("−14 streaming", left + 4, y(-14) - 3); }
   const px = left + st.pos / st.duration * (w - left); c.fillStyle = "#fff"; c.fillRect(px, top, 1.5, bottom - top);
 }
+
+// ---------------------------------------------------------------- Info: the song measured (the user, 2026-11-01)
+// Nine panels, one under another: Audio Truth Summary, Clarity & Masking, Frequency Balance, Punch & Transients,
+// Loudness & Dynamics, Spectrogram, Stereo & Phase, Reference Comparison, Markers & Notes. Measured once a song by
+// insight-worker.js when Info is looked at (and the analysis has finished), kept in the app (kv "ins1:<id>:<length>"),
+// drawn with the playhead; a tap on a picture or a time moves the song there. Every number is measured; words
+// beside them come from rules said in the panel's ?, and estimates say so.
+const INS_V = 1;
+let insWorker = null, insFor = null, insRef = null, insDrawn = -1, insAt = 0;
+const insKey = () => `ins${INS_V}:${st.id}:${Math.round(st.duration * 10)}`;
+const infoShown = () => !$("#np").hidden && npMode === "studio" && $("#tab-intel").classList.contains("on");
+const ipOpen = p => { const d = $("#ip-" + p); return !!d && d.open; };
+const onScreen = el => { const r = el.getBoundingClientRect(); return r.height > 0 && r.bottom > 0 && r.top < innerHeight; };
+const IBG = "#0E0D26", IGRID = "#232250", ITXT = "#6C6996", IGOLD = "#E8C373", IPURP = "#A855F7", ICYAN = "#22D3EE", IORNG = "#F97316";
+const neg = (v, d = 1) => v.toFixed(d).replace("-", "−");
+const sgn = (v, d = 1) => (v >= 0 ? "+" : "−") + Math.abs(v).toFixed(d);
+const tlink = (t, words) => `<button class="tlink" data-t="${t.toFixed(2)}">${fmtTime(t)}</button>${words ? " " + words : ""}`;
+function insMeasure(chans, sr, light, onProgress, keep) {
+  return new Promise((ok, no) => {
+    const w = new Worker("insight-worker.js"); if (keep) keep(w);
+    w.onmessage = e => { const d = e.data; if (d.progress !== undefined) { onProgress(d.progress, d.stage); return; } w.terminate(); d.error ? no(new Error(d.error)) : ok(d.result); };
+    w.onerror = e => { w.terminate(); no(new Error(e.message || "the measuring failed")); };
+    w.postMessage({ channels: chans, sampleRate: sr, light }, chans.map(c => c.buffer));
+  });
+}
+function insReset() {
+  if (insWorker) { insWorker.terminate(); insWorker = null; }
+  st.ins = null; insFor = null; insDrawn = -1; $("#iStatus").textContent = ""; insRender();
+}
+async function insEnsure() {
+  if (!st.buffer || st.ins || insFor === st.id || !st.analysed) return;
+  const id = st.id, key = insKey(); insFor = id;
+  const cached = await kvGet(key, null).catch(() => null);
+  if (st.id !== id) return;
+  if (cached && cached.v === 1) { st.ins = cached; $("#iStatus").textContent = ""; insRender(); return; }
+  const t0 = performance.now(); let stage = "Starting", p = 0;
+  const show = () => { if (st.id === id) $("#iStatus").textContent = `Measuring the song: ${stage} ${Math.round(p * 100)}% · ${((performance.now() - t0) / 1000).toFixed(0)} s`; };
+  show(); const clock = setInterval(show, 500);
+  try {
+    const r = await insMeasure(channelsOf(st.buffer), st.sr, false, (pp, s) => { p = pp; stage = s; }, w => insWorker = w);
+    insWorker = null;
+    if (st.id !== id) return;
+    st.ins = r; kvSet(key, r).catch(() => { });
+    $("#iStatus").textContent = `Measured in ${((performance.now() - t0) / 1000).toFixed(1)} s`;
+    insRender();
+  } catch (err) { if (st.id === id) $("#iStatus").textContent = "Could not measure this song: " + (err && err.message || err); }
+  finally { clearInterval(clock); }
+}
+// the words: each from a rule the panel's ? spells out
+const lossy = () => !!st.info && !st.info.bits;
+function insFindings() {
+  const r = st.ins, l = st.loud, ch = st.checks; if (!r || !l || !ch) return null;
+  const good = [], check = [], f = [];
+  const I = l.integrated, tp = ch.truePeakDb, plr = tp - I;
+  const loudWord = I >= -9 ? "Very loud" : I >= -12 ? "Loud" : I >= -16 ? "Moderately loud" : "Quiet, dynamic";
+  f.push(I > -14 ? [0, `Integrated ${neg(I)} LUFS: services that play songs at about −14 LUFS would turn this down about ${(I + 14).toFixed(1)} dB.`]
+    : [1, `Integrated ${neg(I)} LUFS.`]);
+  f.push(tp > -1 ? [2, `True peak ${neg(tp)} dBTP: above −1 dBTP, an MP3/AAC copy can clip (the usual delivery advice is −1).`] : [1, `True peak ${neg(tp)} dBTP: headroom for lossy copies.`]);
+  f.push(ch.clipEvents ? [2, `Clipped runs (3+ samples at full scale) in ${ch.clipEvents} place${ch.clipEvents === 1 ? "" : "s"}, first at ${tlink(ch.clipTimes[0])}.`] : [1, "No clipped runs found."]);
+  f.push(plr < 8 ? [2, `Peak-to-loudness ratio ${plr.toFixed(1)} dB: heavily limited (under 8 dB, rule of thumb).`] : plr > 14 ? [1, `Peak-to-loudness ratio ${plr.toFixed(1)} dB: lots of peak room, dynamic.`] : [1, `Peak-to-loudness ratio ${plr.toFixed(1)} dB.`]);
+  if (r.tilt !== null) f.push([0, `Spectrum tilt ${sgn(r.tilt, 1)} dB per octave (100 Hz–10 kHz; 0 = equal energy in every octave, like pink noise).`]);
+  const lm = r.events.filter(e => e.kind === "lowmid"), hs = r.events.filter(e => e.kind === "harsh");
+  f.push(lm.length ? [r.activePct.lowmid > 15 ? 2 : 0, `Low-mid (200–500 Hz) rises 3 dB+ above the song's own usual level in ${lm.length} place${lm.length === 1 ? "" : "s"}, the most at ${tlink(lm.reduce((a, e) => e.db > a.db ? e : a).t)}.`] : [1, "No low-mid (200–500 Hz) buildup above the song's own usual level."]);
+  if (hs.length) f.push([r.activePct.harsh > 15 ? 2 : 0, `Upper mids (2–5 kHz) jump 3 dB+ in ${hs.length} place${hs.length === 1 ? "" : "s"}, the most at ${tlink(hs.reduce((a, e) => e.db > a.db ? e : a).t)}.`]);
+  if (r.stereo) {
+    f.push(r.monoDrop < -3 ? [2, `Summed to mono it loses ${(-r.monoDrop).toFixed(1)} dB: parts may thin out on a phone speaker.`] : [1, `Summed to mono it loses ${(-r.monoDrop).toFixed(1)} dB: mono-safe (under 3 dB).`]);
+    if (r.negCorr.length) f.push([2, `Left and right work against each other (correlation below 0) at ${r.negCorr.slice(0, 3).map(n => tlink(n.t)).join(", ")}.`]);
+    if (r.sideLow > 10) f.push([2, `Below 120 Hz ${r.sideLow.toFixed(0)}% of the energy is stereo: a wide low end can weaken in mono (rule of thumb: keep it near mono).`]);
+  } else f.push([0, "Mono file: no stereo to measure."]);
+  if (r.hitLo.rise !== null) f.push([0, `Hits in the kick's range (40–120 Hz) rise ${r.hitLo.rise.toFixed(1)} dB on average (estimate).`]);
+  if (lossy()) f.push([0, `${st.info.fmt} is a lossy format: its encoder usually removes the very top (often above about 16 kHz), so the High band reads lower than the original.`]);
+  for (const [k, t] of f) (k === 2 ? check : good).push({ k, t });
+  const tiltWord = r.tilt === null ? "" : r.tilt > -0.5 ? "bright-leaning" : r.tilt < -3 ? "dark-leaning" : "even tilt";
+  const widthWord = !r.stereo ? "mono" : r.sideAll < 5 ? "near-mono" : r.sideAll < 25 ? "moderate stereo" : r.sideAll < 45 ? "wide stereo" : "very wide stereo";
+  const chips = [
+    ["clarity", "Clarity", r.activePct.lowmid > 15 || r.activePct.harsh > 15 ? "Check" : lm.length + hs.length ? "Some buildup" : "Clear", r.activePct.lowmid > 15 || r.activePct.harsh > 15],
+    ["balance", "Tonal tilt", r.tilt === null ? "—" : sgn(r.tilt, 1) + " dB/oct", false],
+    ["punch", "Punch", r.crest3.med === null ? "—" : r.crest3.med.toFixed(1) + " dB crest", r.crest3.med !== null && r.crest3.med < 8],
+    ["loud", "Dynamics", `PLR ${plr.toFixed(1)} dB`, plr < 8],
+    ["stereo", "Stereo", r.stereo ? (r.monoDrop < -3 || r.negCorr.length ? "Check mono" : "Mono-safe") : "Mono", r.stereo && (r.monoDrop < -3 || !!r.negCorr.length)],
+  ];
+  return { head: `${loudWord} master, ${tiltWord}, ${widthWord}.`, good, check, chips, plr };
+}
+function insRender() {
+  const r = st.ins;
+  const none = st.buffer ? (st.analysed ? "Measuring…" : "Waiting for the analysis…") : "Load a song.";
+  // 1. summary
+  const fd = insFindings();
+  $("#ipSummary").innerHTML = !fd ? `<div class="faint">${none}</div>` : `<div class="ihead">${esc(fd.head)}</div>
+    <div class="ichips">${fd.chips.map(([p, k, v, warn]) => `<button class="ichip${warn ? " warn" : ""}" data-p="${p}"><span>${k}</span><b>${v}</b></button>`).join("")}</div>
+    ${fd.check.length ? `<div class="icap">To check (${fd.check.length})</div><ul class="ilist warn">${fd.check.map(x => `<li>${x.t}</li>`).join("")}</ul>` : ""}
+    <div class="icap">Measured</div><ul class="ilist">${fd.good.map(x => `<li class="${x.k === 1 ? "ok" : ""}">${x.t}</li>`).join("")}</ul>
+    <div class="faint">No overall score: each line is a measurement, and the words beside it come from the rules under ?.</div>`;
+  // 2. clarity
+  if (!r) { for (const id of ["#ipClarity", "#ipBalance", "#ipPunch", "#ipDyn", "#ipStereo"]) $(id).innerHTML = `<div class="faint">${none}</div>`; }
+  else {
+    const lvl = p => p > 15 ? ["High", "bad"] : p > 5 ? ["Medium", "mid"] : ["Low", "ok"];
+    const [l1, c1] = lvl(r.activePct.lowmid), [l2, c2] = lvl(r.activePct.harsh);
+    const dens = r.crowdMed === null ? "—" : `${Math.round(r.crowdMed * r.crowdBands)} of ${r.crowdBands}`;
+    const evs = [...r.events].sort((a, b) => b.db - a.db).slice(0, 8).sort((a, b) => a.t - b.t);
+    $("#ipClarity").innerHTML = `<div class="ilegend"><span><i style="background:${IORNG}"></i>Low-mid 200–500 Hz</span><span><i style="background:${ICYAN}"></i>Upper mids 2–5 kHz</span><span class="faint">vs. the song's own usual level</span></div>
+      <div class="irows">
+        <div><span>Low-mid buildup risk</span><b class="${c1}">${l1}</b><em>${r.activePct.lowmid.toFixed(0)}% of the song 3 dB+ over its usual</em></div>
+        <div><span>Harsh upper-mid risk</span><b class="${c2}">${l2}</b><em>${r.activePct.harsh.toFixed(0)}% of the song 3 dB+ over its usual</em></div>
+        <div><span>Spectral density (estimate)</span><b>${dens}</b><em>third-octave bands (100 Hz–5 kHz) within 6 dB of the loudest; more = denser, more competing</em></div>
+      </div>
+      ${evs.length ? `<div class="icap">Where (tap to listen)</div><ul class="ilist">${evs.map(e => `<li>${tlink(e.t)}–${fmtTime(e.end)} · ${e.kind === "lowmid" ? "low-mid" : "upper mids"} ${sgn(e.db)} dB</li>`).join("")}</ul>` : `<div class="faint">No place rises 3 dB over the song's usual low-mid or upper-mid level.</div>`}
+      <div class="faint">A finished mix has no instruments to tell apart, so this measures crowded bands, not which instrument masks which.</div>`;
+    // 3. balance
+    const refG = insRef && st.loud ? insRef.groups : null;
+    $("#ipBalance").innerHTML = `<div class="itable"><div class="ith"><span>Band</span><span>Share</span>${refG ? "<span>vs. ref</span>" : ""}</div>
+      ${r.groups.map((g, i) => `<div><span>${g.name} <em>${g.lo < 1000 ? g.lo : g.lo / 1000 + "k"}–${g.hi < 1000 ? g.hi : g.hi / 1000 + "k"} Hz</em></span><b>${g.db.toFixed(1)} dB</b>${refG ? `<b class="${Math.abs(g.db - refG[i].db) > 3 ? "mid" : ""}">${sgn(g.db - refG[i].db)} dB</b>` : ""}</div>`).join("")}</div>
+      <div class="irows"><div><span>Tilt (100 Hz–10 kHz)</span><b>${r.tilt === null ? "—" : sgn(r.tilt) + " dB/oct"}</b><em>0 = equal energy per octave (pink noise); lower = darker</em></div></div>
+      <div class="faint">Share = each band's part of the song's energy. The live line follows the playhead.${lossy() ? ` ${st.info.fmt}: the top end is usually cut by the encoder.` : ""}</div>`;
+    // 4. punch
+    const riseWord = v => v === null ? "—" : v >= 12 ? "sharp" : v >= 8 ? "clear" : "soft";
+    $("#ipPunch").innerHTML = `<div class="irows">
+      <div><span>Crest factor (whole song)</span><b>${r.crestDb === null ? "—" : r.crestDb.toFixed(1) + " dB"}</b><em>peak over RMS</em></div>
+      <div><span>Short-term crest, 3 s windows</span><b>${r.crest3.med === null ? "—" : r.crest3.med.toFixed(1) + " dB"}</b><em>median; 10–90%: ${r.crest3.lo === null ? "—" : r.crest3.lo.toFixed(1) + "–" + r.crest3.hi.toFixed(1)} dB. Under 8 dB: hits squashed (rule of thumb)</em></div>
+      <div><span>Attack rise, 40–120 Hz (estimate)</span><b>${r.hitLo.rise === null ? "—" : r.hitLo.rise.toFixed(1) + " dB"}</b><em>${riseWord(r.hitLo.rise)}: how far a hit in the kick's range jumps within 50 ms</em></div>
+      <div><span>Attack rise, 1.5–5 kHz (estimate)</span><b>${r.hitHi.rise === null ? "—" : r.hitHi.rise.toFixed(1) + " dB"}</b><em>${riseWord(r.hitHi.rise)}: the snare's crack and other attacks</em></div></div>
+      <div class="faint">Bands, not instruments: anything in 40–120 Hz counts (kick, bass notes).</div>`;
+    // 5. dynamics (the loudness numbers above are the existing analyzer's)
+    const l = st.loud, ch = st.checks;
+    let mMax = -120; if (l) for (const v of l.momentary) if (v > mMax) mMax = v;
+    $("#ipDyn").innerHTML = l && ch ? `<div class="irows">
+      <div><span>Peak-to-loudness ratio (PLR)</span><b>${(ch.truePeakDb - l.integrated).toFixed(1)} dB</b><em>true peak − integrated; under 8 dB = heavily limited (rule of thumb)</em></div>
+      <div><span>Momentary max (400 ms)</span><b>${mMax.toFixed(1)} LUFS</b><em>the loudest moment</em></div>
+      <div><span>Short-term crest, 3 s</span><b>${r.crest3.med === null ? "—" : r.crest3.med.toFixed(1) + " dB"}</b><em>median peak over RMS</em></div>
+      <div><span>Peak − RMS (whole song)</span><b>${st.info && st.info.peakDb !== undefined ? (st.info.peakDb - st.info.rmsDb).toFixed(1) + " dB" : "—"}</b><em>sample peak over average level</em></div></div>
+      <div class="faint">Tap the timeline to move the song there. Dashed: integrated; green: −14 LUFS, where many services play songs.</div>` : `<div class="faint">${none}</div>`;
+    // 7. stereo
+    $("#ipStereo").innerHTML = !r.stereo ? `<div class="faint">Mono file: left and right are the same.</div>` : `<div class="irows">
+      <div><span>Stereo width (side share)</span><b>${r.sideAll.toFixed(0)}%</b><em>${r.sideAll < 5 ? "near-mono" : r.sideAll < 25 ? "moderate" : r.sideAll < 45 ? "wide" : "very wide"}: the side's part of the energy; 0% mono, 50% left and right unrelated</em></div>
+      <div><span>Phase correlation</span><b>${st.checks && st.checks.correlation !== null ? sgn(st.checks.correlation, 2) : "—"}</b><em>whole song; lowest 1 s: ${sgn(r.minCorr, 2)}. Below 0: cancels in mono</em></div>
+      <div><span>Mono compatibility</span><b class="${r.monoDrop < -3 ? "bad" : "ok"}">${r.monoDrop < -3 ? "Check" : "Good"}</b><em>loses ${(-r.monoDrop).toFixed(1)} dB summed to mono (over 3 dB: check)</em></div>
+      <div><span>Low end below 120 Hz</span><b class="${r.sideLow > 10 ? "mid" : "ok"}">${r.sideLow.toFixed(0)}% side</b><em>near mono is the usual advice</em></div></div>
+      ${r.negCorr.length ? `<div class="icap">Out of phase (tap to listen)</div><ul class="ilist">${r.negCorr.slice(0, 8).map(n => `<li>${tlink(n.t)}–${fmtTime(n.end)} · correlation ${sgn(n.c, 2)}</li>`).join("")}</ul>` : ""}
+      <div class="faint">Left: the live picture at the playhead (up = mid, sideways = side). Right: width by band.</div>`;
+  }
+  insRefRender();
+  insDrawn = -1; insDraw(true);
+}
+// ---- drawing
+function iCanvas(c) { const dpr = sizeCanvas(c), w = c.width / dpr, h = c.height / dpr, g = c.getContext("2d"); g.setTransform(dpr, 0, 0, dpr, 0, 0); g.fillStyle = IBG; g.fillRect(0, 0, w, h); g.font = "10px system-ui"; return { g, w, h }; }
+const HEAT = (() => { const stops = [[0, 14, 13, 38], [70, 59, 7, 120], [140, 176, 38, 170], [200, 249, 115, 22], [255, 253, 230, 90]], lut = new Uint8Array(256 * 3);
+  for (let v = 0; v < 256; v++) { let i = 0; while (stops[i + 1][0] < v) i++; const [a, ...ca] = stops[i], [b, ...cb] = stops[i + 1], t = (v - a) / (b - a || 1); for (let k = 0; k < 3; k++) lut[v * 3 + k] = Math.round(ca[k] + (cb[k] - ca[k]) * t); }
+  return lut; })();
+let insImg = null, insImgFor = null;
+function specImage(r) {
+  if (insImgFor === r) return insImg;
+  const C = r.imgCols, H = r.top, oc = document.createElement("canvas"); oc.width = C; oc.height = H;
+  const g = oc.getContext("2d"), im = g.createImageData(C, H);
+  for (let c = 0; c < C; c++) for (let b = 0; b < H; b++) { const v = r.img[c * r.imgRows + b], o = ((H - 1 - b) * C + c) * 4; im.data[o] = HEAT[v * 3]; im.data[o + 1] = HEAT[v * 3 + 1]; im.data[o + 2] = HEAT[v * 3 + 2]; im.data[o + 3] = 255; }
+  g.putImageData(im, 0, 0); insImg = oc; insImgFor = r; return oc;
+}
+const IL = 34, IB = 16;                                    // the plots' left and bottom margins (labels)
+function timeAxis(g, w, h, left = IL) {
+  g.fillStyle = ITXT; g.textAlign = "center"; const d = st.duration || 1, step = d > 360 ? 60 : d > 150 ? 30 : d > 60 ? 15 : 5;
+  for (let t = 0; t <= d; t += step) g.fillText(fmtTime(t), Math.min(w - 12, Math.max(left + 10, left + t / d * (w - left))), h - 3);
+}
+const playX = (w, left = IL) => left + st.pos / (st.duration || 1) * (w - left);
+function playhead(g, w, top, bottom, left = IL) { g.fillStyle = "#fff"; g.fillRect(playX(w, left), top, 1.5, bottom - top); }
+function drawSpecgram() {
+  const c = $("#ipSpecgram"), { g, w, h } = iCanvas(c), r = st.ins; if (!r) return;
+  const H = h - IB, rowY = b => H - (b + 0.5) / r.top * H;
+  g.imageSmoothingEnabled = true; g.drawImage(specImage(r), IL, 0, w - IL, H);
+  g.fillStyle = ITXT; g.textAlign = "right";
+  for (const f of [50, 100, 250, 500, 1000, 2000, 5000, 10000, 20000]) { const b = Math.floor(12 * Math.log2(f / 20)); if (b < r.top) g.fillText(f >= 1000 ? f / 1000 + "k" : f, IL - 4, Math.max(8, rowY(b) + 3)); }
+  timeAxis(g, w, h); playhead(g, w, 0, H);
+}
+function drawClarity() {
+  const c = $("#ipClarityC"), { g, w, h } = iCanvas(c), r = st.ins; if (!r) return;
+  const H = h - IB, lo = -6, hi = 9, y = v => (hi - Math.max(lo, Math.min(hi, v))) / (hi - lo) * (H - 4) + 2, x = t => IL + t / (st.duration || 1) * (w - IL);
+  for (const e of r.events) { g.fillStyle = e.kind === "lowmid" ? "rgba(249,115,22,.18)" : "rgba(34,211,238,.16)"; g.fillRect(x(e.t), 0, Math.max(2, x(e.end) - x(e.t)), H); }
+  g.fillStyle = ITXT; g.textAlign = "right";
+  for (const v of [-6, 0, 3, 9]) { g.fillStyle = v === 3 ? "rgba(232,195,115,.6)" : IGRID; g.fillRect(IL, y(v), w - IL, 1); g.fillStyle = ITXT; g.fillText((v > 0 ? "+" : "") + v, IL - 4, y(v) + 3); }
+  for (const [arr, col] of [[r.lmOver, IORNG], [r.hOver, ICYAN]]) { g.strokeStyle = col; g.lineWidth = 1.3; g.beginPath(); for (let i = 0; i < arr.length; i++) { const px = x((i + 0.5) * r.secPerWin), py = y(arr[i]); i ? g.lineTo(px, py) : g.moveTo(px, py); } g.stroke(); }
+  timeAxis(g, w, h); playhead(g, w, 0, H);
+}
+const freqX = (f, w, left = IL) => left + Math.log2(f / 20) / Math.log2(1000) * (w - left - 12);
+function bandCurve(db, top) { const out = []; for (let b = 0; b < top; b++) { const a = db[Math.max(0, b - 1)], c = db[Math.min(top - 1, b + 1)]; out.push((a + db[b] + c) / 3); } return out; }
+let liveSpec = null, liveAt = -1;
+function liveSpectrum() {                                  // the 4096 samples at the playhead, in the same bands
+  const r = st.ins; if (!r || !st.buffer) return null;
+  const at = Math.floor(st.pos * st.sr); if (liveSpec && Math.abs(at - liveAt) < st.sr * 0.03) return liveSpec;
+  const N = 4096, re = new Float64Array(N), im = new Float64Array(N), L = st.buffer.getChannelData(0), R = st.buffer.numberOfChannels > 1 ? st.buffer.getChannelData(1) : L;
+  const a = Math.max(0, Math.min(L.length - N, at - N / 2));
+  for (let i = 0; i < N; i++) { const wv = 0.5 - 0.5 * Math.cos(2 * Math.PI * i / N); re[i] = ((L[a + i] || 0) + (R[a + i] || 0)) * 0.5 * wv; }
+  fftMain(re, im);
+  const p = new Float64Array(120);
+  for (let k = 1; k < N / 2; k++) { const b = Math.floor(12 * Math.log2(k * st.sr / N / 20)); if (b >= 0 && b < 120) p[b] += re[k] * re[k] + im[k] * im[k]; }
+  for (let b = 0; b < r.top; b++) if (!p[b]) { const k = Math.max(1, Math.round(20 * Math.pow(2, (b + 0.5) / 12) * N / st.sr)); p[b] = re[k] * re[k] + im[k] * im[k]; }
+  liveSpec = Array.from(p, v => 10 * Math.log10(Math.max(v, 1e-20))); liveAt = at; return liveSpec;
+}
+function fftMain(re, im) {
+  const n = re.length;
+  for (let i = 1, j = 0; i < n; i++) { let bit = n >> 1; for (; j & bit; bit >>= 1) j ^= bit; j ^= bit; if (i < j) { let t = re[i]; re[i] = re[j]; re[j] = t; t = im[i]; im[i] = im[j]; im[j] = t; } }
+  for (let len = 2; len <= n; len <<= 1) {
+    const ang = -2 * Math.PI / len, wr = Math.cos(ang), wi = Math.sin(ang);
+    for (let i = 0; i < n; i += len) { let cr = 1, ci = 0; for (let j = 0; j < len / 2; j++) { const a = i + j, b = a + len / 2, tr = re[b] * cr - im[b] * ci, ti = re[b] * ci + im[b] * cr; re[b] = re[a] - tr; im[b] = im[a] - ti; re[a] += tr; im[a] += ti; const nr = cr * wr - ci * wi; ci = cr * wi + ci * wr; cr = nr; } }
+  }
+}
+function spectrumPlot(c, curves) {                        // curves: [{db (absolute), color, fill, width}]; 0 dB = the first curve's top
+  const { g, w, h } = iCanvas(c), r = st.ins; if (!r) return;
+  const H = h - IB, top = r.top, ref = Math.max(...curves[0].db.slice(0, top)), y = v => 4 + (ref - v) / 60 * (H - 8);
+  g.textAlign = "right";
+  for (let v = 0; v <= 60; v += 12) { g.fillStyle = IGRID; g.fillRect(IL, y(ref - v), w - IL, 1); g.fillStyle = ITXT; g.fillText(v ? "−" + v : "0", IL - 4, y(ref - v) + 3); }
+  g.textAlign = "center";
+  for (const f of [50, 100, 250, 500, 1000, 2500, 5000, 10000, 20000]) { g.fillStyle = IGRID; g.fillRect(freqX(f, w), 0, 1, H); g.fillStyle = ITXT; g.fillText(f >= 1000 ? f / 1000 + "k" : f, Math.min(w - 10, freqX(f, w)), h - 3); }
+  for (const cv of curves) {
+    const pts = bandCurve(cv.db, top); g.beginPath();
+    pts.forEach((v, b) => { const px = freqX(20 * Math.pow(2, (b + 0.5) / 12), w), py = y(Math.max(ref - 62, v)); b ? g.lineTo(px, py) : g.moveTo(px, py); });
+    if (cv.fill) { g.lineTo(freqX(20 * Math.pow(2, (top - 0.5) / 12), w), H); g.lineTo(freqX(20 * Math.pow(2, 0.5 / 12), w), H); g.closePath(); const gr = g.createLinearGradient(0, 0, 0, H); gr.addColorStop(0, cv.fill); gr.addColorStop(1, "rgba(76,29,149,.15)"); g.fillStyle = gr; g.fill(); }
+    else { g.strokeStyle = cv.color; g.lineWidth = cv.width || 1.4; g.stroke(); }
+  }
+  let lx = IL + 6; g.textAlign = "left";
+  for (const cv of curves) if (cv.label) { g.fillStyle = cv.color; g.fillRect(lx, 6, 10, 3); g.fillStyle = "#C9C6F0"; g.fillText(cv.label, lx + 13, 10); lx += 18 + g.measureText(cv.label).width; }
+}
+function refMatched() { return insRef && st.loud ? Array.from(insRef.avgDb, v => v + (st.loud.integrated - insRef.integrated)) : null; }
+function drawBalance() {
+  const r = st.ins; if (!r) { iCanvas($("#ipSpecC")); return; }
+  const curves = [{ db: Array.from(r.avgDb), fill: "rgba(168,85,247,.75)", color: IPURP, label: "Song (average)" }];
+  const m = refMatched(); if (m) curves.push({ db: m, color: "#9CA3AF", label: "Reference" });
+  if (st.playing || st.pos > 0) { const lv = liveSpectrum(); if (lv) curves.push({ db: lv, color: ICYAN, width: 1, label: "Now" }); }
+  spectrumPlot($("#ipSpecC"), curves);
+}
+function drawPunch() {
+  const c = $("#ipPunchC"), { g, w, h } = iCanvas(c), r = st.ins; if (!r) return;
+  const H = h - IB, rows = [[r.stripLo, ICYAN, "40–120"], [r.stripHi, "#EC4899", "1.5–5k"]], rh = H / 2;
+  rows.forEach(([s, col, name], k) => {
+    const base = rh * (k + 1) - 3; g.fillStyle = ITXT; g.textAlign = "right"; g.fillText(name, IL - 3, base - rh / 2 + 6);
+    g.fillStyle = col; const n = s.length, bw = Math.max(1, (w - IL) / n);
+    for (let i = 0; i < n; i++) { const v = s[i] / 255 * (rh - 6); if (v > 0.5) g.fillRect(IL + i / n * (w - IL), base - v, bw, v); }
+  });
+  timeAxis(g, w, h); playhead(g, w, 0, H);
+}
+function drawGonio() {
+  const c = $("#ipGonio"), { g, w, h } = iCanvas(c);
+  const cx = w / 2, cy = h / 2, rad = Math.min(w, h) / 2 - 12;
+  g.strokeStyle = IGRID; g.beginPath(); g.arc(cx, cy, rad, 0, Math.PI * 2); g.moveTo(cx - rad, cy); g.lineTo(cx + rad, cy); g.moveTo(cx, cy - rad); g.lineTo(cx, cy + rad); g.stroke();
+  g.fillStyle = ITXT; g.textAlign = "center"; g.fillText("M", cx, 10); g.fillText("L", cx - rad * 0.75, cy - rad * 0.75 + 4); g.fillText("R", cx + rad * 0.75, cy - rad * 0.75 + 4);
+  if (!st.buffer || st.buffer.numberOfChannels < 2) return;
+  const L = st.buffer.getChannelData(0), R = st.buffer.getChannelData(1), N = 2048, a = Math.max(0, Math.min(L.length - N, Math.floor(st.pos * st.sr) - N / 2));
+  let pk = 1e-6, lr = 0, ll = 0, rr = 0; for (let i = a; i < a + N; i++) { pk = Math.max(pk, Math.abs(L[i]), Math.abs(R[i])); lr += L[i] * R[i]; ll += L[i] * L[i]; rr += R[i] * R[i]; }
+  g.fillStyle = "rgba(192,132,252,.45)";
+  for (let i = a; i < a + N; i += 2) { const s = (R[i] - L[i]) / Math.SQRT2 / pk, m = (L[i] + R[i]) / Math.SQRT2 / pk; g.fillRect(cx + s * rad * 0.7, cy - m * rad * 0.7, 1.5, 1.5); }
+  const cr = ll > 0 && rr > 0 ? lr / Math.sqrt(ll * rr) : 1;
+  g.fillStyle = cr < 0 ? "#F87171" : IGOLD; g.textAlign = "center"; g.fillText(`now ${sgn(cr, 2)}`, cx, h - 2);
+}
+function drawWidth() {
+  const c = $("#ipWidthC"), { g, w, h } = iCanvas(c), r = st.ins; if (!r || !r.stereo) return;
+  const n = r.sideGroups.length, bh = (h - 8) / n, x0 = 52, xw = w - x0 - 30;
+  r.sideGroups.forEach((s, i) => {
+    const y0 = 4 + i * bh; g.fillStyle = ITXT; g.textAlign = "right"; g.fillText(s.name, x0 - 4, y0 + bh / 2 + 3);
+    g.fillStyle = IGRID; g.fillRect(x0, y0 + 3, xw, bh - 6);
+    g.fillStyle = s.pct > 45 ? "#F87171" : IPURP; g.fillRect(x0, y0 + 3, Math.min(1, s.pct / 60) * xw, bh - 6);
+    g.fillStyle = "#C9C6F0"; g.textAlign = "left"; g.fillText(s.pct.toFixed(0) + "%", x0 + xw + 4, y0 + bh / 2 + 3);
+  });
+}
+function insDraw(force) {
+  if (!infoShown()) return;
+  const moved = st.pos !== insDrawn; if (!force && !moved) return; insDrawn = st.pos;
+  const vis = p => ipOpen(p) && onScreen($("#ip-" + p));
+  if (vis("clarity")) drawClarity(); if (vis("balance")) drawBalance(); if (vis("punch")) drawPunch();
+  if (vis("loud")) drawLoud(); if (vis("spectro")) drawSpecgram(); if (vis("stereo")) { drawGonio(); if (force) drawWidth(); }
+  if (force && vis("compare")) drawRef();
+}
+// ---- reference comparison: a song you pick, measured the same way, turned to the same loudness
+function drawRef() {
+  const r = st.ins, c = $("#ipRefC");
+  if (!r || !insRef) { const { g, w, h } = iCanvas(c); g.fillStyle = ITXT; g.textAlign = "center"; g.fillText(insRef ? "Waiting for this song's measurements" : "Pick a reference song to compare with", w / 2, h / 2); return; }
+  spectrumPlot(c, [{ db: Array.from(r.avgDb), fill: "rgba(168,85,247,.75)", color: IPURP, label: st.name.replace(/\.[^.]+$/, "").slice(0, 22) }, { db: refMatched(), color: "#9CA3AF", label: "Reference" }]);
+}
+function insRefRender() {
+  const r = st.ins, f = insRef, el = $("#ipRef");
+  if (!f) { el.innerHTML = `<div class="faint">Pick a song (or a file) to compare with: its spectrum, loudness, dynamics and stereo are measured the same way and set side by side, at the same loudness.</div>`; return; }
+  if (!r || !st.loud || !st.checks) { el.innerHTML = `<div class="faint">Reference: ${esc(f.name)}. ${st.buffer ? "Waiting for this song's measurements." : ""}</div>`; return; }
+  const word = (d, more, less, tol = 1) => Math.abs(d) < tol ? "similar" : (Math.abs(d) < 3 ? "slightly " : "") + (d > 0 ? more : less);
+  const row = (k, a, b, d, wd) => `<div><span>${k}</span><b>${a}</b><b>${b}</b><em>${wd}</em></div>`;
+  const plrS = st.checks.truePeakDb - st.loud.integrated, plrR = f.truePeakDb - f.integrated;
+  const dI = st.loud.integrated - f.integrated;
+  const rows = [
+    row("Loudness", st.loud.integrated.toFixed(1) + " LUFS", f.integrated.toFixed(1), dI, `${sgn(dI)} LU · ${word(dI, "louder", "quieter")}`),
+    row("True peak", st.checks.truePeakDb.toFixed(1) + " dBTP", f.truePeakDb.toFixed(1), 0, sgn(st.checks.truePeakDb - f.truePeakDb) + " dB"),
+    row("PLR", plrS.toFixed(1) + " dB", plrR.toFixed(1), 0, word(plrS - plrR, "more peak room", "more limited")),
+    row("Loudness range", st.loud.lra !== null ? st.loud.lra.toFixed(1) + " LU" : "—", f.lra !== null ? f.lra.toFixed(1) : "—", 0, st.loud.lra !== null && f.lra !== null ? word(st.loud.lra - f.lra, "more varied", "steadier") : ""),
+    row("Tilt", r.tilt !== null ? sgn(r.tilt) + " dB/oct" : "—", f.tilt !== null ? sgn(f.tilt) : "—", 0, r.tilt !== null && f.tilt !== null ? word(r.tilt - f.tilt, "brighter", "darker", 0.5) : ""),
+    ...r.groups.map((g, i) => row(g.name, g.db.toFixed(1) + " dB", f.groups[i].db.toFixed(1), 0, `${sgn(g.db - f.groups[i].db)} dB · ${word(g.db - f.groups[i].db, "more", "less")}`)),
+    row("Short-term crest", r.crest3.med !== null ? r.crest3.med.toFixed(1) + " dB" : "—", f.crest3.med !== null ? f.crest3.med.toFixed(1) : "—", 0, r.crest3.med !== null && f.crest3.med !== null ? word(r.crest3.med - f.crest3.med, "punchier peaks", "more squashed") : ""),
+    row("Stereo width", r.stereo ? r.sideAll.toFixed(0) + "%" : "mono", f.stereo ? f.sideAll.toFixed(0) + "%" : "mono", 0, r.stereo && f.stereo ? word(r.sideAll - f.sideAll, "wider", "narrower", 3) : ""),
+    row("Mono loss", r.stereo ? (-r.monoDrop).toFixed(1) + " dB" : "—", f.stereo ? (-f.monoDrop).toFixed(1) : "—", 0, ""),
+  ];
+  el.innerHTML = `<div class="faint">Reference: <b>${esc(f.name)}</b> · turned ${sgn(dI)} dB to match this song's loudness before the spectra are compared. Whole-song averages: two different songs are not compared moment by moment. <button class="tlink" id="refClear">Remove</button></div>
+    <div class="itable four"><div class="ith"><span></span><span>This song</span><span>Ref</span><span>Difference</span></div>${rows.join("")}</div>`;
+  $("#refClear").onclick = () => { insRef = null; kvSet("insRef", null).catch(() => { }); insRefRender(); drawRef(); drawBalance(); insRender(); };
+}
+async function setReference(blob, name) {
+  const t0 = performance.now(); let stage = "Reading", p = 0;
+  const show = () => $("#ipRef").innerHTML = `<div class="faint">Measuring the reference “${esc(name)}”: ${stage} ${Math.round(p * 100)}% · ${((performance.now() - t0) / 1000).toFixed(0)} s</div>`;
+  show(); const clock = setInterval(show, 500);
+  try {
+    await audio();
+    const ab = await blob.arrayBuffer(); let buf;
+    try { buf = await ctx.decodeAudioData(ab.slice(0)); } catch (err) { const pcm = decodePcm(ab); if (!pcm) throw new Error("this format cannot be opened"); buf = await toContextBuffer(pcm); }
+    stage = "Measuring";
+    const r = await insMeasure(channelsOf(buf), buf.sampleRate, true, (pp, s) => { p = pp; stage = s; });
+    insRef = { ...r, name: name.replace(/\.[^.]+$/, "") }; kvSet("insRef", insRef).catch(() => { });
+  } catch (err) { toast("Could not measure that song: " + (err && err.message || err)); }
+  clearInterval(clock); insRefRender(); insRender();
+}
+$("#refFileBtn").onclick = () => $("#refFile").click();
+$("#refFile").onchange = e => { const f = e.target.files[0]; e.target.value = ""; if (f) setReference(f, f.name); };
+$("#refPick").onclick = () => {
+  const seen = new Set(), ids = [];
+  for (const id of [...lib.recent, ...lib.favorites, ...(shownIds.music || [])]) if (id !== st.id && songs[id] && !seen.has(id)) { seen.add(id); ids.push(id); if (ids.length >= 40) break; }
+  if (!ids.length) { toast("No other songs yet: use From a file"); return; }
+  sheet(ids.map(id => ({ label: esc(songs[id].name.replace(/\.[^.]+$/, "")), run: async () => {
+    const s0 = songs[id];
+    try { const rec = s0.url ? null : await songGet(id); const blob = rec && rec.blob ? rec.blob : await (await fetch(s0.url)).blob(); setReference(blob, s0.name); }
+    catch (err) { toast("Cannot read that song"); }
+  } })), "Compare with");
+};
+kvGet("insRef", null).then(v => { if (v && v.v === 1) { insRef = v; insRefRender(); } }).catch(() => { });
+// ---- the panels: open/closed kept, ? explains, a jump row, times and pictures seek
+const IHELP = {
+  summary: ["Audio Truth Summary", "Every line is a measurement of this file. Lines under To check broke a rule of thumb: true peak above −1 dBTP, clipped runs, peak-to-loudness ratio under 8 dB, low-mid or upper-mid buildup in over 15% of the song, mono loss over 3 dB, left and right out of phase, over 10% stereo below 120 Hz. There is no overall score: a single grade would hide what was measured."],
+  clarity: ["Clarity & Masking", "The song in 1-second steps. Orange: the share of 200–500 Hz (where mud builds) against the song's own usual level; blue: the same for 2–5 kHz (where harshness sits). Shaded: 3 dB or more over usual. Risk: Low under 5% of the song, Medium 5–15%, High over 15%. Spectral density is an estimate: how many third-octave bands are within 6 dB of the loudest one. A stereo mix has no instruments to tell apart, so it measures crowded bands, not which instrument hides which."],
+  balance: ["Frequency Balance & Spectrum", "Purple: the song's average spectrum in twelfth-octave bands; blue: the moment at the playhead; grey: the reference song, turned to the same loudness. The table gives each band's share of the song's energy. Tilt is a straight line through 100 Hz–10 kHz: 0 dB per octave means equal energy in every octave (like pink noise); lower numbers mean darker. No genre curves are built in: compare with a real song under Reference Comparison."],
+  punch: ["Punch & Transients", "The pictures: the level of 40–120 Hz (the kick's range, also bass notes) and 1.5–5 kHz (the snare's crack and other attacks) through the song. Crest factor: peak over average level. Short-term crest: the same in 3-second windows, the middle value; under about 8 dB the hits are squashed (rule of thumb). Attack rise (estimate): how many dB a hit jumps within 50 ms in that band."],
+  loud: ["Loudness & Dynamics", "Loudness by the broadcast standard (ITU-R BS.1770 / EBU R128): integrated over the whole song, short-term (3 s) as the line, loudness range (LRA), true peak (4× oversampled). PLR: true peak minus integrated loudness; under 8 dB means heavily limited (rule of thumb). Tap the line to move the song there."],
+  spectro: ["Spectrogram", "The whole song: time across, frequency up (50 Hz to 20 kHz, octaves evenly spaced), brighter = louder (an 80 dB range). The white line is the playhead; tap anywhere to move the song there."],
+  stereo: ["Stereo & Phase", "Left: the live picture at the playhead (a goniometer: up = what both sides share, sideways = what differs). Width = the side's share of the energy: 0% mono, about 50% when left and right are unrelated. Correlation: +1 the same, 0 unrelated, below 0 cancelling in mono. Mono compatibility: how much quieter the song gets summed to mono; over 3 dB, check it. The low end below 120 Hz is usually kept near mono."],
+  compare: ["Reference Comparison", "Pick a song from your list or a file. It is measured the same way, then turned up or down to this song's loudness, so the spectra and band shares compare fairly. Two different songs are compared on whole-song averages, not moment by moment. The reference stays chosen for every song until you remove it."],
+  marks: ["Markers & Notes", "The song's markers (add them from the waveform or Marker) and your notes on it, saved per song. Export saves the markers as CSV / TXT."],
+};
+$("#tab-intel").querySelectorAll(".ipanel").forEach(d => {
+  const p = d.id.slice(3);
+  try { if ((JSON.parse(localStorage.getItem("ipClosed") || "[]")).includes(p)) d.open = false; } catch (_) { }
+  d.addEventListener("toggle", () => {
+    try { const s = new Set(JSON.parse(localStorage.getItem("ipClosed") || "[]")); d.open ? s.delete(p) : s.add(p); localStorage.setItem("ipClosed", JSON.stringify([...s])); } catch (_) { }
+    if (d.open) requestAnimationFrame(() => insDraw(true));
+  });
+  d.querySelector(".iq").onclick = e => { e.preventDefault(); e.stopPropagation(); const [t, x] = IHELP[p]; ask(t, x, "", "OK", "", false); };
+});
+function ipJump(p) {
+  const d = $("#ip-" + p); if (!d) return; d.open = true;
+  const sc = $("#npScroll"); sc.scrollTop += d.getBoundingClientRect().top - sc.getBoundingClientRect().top - 64;
+  requestAnimationFrame(() => insDraw(true));
+}
+$("#iJump").querySelectorAll("button").forEach(b => b.onclick = () => ipJump(b.dataset.p));
+$("#tab-intel").addEventListener("click", e => {
+  const t = e.target.closest(".tlink[data-t]"); if (t) { seek(+t.dataset.t); if (!st.playing) play(); return; }
+  const ch = e.target.closest(".ichip[data-p]"); if (ch) ipJump(ch.dataset.p);
+});
+for (const [id, left] of [["#ipSpecgram", IL], ["#ipClarityC", IL], ["#ipPunchC", IL], ["#loud", 30]]) {
+  $(id).addEventListener("click", e => { if (!st.buffer) return; const r = e.currentTarget.getBoundingClientRect(), x = e.clientX - r.left; if (x < left) return; seek((x - left) / (r.width - left) * st.duration); insDraw(true); });
+}
+let insScrollQ = false;
+$("#npScroll").addEventListener("scroll", () => { if (insScrollQ || !infoShown()) return; insScrollQ = true; requestAnimationFrame(() => { insScrollQ = false; insDraw(true); }); }, { passive: true });
 
 // ---------------------------------------------------------------- save a copy
 // the copy's format: "wav-16", "flac-24", "mp3-320" ...
@@ -2212,6 +2573,7 @@ function selectTool(name) {
   $("#tools").querySelectorAll("button").forEach(x => x.classList.toggle("on", x.dataset.tab === name));
   document.querySelectorAll(".tab").forEach(t => t.classList.toggle("on", t.id === "tab-" + name));
   if (name === "loud") drawLoud();
+  if (name === "intel") requestAnimationFrame(() => insDraw(true));
   if (name === "eq") { fillEqEdit(); drawEq(); }
   if (name === "save") refreshSave();                      // the sizes beside each format, for this song
 }
@@ -2507,6 +2869,7 @@ let npMode = "listen";
 // one waveform (with pinch zoom, seek, A/B, flags): on the home screen, or in Studio while that is open
 // the Tempo and Key rows live under the home waveform, and go back into Studio's Tempo & Key while it is open
 const MIX_ROWS = ["rowTempo", "rowKey", "rowChange"].map(id => { const el = $("#" + id), a = document.createComment(id); el.before(a); return [el, a]; });
+const MKS = ["mkBar", "mkPanel"].map(id => { const el = $("#" + id), a = document.createComment(id); el.before(a); return [el, a]; });
 const LYR = (() => { const el = $("#tab-lyrics"), anchor = document.createComment("lyrics"); el.before(anchor); return { el, anchor }; })();
 function placeWave() {
   const inStudio = !$("#np").hidden && npMode === "studio";
@@ -2521,6 +2884,11 @@ function placeWave() {
   if (inListen) { if (LYR.el.previousSibling !== LYR.anchor) LYR.anchor.after(LYR.el); }
   else if (LYR.el.parentElement !== $("#homeLyrics")) $("#homeLyrics").appendChild(LYR.el);
   $("#homeLyrics").hidden = !show || inListen;
+  // Markers & Notes: the last panel of Info while Tools is open (the user, 2026-11-01), under the transport in Listen
+  for (const [el, anchor] of MKS) {
+    if (inStudio) { if (el.parentElement !== $("#ipMarks")) $("#notes").before(el); }
+    else if (el.previousSibling !== anchor) anchor.after(el);
+  }
   for (const [el, anchor] of MIX_ROWS) {
     if (inStudio) { if (el.previousSibling !== anchor) anchor.after(el); }
     else if (el.parentElement !== $("#homeMix")) $("#homeMix").appendChild(el);
@@ -2532,7 +2900,7 @@ function setNpMode(m) {
   $("#np").classList.toggle("studio", m === "studio");
   placeWave();
   $("#npMode").querySelectorAll("button").forEach(b => b.classList.toggle("on", b.dataset.mode === m));
-  requestAnimationFrame(() => { drawWave(); if ($("#tab-eq").classList.contains("on")) drawEq(); if ($("#tab-loud").classList.contains("on")) drawLoud(); });
+  requestAnimationFrame(() => { drawWave(); if ($("#tab-eq").classList.contains("on")) drawEq(); if (infoShown()) insDraw(true); });
 }
 function openNP(mode) {
   if (mode) setNpMode(mode);
@@ -2968,12 +3336,15 @@ function tick(now) {
     }
   } else if (st.buffer && st.playing && now - lastDraw > 40) {
     lastDraw = now; $("#tnow").textContent = fmtTime(st.pos); $("#hNow").textContent = fmtTime(st.pos); if (!miniSeeking) $("#miniProg").style.width = (st.pos / st.duration * 100) + "%"; lyricsTick(st.pos); if ($("#tab-eq").classList.contains("on")) drawEq(); $("#seek").value = Math.round(st.pos / st.duration * 1000); drawWave();
-    if ($("#tab-loud").classList.contains("on")) drawLoud();
+    if (infoShown() && now - insLiveAt > 80) { insLiveAt = now; insDraw(); }
     const i = st.sections.findIndex(s => st.pos >= s.start && st.pos < s.end);
     document.querySelectorAll(".sec").forEach((d, k) => d.classList.toggle("now", k === i));
   }
+  // Info: measured once it is looked at; the pictures follow a seek while paused too
+  if (now - insAt > 400) { insAt = now; if (infoShown()) { insEnsure(); if (!st.playing) insDraw(); } }
   requestAnimationFrame(tick);
 }
+let insLiveAt = 0;
 requestAnimationFrame(tick);
 
 function fmtTime(s) { s = Math.max(0, s || 0); const m = Math.floor(s / 60); return `${m}:${String(Math.floor(s % 60)).padStart(2, "0")}`; }

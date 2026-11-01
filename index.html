@@ -61,10 +61,8 @@
   <nav class="chips hometools" id="homeTools" hidden>
     <button data-tool="eq">EQ</button>
     <button data-tool="intel">Info</button>
-    <button data-tool="notes">Notes</button>
     <button data-tool="save">Save copy</button>
     <button data-tool="lyrics" id="lyrChip">Lyrics</button>
-    <button data-tool="loud">Loudness</button>
   </nav>
   <section class="homelyrics" id="homeLyrics" hidden></section>
 
@@ -228,8 +226,6 @@
         <button data-tab="intel" class="on">Info</button>
         <button data-tab="mix">Tempo &amp; Key</button>
         <button data-tab="save">Cut &amp; Save</button>
-        <button data-tab="loud">Loudness</button>
-        <button data-tab="notes">Notes</button>
       </nav>
 
       <div class="tab on" id="tab-intel">
@@ -247,6 +243,28 @@
         </div>
         <div class="grid" id="stats"></div>
         <div class="sections" id="sections"></div>
+
+        <!-- the song measured (insight-worker.js): one full-width panel each, in this order; Loudness and Notes live here too -->
+        <nav class="chips ijump" id="iJump"><button data-p="summary">Summary</button><button data-p="clarity">Clarity</button><button data-p="balance">Balance</button><button data-p="punch">Punch</button><button data-p="loud">Loudness</button><button data-p="spectro">Spectro</button><button data-p="stereo">Stereo</button><button data-p="compare">Compare</button><button data-p="marks">Notes</button></nav>
+        <div class="faint istatus" id="iStatus"></div>
+        <details class="ipanel" id="ip-summary" open><summary><span class="ipico"></span><b>Audio Truth Summary</b><button class="iq" data-help="summary">?</button></summary><div class="ipbody" id="ipSummary"></div></details>
+        <details class="ipanel" id="ip-clarity" open><summary><span class="ipico"></span><b>Clarity &amp; Masking</b><button class="iq" data-help="clarity">?</button></summary><div class="ipbody"><canvas class="ican" id="ipClarityC"></canvas><div id="ipClarity"></div></div></details>
+        <details class="ipanel" id="ip-balance" open><summary><span class="ipico"></span><b>Frequency Balance &amp; Spectrum</b><button class="iq" data-help="balance">?</button></summary><div class="ipbody"><canvas class="ican tall" id="ipSpecC"></canvas><div id="ipBalance"></div></div></details>
+        <details class="ipanel" id="ip-punch" open><summary><span class="ipico"></span><b>Punch &amp; Transients</b><button class="iq" data-help="punch">?</button></summary><div class="ipbody"><canvas class="ican" id="ipPunchC"></canvas><div id="ipPunch"></div></div></details>
+        <details class="ipanel" id="ip-loud" open><summary><span class="ipico"></span><b>Loudness &amp; Dynamics</b><button class="iq" data-help="loud">?</button></summary><div class="ipbody">
+          <canvas id="loud"></canvas>
+          <div class="grid" id="loudstats"></div>
+          <div id="ipDyn"></div>
+        </div></details>
+        <details class="ipanel" id="ip-spectro" open><summary><span class="ipico"></span><b>Spectrogram</b><button class="iq" data-help="spectro">?</button></summary><div class="ipbody"><canvas class="ican tall" id="ipSpecgram"></canvas></div></details>
+        <details class="ipanel" id="ip-stereo" open><summary><span class="ipico"></span><b>Stereo &amp; Phase</b><button class="iq" data-help="stereo">?</button></summary><div class="ipbody"><div class="istereo"><canvas id="ipGonio"></canvas><canvas id="ipWidthC"></canvas></div><div id="ipStereo"></div></div></details>
+        <details class="ipanel" id="ip-compare" open><summary><span class="ipico"></span><b>Reference Comparison</b><button class="iq" data-help="compare">?</button></summary><div class="ipbody">
+          <div class="row irefrow"><button class="ghost" id="refPick">Pick a reference song</button><button class="ghost" id="refFileBtn">From a file</button><input type="file" id="refFile" hidden accept="audio/*,.wav,.flac,.mp3,.ogg,.m4a,.aac,.opus,.aiff,.aif"></div>
+          <canvas class="ican tall" id="ipRefC"></canvas><div id="ipRef"></div>
+        </div></details>
+        <details class="ipanel" id="ip-marks" open><summary><span class="ipico"></span><b>Markers &amp; Notes</b><button class="iq" data-help="marks">?</button></summary><div class="ipbody" id="ipMarks">
+          <textarea id="notes" placeholder="Notes on this song: mix ideas, where the vocal comes in, what to fix. Saved by themselves, per song."></textarea>
+        </div></details>
       </div>
 
       <div class="tab" id="tab-mix">
@@ -305,14 +323,6 @@
         <div class="faint">Never above the file's own quality. The copy goes to your phone's Downloads, at the song's own sample rate. A tempo/key change is rendered into it.</div>
       </div>
 
-      <div class="tab" id="tab-loud">
-        <canvas id="loud"></canvas>
-        <div class="grid" id="loudstats"></div>
-      </div>
-
-      <div class="tab" id="tab-notes">
-        <textarea id="notes" placeholder="Notes on this song: mix ideas, where the vocal comes in, what to fix. Saved by themselves, per song."></textarea>
-      </div>
     </section>
   </div>
 </section>

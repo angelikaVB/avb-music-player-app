@@ -1074,3 +1074,62 @@ body { background: linear-gradient(180deg, #0B0B20 0%, #0D0D27 50%, #11123A 100%
 
 /* Save as: what the song is now, under the sheet's title */
 .sheet .sheetnote { color: var(--gold, #E8C373); font-size: 13px; font-weight: 600; padding: 0 10px 10px; }
+
+/* Info: the song measured - full-width panels, one under another (the user, 2026-11-01) */
+.ijump { margin-top: 14px; }
+.istatus { margin: 6px 2px 0; min-height: 0; }
+.ipanel { margin-top: 10px; border: 1px solid #2A2960; border-radius: 9px; background: linear-gradient(180deg, #141437, #0F0F2C); overflow: hidden; }
+.ipanel > summary { list-style: none; display: flex; align-items: center; gap: 8px; padding: 11px 12px; cursor: pointer; user-select: none; -webkit-user-select: none; }
+.ipanel > summary::-webkit-details-marker { display: none; }
+.ipanel > summary b { flex: 1; font-size: 15px; color: #F3F1FF; }
+.ipanel > summary::after { content: ""; width: 7px; height: 7px; margin: 0 4px 4px 2px; border-right: 2px solid var(--gold, #E8C373); border-bottom: 2px solid var(--gold, #E8C373); transform: rotate(45deg); transition: transform .15s; }
+.ipanel:not([open]) > summary::after { transform: rotate(-45deg); margin-bottom: 0; }
+.ipanel .ipico { width: 18px; height: 18px; flex: none; background: var(--gold, #E8C373); -webkit-mask: var(--ico) center / contain no-repeat; mask: var(--ico) center / contain no-repeat; }
+.ipanel .iq { width: 24px; height: 24px; flex: none; border-radius: 50%; border: 1px solid #4B4A85; background: transparent; color: #C9C6F0; font-weight: 700; font-size: 13px; padding: 0; }
+.ipbody { padding: 0 12px 12px; }
+.ican { width: 100%; height: 120px; display: block; border-radius: 6px; }
+.ican.tall { height: 160px; }
+#ipSpecgram { height: 190px; }
+.istereo { display: flex; gap: 8px; }
+#ipGonio { width: 140px; height: 140px; flex: none; border-radius: 6px; }
+#ipWidthC { flex: 1; min-width: 0; height: 140px; border-radius: 6px; }
+.ihead { font-weight: 700; color: var(--gold, #E8C373); font-size: 15px; margin-bottom: 8px; }
+.ichips { display: grid; grid-template-columns: repeat(auto-fit, minmax(96px, 1fr)); gap: 6px; margin-bottom: 8px; }
+.ichip { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; padding: 6px 8px; border-radius: 7px; border: 1px solid #2E7D4F; background: rgba(34,197,94,.08); color: #C9C6F0; font-size: 11px; text-align: left; }
+.ichip b { color: #4ADE80; font-size: 12.5px; }
+.ichip.warn { border-color: #92400E; background: rgba(245,158,11,.08); }
+.ichip.warn b { color: #FBBF24; }
+.icap { margin: 10px 0 4px; font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: #8B88B8; }
+.ilist { margin: 0; padding: 0; list-style: none; display: grid; gap: 5px; font-size: 13px; line-height: 1.35; color: #DCD9F5; }
+.ilist li { padding-left: 18px; position: relative; }
+.ilist li::before { content: "•"; position: absolute; left: 4px; color: #6C6996; }
+.ilist li.ok::before { content: "✓"; color: #4ADE80; left: 2px; }
+.ilist.warn li::before { content: "!"; color: #FBBF24; font-weight: 800; left: 5px; }
+.tlink { background: none; border: 0; padding: 0; color: var(--gold, #E8C373); font-weight: 700; text-decoration: underline; text-underline-offset: 2px; font-size: inherit; }
+.irows { display: grid; gap: 7px; margin-top: 10px; }
+.irows > div { display: grid; grid-template-columns: 1fr auto; column-gap: 10px; align-items: baseline; font-size: 13px; color: #DCD9F5; }
+.irows > div b { color: #F3F1FF; font-variant-numeric: tabular-nums; }
+.irows > div em { grid-column: 1 / -1; font-style: normal; font-size: 11.5px; color: #8B88B8; }
+b.ok { color: #4ADE80 !important; } b.mid { color: #FBBF24 !important; } b.bad { color: #F87171 !important; }
+.ilegend { margin-top: 8px; font-size: 11.5px; color: #C9C6F0; display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: center; }
+.ilegend i { display: inline-block; width: 10px; height: 3px; margin-right: 4px; vertical-align: middle; }
+.itable { display: grid; gap: 4px; margin-top: 10px; font-size: 12.5px; color: #DCD9F5; }
+.itable > div { display: grid; grid-template-columns: 1fr auto auto; gap: 10px; align-items: baseline; }
+.itable.four > div { grid-template-columns: minmax(0, 1fr) auto auto minmax(0, 1.1fr); gap: 8px; }
+.itable > div b { font-variant-numeric: tabular-nums; text-align: right; }
+.itable > div em { font-style: normal; font-size: 11px; color: #8B88B8; }
+.itable .ith { color: #8B88B8; font-size: 11px; text-transform: uppercase; letter-spacing: .05em; }
+.itable .ith span:not(:first-child) { text-align: right; }
+.irefrow { gap: 8px; margin: 2px 0 10px; flex-wrap: wrap; }
+#ipMarks .mktoggle > span:first-child { display: none; }    /* the panel says "Markers & Notes" already */
+#ipMarks .mkbar, #ipMarks .mkpanel { margin-left: 0; margin-right: 0; }
+#ipMarks textarea { margin-top: 10px; width: 100%; box-sizing: border-box; }
+/* the panels' icons */
+#ip-summary .ipico { --ico: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M2 12h3l2-6 4 13 3-9 2 4h6'/%3E%3C/svg%3E"); }
+#ip-clarity .ipico { --ico: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2.2' stroke-linejoin='round'%3E%3Cpath d='M12 3l9 5-9 5-9-5z'/%3E%3Cpath d='M3 13l9 5 9-5'/%3E%3C/svg%3E"); }
+#ip-balance .ipico, #ip-loud .ipico { --ico: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M3 21h3V11H3zm5 0h3V5H8zm5 0h3V9h-3zm5 0h3V14h-3z'/%3E%3C/svg%3E"); }
+#ip-punch .ipico { --ico: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M2 14h4l2-9 3 15 2-11 2 5h7'/%3E%3C/svg%3E"); }
+#ip-spectro .ipico { --ico: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M3 3h4v18H3zm5 6h4v12H8zm5-3h4v15h-4zm5 7h3v8h-3z' opacity='.9'/%3E%3C/svg%3E"); }
+#ip-stereo .ipico { --ico: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2.2'%3E%3Ccircle cx='9' cy='12' r='6'/%3E%3Ccircle cx='15' cy='12' r='6'/%3E%3C/svg%3E"); }
+#ip-compare .ipico { --ico: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M7 4v16M17 4v16M4 8h6M14 14h6M4 16h6M14 6h6'/%3E%3C/svg%3E"); }
+#ip-marks .ipico { --ico: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M5 22V3h12l-2 4.5L17 12H7v10z'/%3E%3C/svg%3E"); }
