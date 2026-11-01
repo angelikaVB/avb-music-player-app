@@ -712,6 +712,8 @@ function saveName(part, f) {
   if (eqActive()) tags.push("EQ");
   if (f.kind === "mp3") tags.push(`${f.n} kbps`);
   else if (!st.info.bits || f.n !== st.info.bits) tags.push(f.n === 32 ? "32-bit float" : `${f.n}-bit`);
+  if (f.rate) tags.push((f.rate / 1000).toFixed(1).replace(".0", "") + " kHz");
+  if (f.mono) tags.push("mono");
   return `${stem}${tags.length ? ` (${tags.join(", ")})` : ""}.${f.kind}`;
 }
 let saving = null;
@@ -722,6 +724,8 @@ async function makeCopy(part, f, onStage) {
   if (st.speed !== 1 || st.semis) { onStage("Changing tempo / key"); chans = await renderOnce(chans, sr); }
   if (eqActive()) { onStage("Applying the EQ"); chans = await renderEq(chans, sr); }
   if (st.info.rate && st.info.rate !== sr) { onStage("Back to " + (st.info.rate / 1000).toFixed(1).replace(".0", "") + " kHz"); chans = await resample(chans, sr, st.info.rate); sr = st.info.rate; }
+  if (f.rate && f.rate < sr) { onStage("Down to " + (f.rate / 1000).toFixed(1).replace(".0", "") + " kHz"); chans = await resample(chans, sr, f.rate); sr = f.rate; }
+  if (f.mono && chans.length > 1) { const m = new Float32Array(chans[0].length); for (const c of chans) for (let i = 0; i < m.length; i++) m[i] += c[i] / chans.length; chans = [m]; }
   let peak = 0; for (const c of chans) for (let i = 0; i < c.length; i++) peak = Math.max(peak, Math.abs(c[i]));
   let note = "";
   if (peak > 1 && !(f.kind === "wav" && f.n === 32)) { const g = 0.989 / peak; for (const c of chans) for (let i = 0; i < c.length; i++) c[i] *= g; note = ` · lowered ${(20 * Math.log10(g)).toFixed(1)} dB so it does not clip`; }
@@ -792,6 +796,47 @@ async function shareCopy(f) {
     clearInterval(clock);
     await deliverShare(blob, name);
   } catch (err) { clearInterval(clock); toast("Could not make the copy: " + (err && err.message || err)); }
+}
+// Save as (the ⋯ menu): the whole song as a smaller file - MP3, or a WAV at 16-bit, 44.1 kHz or mono - each with its
+// size; your tempo/key and EQ go into it, as in Save a copy; it goes to Downloads
+async function saveAsMenu(id) {
+  if (st.id !== id) { await loadSong(id, false); if (st.id !== id || !st.buffer) return; }
+  if (!st.buffer) { toast("The song is still loading"); return; }
+  const rate = st.info.rate || st.sr, ch = st.info.channels || 2, dur = st.duration / (st.speed || 1);
+  const changes = [st.speed !== 1 || st.semis ? "tempo/key" : "", eqActive() ? "EQ" : ""].filter(Boolean).join(" + ");
+  const fmts = [
+    [{ kind: "mp3", n: 320 }, "MP3 320 kbps · best quality"],
+    [{ kind: "mp3", n: 192 }, "MP3 192 kbps · smaller"],
+    [{ kind: "mp3", n: 128 }, "MP3 128 kbps · smallest"],
+    [{ kind: "wav", n: 16 }, "WAV 16-bit"],
+  ];
+  if (rate > 44100) fmts.push([{ kind: "wav", n: 16, rate: 44100 }, "WAV 16-bit · 44.1 kHz"]);
+  if (ch > 1) fmts.push([{ kind: "wav", n: 16, rate: rate > 44100 ? 44100 : 0, mono: true }, `WAV 16-bit${rate > 44100 ? " · 44.1 kHz" : ""} · mono`]);
+  const items = [];
+  for (const [f, label] of fmts) {
+    if (!f.rate && !f.mono && saveReason("whole", f)) continue;            // above the song's own quality, or the same file
+    const bytes = f.kind === "mp3" ? dur * f.n * 1000 / 8 : dur * (f.rate || rate) * (f.mono ? 1 : ch) * 2 + 44;
+    items.push({ label: `${label} · ${(bytes / 1e6).toFixed(1)} MB`, run: () => saveAs(f) });
+  }
+  if (!items.length) { toast("This song is already as small as these formats"); return; }
+  // what the song is now, so the choice is made against it
+  const kb = st.info.bits ? 0 : sourceKbps(), size = (songs[id] && songs[id].size > 0 ? songs[id].size : st.info.size) || 0;
+  const now = [st.info.fmt, st.info.bits ? (st.info.bits === 32 ? "32-bit float" : `${st.info.bits}-bit`) : kb ? `${Math.round(kb)} kbps` : "",
+    (rate / 1000).toFixed(1).replace(".0", "") + " kHz", ch === 1 ? "mono" : ch === 2 ? "stereo" : `${ch} channels`, size ? `${(size / 1e6).toFixed(1)} MB` : ""].filter(Boolean).join(" · ");
+  sheet(items, `Save “${st.name.replace(/\.[^.]+$/, "")}” as${changes ? ` (with your ${changes})` : ""}`, "Now: " + now);
+}
+async function saveAs(f) {
+  if (saving) return;
+  const t0 = performance.now(); let stage = "Preparing"; saving = true;
+  const clock = setInterval(() => toast(`${stage}… ${((performance.now() - t0) / 1000).toFixed(0)} s`), 600);
+  try {
+    const { blob, name, note } = await makeCopy("whole", f, x => stage = x);
+    stage = "Saving";
+    if (ANDROID) await androidSave(blob, name);
+    else { const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = name; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 60000); }
+    clearInterval(clock); toast(`Saved to Downloads: ${name} (${(blob.size / 1e6).toFixed(1)} MB)${note}`);
+  } catch (err) { clearInterval(clock); toast("Could not save: " + (err && err.message || err)); }
+  saving = null; refreshSave();
 }
 // Send to Music Tools by AVB on the PC (2026-10-24): the song, as it is, over the home Wi-Fi to the PC whose
 // Phone link is on - found by its 4-digit code (asked once, kept); it opens there on SONG MAP
@@ -1238,9 +1283,9 @@ swipeToClose($("#sheet"), () => $("#sheet").classList.remove("on"));
 swipeToClose($("#mkEdit"), () => closeMarkEdit());
 // a tap outside a menu closes it (and does nothing else)
 $("#shade").addEventListener("click", e => { e.preventDefault(); $("#sheet").classList.remove("on"); });
-function sheet(items, title) {
+function sheet(items, title, note) {
   const s = $("#sheet");
-  s.innerHTML = (title ? `<div class="sheettitle">${title.replace(/</g, "&lt;")}</div>` : "") + items.map((it, i) => `<button class="${it.danger ? "danger" : ""}" data-i="${i}">${it.label}</button>`).join("") + `<button data-i="-1">Cancel</button>`;
+  s.innerHTML = (title ? `<div class="sheettitle">${title.replace(/</g, "&lt;")}</div>` : "") + (note ? `<div class="sheetnote">${note.replace(/</g, "&lt;")}</div>` : "") + items.map((it, i) => `<button class="${it.danger ? "danger" : ""}" data-i="${i}">${it.label}</button>`).join("") + `<button data-i="-1">Cancel</button>`;
   s.classList.add("on");
   s.querySelectorAll("button").forEach(b => b.onclick = () => { s.classList.remove("on"); const i = +b.dataset.i; if (i >= 0) items[i].run(); });
 }
@@ -1253,7 +1298,7 @@ function songMenu(id) {
   ];
   if (view === "queue") items.push({ label: "Remove from queue", run: () => { const i = lib.queue.indexOf(id); if (i >= 0) { lib.queue.splice(i, 1); if (i < lib.index) lib.index--; else if (i === lib.index) lib.index = -1; } save("queue"); save("index"); renderList(); } });
   if (view === "list") items.push({ label: "Remove from this playlist", run: () => { const p = lib.playlists.find(p => p.name === listName); p.items = p.items.filter(x => x !== id); save("playlists"); renderList(); } });
-  items.unshift({ label: DESKTOP ? "Show in folder / save a copy" : "Share", run: () => shareSong(id) }, { label: "Rename", run: () => renameSong(id) });
+  items.unshift({ label: DESKTOP ? "Show in folder / save a copy" : "Share", run: () => shareSong(id) }, { label: "Save as MP3 or smaller WAV", run: () => saveAsMenu(id) }, { label: "Rename", run: () => renameSong(id) });
   if (ANDROID && !DESKTOP && ANDROID.pcSendBegin) items.splice(1, 0, { label: "Send to Music Tools by AVB", run: () => sendToPc(id) });
   const rec = isRecording(id);
   const twin = phoneTwin(id);                         // the phone file behind an app copy, when it can be found

@@ -1071,3 +1071,6 @@ body { background: linear-gradient(180deg, #0B0B20 0%, #0D0D27 50%, #11123A 100%
 
 /* selecting songs: the tick takes no more room than the ⋯ it replaces, so no row grows and the list never moves */
 .list li .check { margin: 0 2px 0 4px; }
+
+/* Save as: what the song is now, under the sheet's title */
+.sheet .sheetnote { color: var(--gold, #E8C373); font-size: 13px; font-weight: 600; padding: 0 10px 10px; }

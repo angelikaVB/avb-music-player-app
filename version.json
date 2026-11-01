@@ -1,7 +1,7 @@
 {
- "code": 125,
- "name": "11.5",
- "url": "https://angelikavb.github.io/avb-music-player-app/AVB-Player-11.5.apk",
- "sha256": "5a8d21908eaf1e523597f0f47d0b1faffc50197b2d95aef2280fe43b50c0ee94",
- "notes": "Selecting songs no longer makes the list jump: the songs you are ticking stay where they are on the screen."
+ "code": 126,
+ "name": "11.6",
+ "url": "https://angelikavb.github.io/avb-music-player-app/AVB-Player-11.6.apk",
+ "sha256": "5de0c333288a43be3b42a281a41f62f6a1dde676d9a68cb2b530b3240dcbef57",
+ "notes": "Save as: from a song's \u22ef menu, save it as MP3 (320/192/128 kbps) or a smaller WAV (16-bit, 44.1 kHz, mono), each with its size; the menu first says the song's own format and size."
 }
