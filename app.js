@@ -1204,6 +1204,29 @@ async function saveAs(f) {
 const pcWaiters = {};
 let pcToken = 0;
 window.avbPcSent = (token, ok, words) => { const f = pcWaiters[token]; delete pcWaiters[token]; if (f) f({ ok, words }); };
+// Song from a link (the user, 2026-11-01: as Music Tools' Other tab; "the phone should not be finding the PC"): a
+// YouTube, SoundCloud or Bandcamp link - pasted, or YouTube's Share -> AVB Player - is read by the phone itself
+// (LinkFetch, NewPipe Extractor); its best audio, as the site serves it, goes into Music/AVB Player and plays
+const linkWaiters = {};
+let linkToken = 0;
+window.avbLinkProgress = (token, stage, pct) => { const w = linkWaiters[token]; if (w) w.stage = stage + (pct >= 0 ? ` ${pct}%` : ""); };
+window.avbLinkDone = (token, ok, words, id) => { const w = linkWaiters[token]; delete linkWaiters[token]; if (w) w.done({ ok, words, id }); };
+const canLink = () => !!(ANDROID && ANDROID.linkGet && !DESKTOP);
+async function songFromLink(page) {
+  if (!canLink()) { toast("Song from a link works in the phone app"); return; }
+  if (page == null) page = await ask("Song from a link", "Paste a YouTube, SoundCloud or Bandcamp link. The song is saved in Music/AVB Player as the site serves it (YouTube: AAC, about 128 kbps).", "", "Get it");
+  const m = String(page || "").match(/https?:\/\/\S+/);
+  if (!m) { if (page) toast("That is not a link"); return; }
+  const token = ++linkToken, w = { stage: "Starting" }, t0 = performance.now();
+  const clock = setInterval(() => toast(`${w.stage} · ${((performance.now() - t0) / 1000).toFixed(0)} s`), 600);
+  const res = await new Promise(r => { w.done = r; linkWaiters[token] = w; ANDROID.linkGet(m[0], token); });
+  clearInterval(clock);
+  if (!res.ok) { ask("Song from a link", "Could not get that song: " + res.words, "", "OK", "", false); return; }
+  toast("Saved in Music/AVB Player: " + res.words);
+  for (let i = 0; i < 6 && !songs[res.id]; i++) { loadPhone(false); if (!songs[res.id]) await new Promise(r => setTimeout(r, 500)); }
+  if (songs[res.id]) { lib.queue = [res.id, ...lib.queue.filter(x => x !== res.id)]; save("queue"); playIndex(0, true); showPage("music"); }
+}
+window.avbTakeLink = () => { const l = canLink() && ANDROID.takeLink ? ANDROID.takeLink() : ""; if (l) songFromLink(l); };
 async function sendToPc(id) {
   const s0 = songs[id]; if (!s0) return;
   let code = localStorage.getItem("avbPcCode") || "";
@@ -2729,6 +2752,7 @@ $("#settingsBtn").onclick = () => {
   if (ANDROID && ANDROID.updateCheck) items.push(updateInfo
     ? { label: `Update to AVB Player ${updateInfo.name}`, run: startUpdate }
     : { label: "Check for updates", run: () => { updateManual = true; toast("Checking for updates"); ANDROID.updateCheck(); } });
+  if (canLink()) items.push({ label: "Song from a link (YouTube, SoundCloud, Bandcamp)", run: () => songFromLink() });
   items.push({ label: DESKTOP ? "Add a song from another folder" : ANDROID ? "Open a song from Drive or another app" : "Add music from your files", run: () => $("#files2").click() });
   items.push({ label: "Save the markers and notes of every song in one spreadsheet (to Downloads)", run: exportAllMarks });
   if (ANDROID) items.push({ label: "Why did the music stop?", run: () => {
@@ -3312,6 +3336,11 @@ $("#recBtn").onclick = recordStart; $("#recPause").onclick = recordPause;
 $("#recStop").onclick = () => recordStop(true);
 $("#recCancel").onclick = async () => { const was = rec && rec.paused; if (rec && !was) recordPause(); if (await confirmBox("Throw this take away?", "It has not been saved.", "Discard", "Keep recording")) recordStop(false); else if (rec && !was) recordPause(); };
 // typing a search: the song panel steps aside so the matches show right under the box (the mini player keeps playing)
+// a link pasted into the search box: get that song (Song from a link)
+$("#filter").addEventListener("paste", e => {
+  const t = (e.clipboardData && e.clipboardData.getData("text")) || "";
+  if (canLink() && /^\s*https?:\/\/\S+\s*$/.test(t)) { e.preventDefault(); $("#filter").blur(); songFromLink(t.trim()); }
+});
 $("#filter").oninput = () => { document.body.classList.toggle("searching", !!$("#filter").value.trim()); renderList(); };
 window.addEventListener("resize", () => { drawWave(); drawLoud(); drawEq(); drawRecorder(); drawMeter(); });
 document.addEventListener("keydown", e => { if (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA") return; if (e.code === "Space") { e.preventDefault(); togglePlay(); } if (e.key === "ArrowLeft") seek(st.pos - 5); if (e.key === "ArrowRight") seek(st.pos + 5); });
@@ -3471,6 +3500,7 @@ window.avbBack = () => {
   return false;
 };
 await takeAndroid();
+window.avbTakeLink();                                          // a link shared to the app before it opened
 if ("launchQueue" in window) {
   window.launchQueue.setConsumer(async params => {
     if (!params.files || !params.files.length) return;

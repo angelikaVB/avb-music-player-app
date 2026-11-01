@@ -1133,3 +1133,13 @@ b.ok { color: #4ADE80 !important; } b.mid { color: #FBBF24 !important; } b.bad {
 #ip-stereo .ipico { --ico: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2.2'%3E%3Ccircle cx='9' cy='12' r='6'/%3E%3Ccircle cx='15' cy='12' r='6'/%3E%3C/svg%3E"); }
 #ip-compare .ipico { --ico: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M7 4v16M17 4v16M4 8h6M14 14h6M4 16h6M14 6h6'/%3E%3C/svg%3E"); }
 #ip-marks .ipico { --ico: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M5 22V3h12l-2 4.5L17 12H7v10z'/%3E%3C/svg%3E"); }
+
+/* Never waste space (the user, 2026-11-01: "Remove unnecessary paddings and block borders ... use that space for actual
+   info"): the full-screen player 8 px from the screen's edges, the Tools page without its card, the Info panels without
+   frames - a thin line between them */
+.npscroll { padding-left: 8px; padding-right: 8px; }
+.toolsbox .chips { margin: 0 -8px 10px; padding: 0 8px; }
+.toolsbox .tab { background: none; border-radius: 0; padding: 0; }
+.ipanel { margin-top: 4px; border: 0; border-top: 1px solid #2A2960; border-radius: 0; background: none; overflow: visible; }
+.ipanel > summary { padding: 10px 0; }
+.ipbody { padding: 0 0 12px; }

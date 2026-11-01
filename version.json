@@ -1,7 +1,7 @@
 {
- "code": 127,
- "name": "11.7",
- "url": "https://angelikavb.github.io/avb-music-player-app/AVB-Player-11.7.apk",
- "sha256": "22f2db39b052991c2e09d35fcc1dc2ca2398f70dc84c32956f814a0142c21b33",
- "notes": "Info now measures the song: summary, clarity, frequency balance, punch, loudness, spectrogram, stereo, a reference song to compare with, and markers & notes, one panel under another. Home tools: EQ, Info, Save copy, Lyrics."
+ "code": 128,
+ "name": "11.8",
+ "url": "https://angelikavb.github.io/avb-music-player-app/AVB-Player-11.8.apk",
+ "sha256": "5eb6bf71fc9b699584f30e9ee9b37335fe3f557d456080e2322769fc60410fa1",
+ "notes": "Song from a link: paste a YouTube, SoundCloud or Bandcamp link (Settings, or into the search box), or Share -> AVB Player from YouTube; the phone saves the song in Music/AVB Player and plays it. Tools: more room for the information (no frames, no wide margins)."
 }
