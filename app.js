@@ -529,8 +529,9 @@ function drawWave() {
     if (t === null) continue;
     const x = xOf(t, w); if (x < -10 || x > w + 10) continue;
     wctx.strokeStyle = col; wctx.setLineDash([4, 4]); wctx.beginPath(); wctx.moveTo(x, top); wctx.lineTo(x, bottom); wctx.stroke(); wctx.setLineDash([]);
-    wctx.fillStyle = col; roundRect(wctx, x - 10, top - 2, 20, 16, 5); wctx.fill();
-    wctx.fillStyle = "#fff"; wctx.font = "700 11px system-ui"; wctx.textAlign = "center"; wctx.fillText(letter, x, top + 10);
+    const fx = Math.max(10, Math.min(w - 10, x));                // the flag stays whole at the screen's edge
+    wctx.fillStyle = col; roundRect(wctx, fx - 10, top - 2, 20, 16, 5); wctx.fill();
+    wctx.fillStyle = "#fff"; wctx.font = "700 11px system-ui"; wctx.textAlign = "center"; wctx.fillText(letter, fx, top + 10);
   }
   // how far in it is zoomed, while it is
   if ((st.vzoom || 1) > 1.05 || st.view.b - st.view.a < 0.98) {
@@ -542,10 +543,22 @@ function drawWave() {
   wctx.fillStyle = "#6C6996"; wctx.font = "11px system-ui"; wctx.textAlign = "center";
   const span = (st.view.b - st.view.a) * st.duration;
   const step = [1, 2, 5, 10, 15, 30, 60, 120, 300].find(s => span / s <= 7) || 600;
-  for (let t = Math.ceil(st.view.a * st.duration / step) * step; t <= st.view.b * st.duration; t += step) wctx.fillText(fmtTime(t), xOf(t, w), h - 4);
-  // playhead
+  // the song's length at the ruler's right end (the user, 2026-11-02: the time sits on the playhead now)
+  const endW = wctx.measureText(fmtTime(st.duration)).width + 8;
+  for (let t = Math.ceil(st.view.a * st.duration / step) * step; t <= st.view.b * st.duration; t += step) {
+    const x = xOf(t, w), half = wctx.measureText(fmtTime(t)).width / 2 + 2;
+    if (x < w - endW - 14) wctx.fillText(fmtTime(t), Math.max(half, x), h - 4);          // never cut at the left edge
+  }
+  wctx.textAlign = "right"; wctx.fillStyle = "#9592BF"; wctx.fillText(fmtTime(st.duration), w - 4, h - 4);
+  // playhead, its time right above it (tenths while cutting: where a cut starts and ends)
   const px = xOf(st.pos, w);
   wctx.shadowColor = "#fff"; wctx.shadowBlur = 8; wctx.fillStyle = "#fff"; wctx.fillRect(px - 1, top, 2, bottom - top); wctx.shadowBlur = 0;
+  if (px >= -1 && px <= w + 1) {
+    const label = cutMode ? `${fmtTime(st.pos)}.${Math.floor(st.pos * 10 % 10)}` : fmtTime(st.pos);
+    wctx.font = "700 11px system-ui"; const lw = wctx.measureText(label).width + 10, lx = Math.max(0, Math.min(w - lw, px - lw / 2));
+    wctx.fillStyle = "#fff"; roundRect(wctx, lx, Math.max(0, top - 15), lw, 14, 5); wctx.fill();
+    wctx.fillStyle = "#0B0B20"; wctx.textAlign = "center"; wctx.fillText(label, lx + lw / 2, Math.max(0, top - 15) + 11);
+  }
 }
 function roundRect(c, x, y, w, h, r) { c.beginPath(); c.moveTo(x + r, y); c.arcTo(x + w, y, x + w, y + h, r); c.arcTo(x + w, y + h, x, y + h, r); c.arcTo(x, y + h, x, y, r); c.arcTo(x, y, x + w, y, r); c.closePath(); }
 // touch: tap = seek / section jump, drag a flag = move it, pinch = zoom
@@ -1465,7 +1478,7 @@ function renderList() {
   el.querySelectorAll("li[data-id]").forEach(li => {
     li.querySelector(".n").onclick = () => { if (pickRow(li, "music")) return;
       const id = li.dataset.id;
-      if (st.id === id && st.buffer) { if (!st.playing) play(); return; }        // the loaded song: carry on, never restart
+      if (st.id === id && st.buffer) { if (st.playing) seek(0); else play(); return; }   // the song playing: from the start (the user, 2026-11-01); paused: carries on
       if (view === "queue") playIndex(lib.queue.indexOf(id), true); else { lib.queue = ids.slice(); save("queue"); playIndex(ids.indexOf(id), true); } };
     wireRow(li, "music");
     li.querySelector(".fav").onclick = e => { e.stopPropagation(); const on = !lib.favorites.includes(li.dataset.id); toggleFav(li.dataset.id); toast(on ? "Added to Favorites" : "Removed from Favorites"); };
@@ -2902,6 +2915,7 @@ function placeWave() {
   const show = !!st.id && !!songs[st.id] && !inStudio;
   $("#homeWave").hidden = !show; $("#homeMix").hidden = !show; $("#homeTransport").hidden = !show; $("#homeTitle").hidden = !show;
   $("#cutBar").hidden = !show || !cutMode;
+  $("#waveBox").classList.toggle("cutting", !!cutMode);          // the ±10 s circles go while cutting: the start and end show
   $("#homeTools").hidden = !show;
   // the lyrics: on the home screen, or in Now Playing > Listen while that is open
   const inListen = !$("#np").hidden && npMode === "listen";

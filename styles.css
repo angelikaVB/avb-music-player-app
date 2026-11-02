@@ -1143,3 +1143,10 @@ b.ok { color: #4ADE80 !important; } b.mid { color: #FBBF24 !important; } b.bad {
 .ipanel { margin-top: 4px; border: 0; border-top: 1px solid #2A2960; border-radius: 0; background: none; overflow: visible; }
 .ipanel > summary { padding: 10px 0; }
 .ipbody { padding: 0 0 12px; }
+
+/* The home waveform (the user, 2026-11-02): from screen edge to screen edge, taller, no frame; the time rides on the
+   playhead (drawn), so the corner label goes; the ±10 s circles go while cutting */
+.homewave { margin: 4px -16px 14px !important; border: 0 !important; border-radius: 0 !important; background: none !important; padding: 0 !important; }
+.homewave #wave { height: 150px !important; border-radius: 0 !important; }
+.homewave .htime { display: none; }
+.wavebox.cutting .wskip { display: none; }

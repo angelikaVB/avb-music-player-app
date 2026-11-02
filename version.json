@@ -1,7 +1,7 @@
 {
- "code": 128,
- "name": "11.8",
- "url": "https://angelikavb.github.io/avb-music-player-app/AVB-Player-11.8.apk",
- "sha256": "5eb6bf71fc9b699584f30e9ee9b37335fe3f557d456080e2322769fc60410fa1",
- "notes": "Song from a link: paste a YouTube, SoundCloud or Bandcamp link (Settings, or into the search box), or Share -> AVB Player from YouTube; the phone saves the song in Music/AVB Player and plays it. Tools: more room for the information (no frames, no wide margins)."
+ "code": 130,
+ "name": "12.0",
+ "url": "https://angelikavb.github.io/avb-music-player-app/AVB-Player-12.0.apk",
+ "sha256": "6afccb72a035e6e3612503f12b2fc79491175328ebaeab1fe401a6e686df5481",
+ "notes": "Home waveform edge to edge and taller; the time rides on the playhead (tenths while cutting); the \u00b110 s circles hide while cutting. Tapping the song that is playing starts it again."
 }
