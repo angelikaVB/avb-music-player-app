@@ -1,7 +1,7 @@
 {
- "code": 130,
- "name": "12.0",
- "url": "https://angelikavb.github.io/avb-music-player-app/AVB-Player-12.0.apk",
- "sha256": "6afccb72a035e6e3612503f12b2fc79491175328ebaeab1fe401a6e686df5481",
- "notes": "Home waveform edge to edge and taller; the time rides on the playhead (tenths while cutting); the \u00b110 s circles hide while cutting. Tapping the song that is playing starts it again."
+ "code": 131,
+ "name": "12.1",
+ "url": "https://angelikavb.github.io/avb-music-player-app/AVB-Player-12.1.apk",
+ "sha256": "3345dcd6b5485bdd6a9bfa604002b79ae18b7191ad1efe32dd30c387e9857e47",
+ "notes": "12.1: smoother song loading; Settings has a Playback check. Desktop uses the whole window."
 }

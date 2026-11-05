@@ -21,7 +21,7 @@ const songGet = id => new Promise((ok, no) => { const t = db.transaction("songs"
 const lib = {
   queue: await kvGet("queue", []), index: await kvGet("index", -1), favorites: await kvGet("favorites", []),
   recent: await kvGet("recent", []), playlists: await kvGet("playlists", []), notes: await kvGet("notes", {}), lyrics: await kvGet("lyrics", {}), eq: await kvGet("eq", null), lyrH: await kvGet("lyrH", 300), lyrFold: await kvGet("lyrFold", false), mkOpen: await kvGet("mkOpen", true), mkCat: await kvGet("mkCat", "idea"), recInput: await kvGet("recInput", ""), recFmt: await kvGet("recFmt", { sr: 48000, bits: 24 }), shuffle: await kvGet("shuffle", false), mono: false,
-  balance: await kvGet("balance", 0), fix: await kvGet("fix", {}), marks: await kvGet("marks", {}), hidden: await kvGet("hidden", []), change: await kvGet("change", {}), stopLog: await kvGet("stopLog", []), seenVersion: await kvGet("seenVersion", ""), sort: await kvGet("sort", "default"), mmOffered: await kvGet("mmOffered", false), renamed: await kvGet("renamed", {}),
+  balance: await kvGet("balance", 0), fix: await kvGet("fix", {}), marks: await kvGet("marks", {}), hidden: await kvGet("hidden", []), change: await kvGet("change", {}), playLog: await kvGet("playLog", []), stopLog: await kvGet("stopLog", []), seenVersion: await kvGet("seenVersion", ""), sort: await kvGet("sort", "default"), mmOffered: await kvGet("mmOffered", false), renamed: await kvGet("renamed", {}),
   repeat: await kvGet("repeat", "off"), volume: await kvGet("volume", 1), keepVoice: await kvGet("keepVoice", true),
 };
 const save = k => kvSet(k, lib[k]);
@@ -46,7 +46,7 @@ async function audio() {
   node = new AudioWorkletNode(ctx, "avb-player", { outputChannelCount: [2] });
   buildEqChain();
   node.port.onmessage = e => {
-    if (e.data.frame !== undefined) { st.pos = e.data.frame / st.sr; }
+    if (e.data.frame !== undefined) { st.pos = e.data.frame / st.sr; playCheck(e.data.frame); }
     if (e.data.ended) onEnded();
   };
   setVolume();
@@ -59,6 +59,46 @@ async function audio() {
   }
 }
 const send = m => node && node.port.postMessage(m);
+// a whole song goes to the audio thread by hand-over, not as a copy: copying it there would hold up the sound
+const sendSong = m => node && node.port.postMessage(m, m.channels.map(c => c.buffer));
+// the playback check (the user, 2026-11-05: an MP3 "plays too fast, skipping" on the phone, never on the computer):
+// every 10 s of playing, how far the song moved against the real clock, kept for Settings > Playback check
+let pc = null;
+function playCheck(frame) {
+  const now = performance.now();
+  if (!st.playing || !ctx) { pc = null; return; }
+  if (!pc || frame < pc.f || pc.id !== st.id) { pc = { id: st.id, f: frame, t: now, c: ctx.currentTime, n: pc && pc.id === st.id ? pc.n : 0 }; return; }
+  const dt = (now - pc.t) / 1000; if (dt < 10) return;
+  const want = st.changed ? st.speed : 1, r = (frame - pc.f) / st.sr / dt / want, clock = (ctx.currentTime - pc.c) / dt;
+  const off = Math.abs(r - 1) > 0.03 || Math.abs(clock - 1) > 0.03;
+  if (pc.n === 0 || (off && pc.n < 4)) {
+    const i = st.info || {}, s = v => v ? `${v.toFixed(1)} s` : "unknown";
+    const why = `${off ? "OFF" : "OK"} · speed ${r.toFixed(3)} · audio clock ${clock.toFixed(3)} · file ${st.fileRate || i.rate || "?"} Hz · player ${ctx.sampleRate} Hz · decoded ${s(st.duration)} · file says ${s(st.fileLen)} · delay ${Math.round((ctx.baseLatency || 0) * 1000)} ms`;
+    lib.playLog = [{ t: Date.now(), why, song: st.id && songs[st.id] ? songs[st.id].name.replace(/\.[^.]+$/, "") : "" }, ...(lib.playLog || [])].slice(0, 20);
+    save("playLog"); pc.n++;
+  }
+  pc.f = frame; pc.t = now; pc.c = ctx.currentTime;
+}
+// an MP3's own length, from its frames' header: what the decoder should give back
+async function mp3Seconds(blob) {
+  const b = new Uint8Array(await blob.slice(0, 1 << 20).arrayBuffer());
+  let i = 0;
+  if (b[0] === 0x49 && b[1] === 0x44 && b[2] === 0x33) i = 10 + ((b[6] << 21) | (b[7] << 14) | (b[8] << 7) | b[9]);
+  for (; i + 200 < b.length; i++) {
+    if (b[i] !== 0xFF || (b[i + 1] & 0xE6) !== 0xE2) continue;           // a Layer III frame
+    const v = (b[i + 1] >> 3) & 3, bi = b[i + 2] >> 4, ri = (b[i + 2] >> 2) & 3;
+    if (v === 1 || !bi || bi === 15 || ri === 3) continue;
+    const rate = [[11025, 12000, 8000], null, [22050, 24000, 16000], [44100, 48000, 32000]][v][ri], spf = v === 3 ? 1152 : 576;
+    st.fileRate = rate;
+    const kbps = (v === 3 ? [0, 32, 40, 48, 56, 64, 80, 96, 112, 128, 160, 192, 224, 256, 320] : [0, 8, 16, 24, 32, 40, 48, 56, 64, 80, 96, 112, 128, 144, 160])[bi];
+    for (let k = i + 4; k < i + 44; k++) {
+      const tag = String.fromCharCode(b[k], b[k + 1], b[k + 2], b[k + 3]);
+      if ((tag === "Xing" || tag === "Info") && (b[k + 7] & 1)) return ((b[k + 8] * 2 ** 24) + (b[k + 9] << 16) + (b[k + 10] << 8) + b[k + 11]) * spf / rate;
+    }
+    return (blob.size - i) * 8 / (kbps * 1000);
+  }
+  return 0;
+}
 const channelsOf = buf => { const out = []; for (let c = 0; c < buf.numberOfChannels; c++) out.push(buf.getChannelData(c).slice()); return out; };
 
 let worker = null, stretch = null;
@@ -134,8 +174,8 @@ async function loadSong(id, autoplay = true) {
   const hdr = await sniffHeader(rec.blob, rec.name);
   st.info = { fmt: fmtOf(rec.name), rate: hdr.rate || buf.sampleRate, channels: buf.numberOfChannels, size: rec.size, bits: hdr.bits || bitsOf(rec) };
   fillBadges(); fillStats(); refreshSave();
-  const chans = channelsOf(buf);
-  send({ cmd: "load", channels: chans });
+  st.fileRate = 0; st.fileLen = /\.mp3$/i.test(rec.name) ? await mp3Seconds(rec.blob).catch(() => 0) : 0;
+  sendSong({ cmd: "load", channels: channelsOf(buf) });
   $("#tdur").textContent = fmtTime(buf.duration); $("#hDur").textContent = fmtTime(buf.duration); $("#hNow").textContent = "0:00";
   if (mkEditing && mkEditing.ctx === songMk) closeMarkEdit();
   $("#notes").value = lib.notes[id] || "";
@@ -306,7 +346,7 @@ window.avbMedia = (cmd, arg) => {
   else if (cmd === "unduck") { duck = 1; setVolume(); }
 };
 function togglePlay() { if (!st.buffer) { if (lib.queue.length) playIndex(Math.max(0, lib.index), true); else $("#files2").click(); return; } st.playing ? pause() : play(); }
-function seek(t) { if (!st.buffer) return; t = Math.max(0, Math.min(st.duration, t)); st.pos = t; send({ cmd: "seek", frame: Math.round(t * st.sr) }); drawWave(); mediaReportSoon();
+function seek(t) { if (!st.buffer) return; t = Math.max(0, Math.min(st.duration, t)); st.pos = t; if (pc) pc = { ...pc, f: Infinity }; send({ cmd: "seek", frame: Math.round(t * st.sr) }); drawWave(); mediaReportSoon();
   $("#miniProg").style.width = (t / st.duration * 100) + "%"; $("#tnow").textContent = fmtTime(t); $("#hNow").textContent = fmtTime(t); $("#seek").value = Math.round(t / st.duration * 1000); }
 function onEnded() {
   st.playing = false; setMiniPlay(false);
@@ -366,7 +406,7 @@ async function applyChange() {
   if (speed === 1 && semis === 0) {
     // back to the original: a change still being made must not land afterwards
     if (st.rendering) { st.rendering.terminate(); st.rendering = null; }
-    const chans = channelsOf(st.buffer); send({ cmd: "swap", channels: chans, speed: 1 }); st.changed = false; $("#changeStatus").textContent = ""; refreshMusic(); refreshSave(); return;
+    sendSong({ cmd: "swap", channels: channelsOf(st.buffer), speed: 1 }); pc = null; st.changed = false; $("#changeStatus").textContent = ""; refreshMusic(); refreshSave(); return;
   }
   if (st.rendering) { st.rendering.terminate(); st.rendering = null; }
   const w = new Worker("stretch-worker.js", { type: "module" });
@@ -381,7 +421,7 @@ async function applyChange() {
     if (st.rendering !== w) return;
     st.rendering = null;
     if (e.data.error) { $("#changeStatus").textContent = "Could not change it: " + e.data.error; return; }
-    send({ cmd: "swap", channels: e.data.channels, speed: e.data.speed });
+    sendSong({ cmd: "swap", channels: e.data.channels, speed: e.data.speed }); pc = null;
     st.changed = true;
     $("#changeStatus").textContent = "";
     refreshMusic(); refreshSave();
@@ -1385,7 +1425,7 @@ async function addFiles(files, playNow = false) {
   for (const id of ids) if (!lib.queue.includes(id)) lib.queue.push(id);
   save("queue");
   // a song you open plays at once: double-clicked in Windows, opened from another app, or picked with Add music
-  if ((playNow || !st.buffer) && ids.length) { playIndex(lib.queue.indexOf(ids[0]), playNow); showPage("music"); if (playNow) openNP("listen"); }
+  if ((playNow || !st.buffer) && ids.length) { playIndex(lib.queue.indexOf(ids[0]), playNow); showPage("music"); if (playNow && !$("#np").hidden) closeNP(); }   // the Music page, as on the phone: waveform, tempo/key, tools, lyrics
   else if (ids.length) toast(`Added ${lib.queue.length - before} to the queue`);
   renderList();
 }
@@ -2774,6 +2814,11 @@ $("#settingsBtn").onclick = () => {
     ask("Why did the music stop?", log.length ? log.slice(0, 10).map(e => `${when(e.t)} · ${e.why}${e.song ? ` · “${e.song}”` : ""}`).join("\n")
       : "Nothing yet: the player has not stopped by itself.", "", "OK", "", false);
   } });
+  if (ANDROID) items.push({ label: "Playback check", run: () => {
+    const when = t => { const d = new Date(t); return d.toLocaleDateString(undefined, { month: "short", day: "numeric" }) + " " + d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" }); };
+    const log = lib.playLog || [];
+    ask("Playback check", log.length ? log.slice(0, 8).map(e => `${when(e.t)} · “${e.song}” · ${e.why}`).join("\n\n") : "Nothing yet: play a song for 10 seconds.", "", "OK", "", false);
+  } });
   if (canAskManaged()) items.push({ label: "Delete and rename without Android asking", run: () => { ANDROID.askManageMedia(); toast("Turn on “Allow media management” for AVB Player, then come back"); } });
   if (lib.hidden.length) items.push({ label: `Show removed songs again (${lib.hidden.length})`, run: () => { const n = lib.hidden.length; lib.hidden = []; save("hidden"); renderList(); renderRecList(); toast(`${n} back in the player`); } });
   const ver = ANDROID && ANDROID.version ? ANDROID.version() : "";
@@ -3388,6 +3433,8 @@ function tick(now) {
   requestAnimationFrame(tick);
 }
 let insLiveAt = 0;
+// the top bar is pinned: once the page scrolls under it, its edge shows (body.scrolled)
+addEventListener("scroll", () => document.body.classList.toggle("scrolled", scrollY > 2), { passive: true });
 requestAnimationFrame(tick);
 
 function fmtTime(s) { s = Math.max(0, s || 0); const m = Math.floor(s / 60); return `${m}:${String(Math.floor(s % 60)).padStart(2, "0")}`; }
