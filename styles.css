@@ -653,6 +653,7 @@ body.hasmini .snack { bottom: calc(76px + env(safe-area-inset-bottom)); }
 .ft-mp3 { background: #F472B6; }
 .ft-flac { background: #A78BFA; }
 .ft-m4a { background: #FBBF24; }
+.ft-midi { background: #A3E635; }
 .ft-ogg { background: #34D399; }
 .ft-aif { background: #2DD4BF; }
 .ft-other { background: #94A3B8; }

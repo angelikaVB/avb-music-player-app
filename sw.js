@@ -1,10 +1,11 @@
 // Offline shell.  Online: always the newest files from the site (and the
 // cache refreshed with them).  Offline: the cached copy.  So an update
 // shows up the first time the app is opened with a connection.
-const VERSION = "avb-player-v161";
+const VERSION = "avb-player-v162";
 const FILES = ["./", "index.html", "styles.css", "app.js", "analysis-worker.js", "insight-worker.js", "stretch-worker.js", "player-worklet.js",
   "manifest.webmanifest", "icons/icon-192.png", "icons/icon-512.png", "icons/banner.png", "icons/maskable-192.png", "icons/maskable-512.png",
   "vendor/rubberband.esm.js", "vendor/rubberband.wasm", "encode-worker.js", "vendor/lame.min.js",
+  "decode-worker.js", "midi-worker.js", "vendor/spessasynth.js",
   "vendor/fonts/pjs-latin.woff2", "vendor/fonts/pjs-latin-ext.woff2"];
 
 self.addEventListener("install", e => {

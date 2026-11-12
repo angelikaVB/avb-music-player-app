@@ -23,7 +23,7 @@
   <span class="spacer"></span>
   <button class="install" id="installBtn" hidden>Install</button>
   <button class="gear" id="settingsBtn" title="Settings"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg></button>
-  <label class="addbtn" title="Add music from your files">+<input type="file" id="files2" multiple accept="audio/*,.wav,.flac,.mp3,.ogg,.m4a,.aac,.opus,.aiff,.aif"></label>
+  <label class="addbtn" title="Add music from your files">+<input type="file" id="files2" multiple accept="audio/*,.wav,.flac,.mp3,.ogg,.m4a,.aac,.opus,.aiff,.aif,.caf,.au,.mid,.midi,.kar,.rmi"></label>
 </header>
   <div class="searchbar topsearch"><input type="search" id="filter" placeholder="Search songs, artists, albums"></div>
 </div>
@@ -69,7 +69,7 @@
   <section class="hero" id="hero" hidden>
     <div class="herotitle">Your music, beautifully played</div>
     <div class="herotext">Add songs from your phone to start listening, change tempo and key, cut pieces and save copies.</div>
-    <label class="primary herobtn">Add music<input type="file" id="files3" multiple accept="audio/*,.wav,.flac,.mp3,.ogg,.m4a,.aac,.opus,.aiff,.aif"></label>
+    <label class="primary herobtn">Add music<input type="file" id="files3" multiple accept="audio/*,.wav,.flac,.mp3,.ogg,.m4a,.aac,.opus,.aiff,.aif,.caf,.au,.mid,.midi,.kar,.rmi"></label>
   </section>
 
   <section class="shelf" id="recentShelf" hidden>
@@ -259,7 +259,7 @@
         <details class="ipanel" id="ip-spectro" open><summary><span class="ipico"></span><b>Spectrogram</b><button class="iq" data-help="spectro">?</button></summary><div class="ipbody"><canvas class="ican tall" id="ipSpecgram"></canvas></div></details>
         <details class="ipanel" id="ip-stereo" open><summary><span class="ipico"></span><b>Stereo &amp; Phase</b><button class="iq" data-help="stereo">?</button></summary><div class="ipbody"><div class="istereo"><canvas id="ipGonio"></canvas><canvas id="ipWidthC"></canvas></div><div id="ipStereo"></div></div></details>
         <details class="ipanel" id="ip-compare" open><summary><span class="ipico"></span><b>Reference Comparison</b><button class="iq" data-help="compare">?</button></summary><div class="ipbody">
-          <div class="row irefrow"><button class="ghost" id="refPick">Pick a reference song</button><button class="ghost" id="refFileBtn">From a file</button><input type="file" id="refFile" hidden accept="audio/*,.wav,.flac,.mp3,.ogg,.m4a,.aac,.opus,.aiff,.aif"></div>
+          <div class="row irefrow"><button class="ghost" id="refPick">Pick a reference song</button><button class="ghost" id="refFileBtn">From a file</button><input type="file" id="refFile" hidden accept="audio/*,.wav,.flac,.mp3,.ogg,.m4a,.aac,.opus,.aiff,.aif,.caf,.au,.mid,.midi,.kar,.rmi"></div>
           <canvas class="ican tall" id="ipRefC"></canvas><div id="ipRef"></div>
         </div></details>
         <details class="ipanel" id="ip-marks" open><summary><span class="ipico"></span><b>Markers &amp; Notes</b><button class="iq" data-help="marks">?</button></summary><div class="ipbody" id="ipMarks">

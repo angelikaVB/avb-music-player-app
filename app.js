@@ -159,12 +159,7 @@ async function loadSong(id, autoplay = true) {
   let buf;
   try {
     const ab = await rec.blob.arrayBuffer();
-    try { buf = await ctx.decodeAudioData(ab.slice(0)); }
-    catch (err) {
-      const pcm = decodePcm(ab);                                   // AIFF / AIFF-C, 64-bit float WAV ...
-      if (!pcm) throw new Error(/\.m4a$/i.test(rec.name) ? "Apple Lossless (ALAC) is not supported yet" : "this format cannot be opened");
-      buf = await toContextBuffer(pcm);
-    }
+    buf = await decodeSong(ab, rec.name, t => { if (token === loadSeq) $("#listen").textContent = t; });
   } catch (err) {
     st.loadErr = "Cannot play this file"; updateMini(); drawWave();
     toast("Cannot play this file: " + (err && err.message || "unknown format")); $("#listen").textContent = ""; return;
@@ -242,6 +237,55 @@ function decodePcm(ab, headerOnly) {
   }
   return { channels: out, sampleRate: fmt.sr, bits: fmt.bits };
 }
+// every song is opened here: the browser engine first; MIDI through the synthesizer; Apple Lossless, CAF and .au
+// through our own reader; AIFF and 64-bit WAV through decodePcm
+const isMidi = (ab, name) => { const u = new Uint8Array(ab, 0, Math.min(12, ab.byteLength)), t = String.fromCharCode(...u);
+  return t.startsWith("MThd") || (t.startsWith("RIFF") && t.slice(8, 12) === "RMID") || /\.(midi?|kar|rmi)$/i.test(name || ""); };
+async function decodeSong(ab, name, say = () => { }) {
+  if (isMidi(ab, name)) return midiToBuffer(ab, say);
+  try { return await ctx.decodeAudioData(ab.slice(0)); }
+  catch (err) {
+    const pcm = decodePcm(ab) || await decodeOther(ab, say);
+    if (!pcm) throw new Error("this format cannot be opened");
+    return toContextBuffer(pcm);
+  }
+}
+function decodeOther(ab, say) {
+  return new Promise((ok, fail) => {
+    const w = new Worker("decode-worker.js"), t0 = performance.now();
+    const clock = setInterval(() => say(`Opening… ${((performance.now() - t0) / 1000).toFixed(0)} s` + (w.p ? ` · ${Math.round(w.p * 100)}%` : "")), 500);
+    const end = () => { clearInterval(clock); w.terminate(); };
+    w.onmessage = e => {
+      const d = e.data;
+      if (d.progress !== undefined) { w.p = d.progress; return; }
+      end();
+      if (d.error) fail(new Error(d.error)); else ok(d.none ? null : { channels: d.channels, sampleRate: d.sampleRate, bits: d.bits });
+    };
+    w.onerror = e => { end(); fail(new Error(e.message || "the reader failed")); };
+    w.postMessage({ buffer: ab }, [ab]);
+  });
+}
+// MIDI: the notes played once through the synthesizer (midi-worker.js), kept alive so the sounds load only once
+let midiWorker = null;
+function midiToBuffer(ab, say) {
+  return new Promise((ok, fail) => {
+    if (!midiWorker) midiWorker = new Worker("midi-worker.js", { type: "module" });
+    const w = midiWorker, t0 = performance.now(); let p = 0;
+    const show = () => say(`Playing the notes through the instruments… ${((performance.now() - t0) / 1000).toFixed(0)} s` + (p ? ` · ${Math.round(p * 100)}%` : ""));
+    show(); const clock = setInterval(show, 500);
+    w.onmessage = e => {
+      const d = e.data;
+      if (d.progress !== undefined) { p = d.progress; return; }
+      clearInterval(clock);
+      if (d.error) { fail(new Error(d.error)); return; }
+      const b = ctx.createBuffer(2, d.channels[0].length, d.sampleRate);
+      d.channels.forEach((c, i) => b.copyToChannel(c, i));
+      ok(b);
+    };
+    w.onerror = e => { clearInterval(clock); midiWorker = null; fail(new Error(e.message || "the synthesizer failed")); };
+    w.postMessage({ buffer: ab.slice(0), sampleRate: ctx.sampleRate });
+  });
+}
 async function toContextBuffer(pcm) {
   // the player runs at the phone's rate: convert, the way the browser engine would
   const n = pcm.channels[0].length, nch = pcm.channels.length;
@@ -256,6 +300,8 @@ function coverFor(name) {
   const a = RUN[h % 6], b = RUN[((h >>> 3) + 1 + (h % 5)) % 6];
   return `linear-gradient(135deg, ${a}66, ${b}cc), #1e1b4b`;
 }
+// a MIDI file is a few KB: small files say KB, not "0.0 MB"
+function sizeText(b) { return b < 1e5 ? `${Math.max(1, Math.round(b / 1e3))} KB` : `${(b / 1e6).toFixed(1)} MB`; }
 const fmtOf = n => (n.split(".").pop() || "").toUpperCase();
 function bitsOf(rec) {
   // only WAV/AIFF/FLAC headers say their depth; others are compressed
@@ -290,6 +336,8 @@ async function sniffHeader(blob, name) {
 const ANDROID = window.AVBAndroid || null;
 // the same app on a computer (desktop-bridge.js): "phone" in the words becomes "computer", delete goes to the Recycle Bin
 const DESKTOP = !!(ANDROID && ANDROID.platform && ANDROID.platform() === "desktop");
+// on the computer the player opens fully open (the user, 2026-11-05); Edge's own file handler skips the launcher, so the page sees to it
+if (DESKTOP && window.outerWidth < screen.availWidth - 40) { try { window.moveTo(screen.availLeft || 0, screen.availTop || 0); window.resizeTo(screen.availWidth, screen.availHeight); } catch (_) { } }
 const DEV = DESKTOP ? "computer" : "phone";
 const RECS_PLACE = DESKTOP ? "Music\\AVB Player Recordings" : "Recordings/AVB Music Player on your phone";
 function play() {
@@ -1002,7 +1050,7 @@ async function setReference(blob, name) {
   try {
     await audio();
     const ab = await blob.arrayBuffer(); let buf;
-    try { buf = await ctx.decodeAudioData(ab.slice(0)); } catch (err) { const pcm = decodePcm(ab); if (!pcm) throw new Error("this format cannot be opened"); buf = await toContextBuffer(pcm); }
+    buf = await decodeSong(ab, name);
     stage = "Measuring";
     const r = await insMeasure(channelsOf(buf), buf.sampleRate, true, (pp, s) => { p = pp; stage = s; });
     insRef = { ...r, name: name.replace(/\.[^.]+$/, "") }; kvSet("insRef", insRef).catch(() => { });
@@ -1236,7 +1284,7 @@ async function saveAsMenu(id) {
   // what the song is now, so the choice is made against it
   const kb = st.info.bits ? 0 : sourceKbps(), size = (songs[id] && songs[id].size > 0 ? songs[id].size : st.info.size) || 0;
   const now = [st.info.fmt, st.info.bits ? (st.info.bits === 32 ? "32-bit float" : `${st.info.bits}-bit`) : kb ? `${Math.round(kb)} kbps` : "",
-    (rate / 1000).toFixed(1).replace(".0", "") + " kHz", ch === 1 ? "mono" : ch === 2 ? "stereo" : `${ch} channels`, size ? `${(size / 1e6).toFixed(1)} MB` : ""].filter(Boolean).join(" · ");
+    (rate / 1000).toFixed(1).replace(".0", "") + " kHz", ch === 1 ? "mono" : ch === 2 ? "stereo" : `${ch} channels`, size ? sizeText(size) : ""].filter(Boolean).join(" · ");
   sheet(items, `Save “${st.name.replace(/\.[^.]+$/, "")}” as${changes ? ` (with your ${changes})` : ""}`, "Now: " + now);
 }
 async function saveAs(f) {
@@ -1433,11 +1481,11 @@ let view = ANDROID ? "phone" : "queue", listName = "";
 let phoneIds = [], recordingIds = [], phoneState = ANDROID ? "loading" : "web";
 function subLine(s) {
   // the format as a colored tag (WAV blue, MP3 pink …), then artist, length, size
-  const f = fmtOf(s.name), kind = { WAV: "wav", MP3: "mp3", FLAC: "flac", M4A: "m4a", AAC: "m4a", MP4: "m4a", OGG: "ogg", OPUS: "ogg", AIFF: "aif", AIF: "aif", AIFC: "aif" }[f] || "other";
+  const f = fmtOf(s.name), kind = { MID: "midi", MIDI: "midi", KAR: "midi", RMI: "midi", CAF: "aif", AU: "aif", WAV: "wav", MP3: "mp3", FLAC: "flac", M4A: "m4a", AAC: "m4a", MP4: "m4a", OGG: "ogg", OPUS: "ogg", AIFF: "aif", AIF: "aif", AIFC: "aif" }[f] || "other";
   const bits = [];
   if (s.artist && !/unknown/i.test(s.artist)) bits.push(esc(s.artist));
   if (s.duration) bits.push(fmtTime(s.duration));
-  if (s.size > 0) bits.push((s.size / 1e6).toFixed(1) + " MB");
+  if (s.size > 0) bits.push(sizeText(s.size));
   return `<span class="ft ft-${kind}">${esc(f)}</span>` + bits.join(" · ");   // no folder: the user does not want "Download" anywhere
 }
 function emptyText() {
@@ -1463,7 +1511,7 @@ function renderGroups(key, filter) {
 }
 const HEART = `<svg viewBox="0 0 24 24" width="20" height="20"><path d="M12 20.3s-7.6-4.6-9.2-9.3C1.7 7.6 4 4.5 7.3 4.5c2 0 3.4 1.1 4.7 2.8 1.3-1.7 2.7-2.8 4.7-2.8 3.3 0 5.6 3.1 4.5 6.5-1.6 4.7-9.2 9.3-9.2 9.3z"/></svg>`;
 // sorting the song list (remembered); "default" keeps each list's own order (newest added, last played, playlist order)
-const FORMAT_ORDER = ["WAV", "AIFF", "AIF", "FLAC", "ALAC", "M4A", "MP3", "AAC", "OGG", "OPUS"];
+const FORMAT_ORDER = ["WAV", "AIFF", "AIF", "CAF", "FLAC", "ALAC", "M4A", "MP3", "AAC", "OGG", "OPUS", "AU", "MID", "MIDI", "KAR", "RMI"];
 const SORTS = {
   default: { label: "Default order", short: "Sort" },
   newest: { label: "Newest first", short: "Newest", cmp: (a, b) => (b.added || 0) - (a.added || 0) },
@@ -1930,15 +1978,19 @@ async function findLyrics(id, rec, preTags) {
   if (isRecording(id)) { why.push("Recordings are not looked up online."); return done(); }
   if (!navigator.onLine) { why.push(`Online search skipped: the ${DEV} is offline.`); return done(); }
   if (!title) { why.push("Online search skipped: the song has no title."); return done(); }
+  // a title alone found other people's songs of the same length (the user, 2026-11-06: "all wrong"): the artist must be known too
+  if (!artist) { why.push("Online search skipped: the song has no artist, and a title alone finds the wrong songs."); return done(); }
   const dur0 = songs[id]?.duration || st.duration || 0;
   if (dur0 && dur0 < 30) { why.push("Online search skipped: shorter than 30 seconds."); return done(); }
   try {
-    const q = new URLSearchParams({ track_name: title });
-    if (artist) q.set("artist_name", artist);
+    const q = new URLSearchParams({ track_name: title, artist_name: artist });
     let r = await fetch("https://lrclib.net/api/get?" + q, { headers: { "Accept": "application/json" } });
     // only lyrics for a song of the same length: a name alone matches the wrong songs
     const dur = () => (st.id === id && st.duration) || songs[id]?.duration || 0;
-    const fits = x => x && (x.syncedLyrics || x.plainLyrics) && (!dur() || !x.duration || Math.abs(x.duration - dur()) <= 4);
+    // the same song: same title, same artist and the same length, never one of them alone
+    const plain = t => String(t || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[(\[].*?[)\]]/g, " ").replace(/^the\s+/, "").replace(/[^\p{L}\p{N}]+/gu, "");
+    const sameSong = x => plain(x.trackName || x.name) === plain(title) && plain(x.artistName) === plain(artist);
+    const fits = x => x && (x.syncedLyrics || x.plainLyrics) && sameSong(x) && (!dur() || !x.duration || Math.abs(x.duration - dur()) <= 4);
     let d = r.ok ? await r.json() : null;
     let seen = d && (d.syncedLyrics || d.plainLyrics) ? 1 : 0;
     if (!fits(d) || !d.syncedLyrics) {
@@ -2892,11 +2944,11 @@ function fillHomeSub() {
   $("#hHeart").innerHTML = HEART; $("#hHeart").classList.toggle("on", lib.favorites.includes(st.id));
   if (!st.buffer) { $("#hSub").textContent = st.loadErr || "Loading…"; return; }
   const s0 = songs[st.id], f = fmtOf(s0.name), sp = +$("#speed").value, b = effBpm();
-  const kind = { WAV: "wav", MP3: "mp3", FLAC: "flac", M4A: "m4a", AAC: "m4a", MP4: "m4a", OGG: "ogg", OPUS: "ogg", AIFF: "aif", AIF: "aif", AIFC: "aif" }[f] || "other";
+  const kind = { MID: "midi", MIDI: "midi", KAR: "midi", RMI: "midi", CAF: "aif", AU: "aif", WAV: "wav", MP3: "mp3", FLAC: "flac", M4A: "m4a", AAC: "m4a", MP4: "m4a", OGG: "ogg", OPUS: "ogg", AIFF: "aif", AIF: "aif", AIFC: "aif" }[f] || "other";
   const artist = $("#npArtist").textContent || (s0.artist && !/unknown/i.test(s0.artist) ? s0.artist : "");
   const parts = [artist && esc(artist), fmtTime(st.duration || s0.duration || 0),
     b ? `<b class="hbpm${sp !== 100 ? " moved" : ""}">${(b * sp / 100).toFixed(1)} BPM</b>` : "",
-    s0.size > 0 ? (s0.size / 1e6).toFixed(1) + " MB" : ""].filter(Boolean);
+    s0.size > 0 ? sizeText(s0.size) : ""].filter(Boolean);
   $("#hSub").innerHTML = `<span class="ft ft-${kind}">${esc(f)}</span>` + parts.join(" · ");
 }
 // a name too long for its line slowly runs to its end and back, so the whole name can be read
@@ -3519,7 +3571,6 @@ window.avbTakeAndroid = takeAndroid;
 function phoneEntries(json, kind, prefix) {
   const out = [];
   for (const m of JSON.parse(json || "[]")) {
-    if (/\.(midi?|kar|rmi)$/i.test(m.name || "") || /midi/i.test(m.mime || "")) continue;   // MIDI is notes, not sound
     const id = prefix + m.id;
     songs[id] = { id, name: m.name, title: m.title, artist: m.artist, album: m.album, duration: m.duration / 1000, size: m.size,
                   type: m.mime, url: m.url, folder: m.folder, kind, added: m.added };
