@@ -30,6 +30,8 @@ class AVBPlayer extends AudioWorkletProcessor {
       case "seek": if (this.ch) { this.pos = Math.max(0, Math.min(this.ch[0].length, Math.round(m.frame / this.speed))); this.ended = false; } break;
       case "loop": this.loop = m.loop; break;
       case "volume": this.volume = m.volume; break;
+      case "give": { const ch = this.ch || []; this.ch = null; this.playing = false; this.port.postMessage({ given: ch, speed: this.speed, pos: this.pos }, ch.map(c => c.buffer)); break; }   // the sound output is being reopened
+      case "restore": this.ch = m.channels; this.speed = m.speed; this.pos = m.pos; this.ended = false; break;
       case "unload": this.ch = null; this.playing = false; this.pos = 0; break;
     }
   }

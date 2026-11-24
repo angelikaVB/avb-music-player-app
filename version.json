@@ -1,7 +1,7 @@
 {
- "code": 134,
- "name": "12.4",
- "url": "https://angelikavb.github.io/avb-music-player-app/AVB-Player-12.4.apk",
- "sha256": "01eb25bd266f871d3839c970c690f551f2e23d9c65f6c80cea93572b2824e1fd",
- "notes": "Info opens straight away, with EQ first. New downloads show up without restarting. Playback check says where the sound goes and what held it up."
+ "code": 135,
+ "name": "12.5",
+ "url": "https://angelikavb.github.io/avb-music-player-app/AVB-Player-12.5.apk",
+ "sha256": "6147c54bfb6685cd5b9b68184e89c475dd444aba1032b8d95efad8d1a9e83f27",
+ "notes": "Sound that runs too fast and skips (seen on a Bluetooth speaker) is noticed and the sound output reopened at the same spot."
 }

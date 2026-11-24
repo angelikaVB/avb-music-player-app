@@ -38,15 +38,23 @@ const st = {
 };
 
 // ---------------------------------------------------------------- audio
-let ctx = null, node = null;
+let ctx = null, node = null, reopening = null, latHint = 0;
+// buffer sizes to try, in turn: a different one makes the phone open a different output
+const LAT = ["playback", 0.1, "interactive", 0.25, "balanced"];
 async function audio() {
+  if (reopening) await reopening;
+  return openAudio();
+}
+async function openAudio() {
   if (ctx) { if (ctx.state === "suspended") await ctx.resume(); return; }
-  ctx = new (window.AudioContext || window.webkitAudioContext)({ latencyHint: "playback" });
+  ctx = new (window.AudioContext || window.webkitAudioContext)({ latencyHint: LAT[latHint], ...(reopening && st.buffer ? { sampleRate: st.sr } : {}) });
   await ctx.audioWorklet.addModule("player-worklet.js");
   node = new AudioWorkletNode(ctx, "avb-player", { outputChannelCount: [2] });
   buildEqChain();
   node.port.onmessage = e => {
-    if (e.data.frame !== undefined) { st.pos = e.data.frame / st.sr; playCheck(e.data.frame, e.data); }
+    if (e.data.given) { if (node && node.onGiven) node.onGiven(e.data); return; }
+    if (reopening) return;
+    if (e.data.frame !== undefined) { clockWatch(); st.pos = e.data.frame / st.sr; playCheck(e.data.frame, e.data); }
     if (e.data.ended) onEnded();
   };
   setVolume();
@@ -64,6 +72,46 @@ const sendSong = m => node && node.port.postMessage(m, m.channels.map(c => c.buf
 // the playback check (the user, 2026-11-05: an MP3 "plays too fast, skipping" on the phone, never on the computer):
 // every 10 s of playing, how far the song moved against the real clock, kept for Settings > Playback check
 let pc = null;
+// The phone's sound output sometimes takes the music nearly twice as fast as real time (Playback check, 2026-11-23:
+// audio clock 1.83-1.91, position with it, file and rate right): blocks are dropped, it skips. The app sees it
+// within 2-3 s, closes that output and opens another at the same moment in the song.
+let cw = null, cwTries = [];
+function clockWatch() {
+  if (!st.playing || !ctx || reopening) { cw = null; return; }
+  const now = performance.now();
+  if (!cw || cw.ctx !== ctx) { cw = { ctx, t: now, c: ctx.currentTime, bad: 0 }; return; }
+  const dt = (now - cw.t) / 1000; if (dt < 1) return;
+  const clock = (ctx.currentTime - cw.c) / dt;
+  cw = { ctx, t: now, c: ctx.currentTime, bad: clock > 1.15 && dt < 3 ? cw.bad + 1 : 0 };
+  if (cw.bad < 2) return;
+  cwTries = cwTries.filter(t => now - t < 60000);
+  if (cwTries.length >= LAT.length) return;                       // five different outputs within a minute: leave it be
+  cwTries.push(now); cw = null;
+  reopenAudio(clock);
+}
+function reopenAudio(clock) {
+  if (reopening) return reopening;
+  const id = st.id, was = LAT[latHint];
+  reopening = (async () => {
+    const old = ctx, oldNode = node;
+    const got = await new Promise(ok => { oldNode.onGiven = ok; oldNode.port.postMessage({ cmd: "give" }); setTimeout(() => ok(null), 1500); });
+    try { oldNode.disconnect(); await old.close(); } catch (_) { }
+    latHint = (latHint + 1) % LAT.length;
+    ctx = node = eqOut = eqAnalyser = outStage = null; eqNodes = [];
+    await openAudio();
+    if (st.id === id && st.buffer) {
+      if (got && got.given.length) node.port.postMessage({ cmd: "restore", channels: got.given, speed: got.speed, pos: got.pos }, got.given.map(c => c.buffer));
+      else { sendSong({ cmd: "load", channels: channelsOf(st.buffer) }); send({ cmd: "seek", frame: Math.round(st.pos * st.sr) }); }
+      const loop = st.loopOn && st.a !== null && st.b !== null;
+      send({ cmd: "loop", loop: loop ? [Math.round(st.a * st.sr), Math.round(st.b * st.sr)] : null });
+      if (st.playing) send({ cmd: "play" });
+    }
+    pc = null;
+    lib.playLog = [{ t: Date.now(), why: `REOPENED the sound output · audio clock was ${clock.toFixed(3)} · ${was} to ${LAT[latHint]} · sound to ${ANDROID && ANDROID.outName ? ANDROID.outName() : "unknown"}`, song: songs[id] ? songs[id].name.replace(/\.[^.]+$/, "") : "" }, ...(lib.playLog || [])].slice(0, 20);
+    save("playLog");
+  })().catch(err => { console.error("reopen", err); }).finally(() => { reopening = null; cw = null; });
+  return reopening;
+}
 function playCheck(frame, d = {}) {
   const now = performance.now();
   if (!st.playing || !ctx) { pc = null; return; }
