@@ -12,6 +12,7 @@ class AVBPlayer extends AudioWorkletProcessor {
     this.volume = 1;
     this.ended = false;
     this.tick = 0;
+    this.last = 0; this.stalls = 0; this.worst = 0;   // the playback check: moments the sound thread was held up
     this.port.onmessage = e => this.handle(e.data);
   }
   songFrame() { return Math.round(this.pos * this.speed); }
@@ -35,6 +36,8 @@ class AVBPlayer extends AudioWorkletProcessor {
   process(_inputs, outputs) {
     const out = outputs[0];
     const n = out[0].length;
+    const now = Date.now(), gap = this.last ? now - this.last : 0; this.last = now;
+    if (this.ch && this.playing && gap > 60) { this.stalls++; if (gap > this.worst) this.worst = gap; }
     if (!this.ch || !this.playing) {
       for (const o of out) o.fill(0);
       return true;
@@ -58,7 +61,7 @@ class AVBPlayer extends AudioWorkletProcessor {
       if (this.loop && lb > la) this.pos = la;
       else { this.playing = false; this.ended = true; this.port.postMessage({ ended: true }); }
     }
-    if (++this.tick % 8 === 0) this.port.postMessage({ frame: this.songFrame() });
+    if (++this.tick % 8 === 0) { this.port.postMessage({ frame: this.songFrame(), stalls: this.stalls, worst: this.worst }); this.stalls = this.worst = 0; }
     return true;
   }
 }

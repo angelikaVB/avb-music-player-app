@@ -46,7 +46,7 @@ async function audio() {
   node = new AudioWorkletNode(ctx, "avb-player", { outputChannelCount: [2] });
   buildEqChain();
   node.port.onmessage = e => {
-    if (e.data.frame !== undefined) { st.pos = e.data.frame / st.sr; playCheck(e.data.frame); }
+    if (e.data.frame !== undefined) { st.pos = e.data.frame / st.sr; playCheck(e.data.frame, e.data); }
     if (e.data.ended) onEnded();
   };
   setVolume();
@@ -64,20 +64,21 @@ const sendSong = m => node && node.port.postMessage(m, m.channels.map(c => c.buf
 // the playback check (the user, 2026-11-05: an MP3 "plays too fast, skipping" on the phone, never on the computer):
 // every 10 s of playing, how far the song moved against the real clock, kept for Settings > Playback check
 let pc = null;
-function playCheck(frame) {
+function playCheck(frame, d = {}) {
   const now = performance.now();
   if (!st.playing || !ctx) { pc = null; return; }
-  if (!pc || frame < pc.f || pc.id !== st.id) { pc = { id: st.id, f: frame, t: now, c: ctx.currentTime, n: pc && pc.id === st.id ? pc.n : 0 }; return; }
+  if (!pc || frame < pc.f || pc.id !== st.id) { pc = { id: st.id, f: frame, t: now, c: ctx.currentTime, n: pc && pc.id === st.id ? pc.n : 0, stalls: 0, worst: 0 }; return; }
+  pc.stalls += d.stalls || 0; pc.worst = Math.max(pc.worst, d.worst || 0);
   const dt = (now - pc.t) / 1000; if (dt < 10) return;
   const want = st.changed ? st.speed : 1, r = (frame - pc.f) / st.sr / dt / want, clock = (ctx.currentTime - pc.c) / dt;
-  const off = Math.abs(r - 1) > 0.03 || Math.abs(clock - 1) > 0.03;
+  const off = Math.abs(r - 1) > 0.03 || Math.abs(clock - 1) > 0.03 || pc.stalls > 2;
   if (pc.n === 0 || (off && pc.n < 4)) {
     const i = st.info || {}, s = v => v ? `${v.toFixed(1)} s` : "unknown";
-    const why = `${off ? "OFF" : "OK"} · speed ${r.toFixed(3)} · audio clock ${clock.toFixed(3)} · file ${st.fileRate || i.rate || "?"} Hz · player ${ctx.sampleRate} Hz · decoded ${s(st.duration)} · file says ${s(st.fileLen)} · delay ${Math.round((ctx.baseLatency || 0) * 1000)} ms`;
+    const why = `${off ? "OFF" : "OK"} · speed ${r.toFixed(3)} · audio clock ${clock.toFixed(3)} · file ${st.fileRate || i.rate || "?"} Hz · player ${ctx.sampleRate} Hz · decoded ${s(st.duration)} · file says ${s(st.fileLen)} · delay ${Math.round((ctx.baseLatency || 0) * 1000)} + ${Math.round((ctx.outputLatency || 0) * 1000)} ms · held up ${pc.stalls} times, longest ${pc.worst} ms · sound to ${ANDROID && ANDROID.outName ? ANDROID.outName() : "unknown"} · phone screen ${document.visibilityState}`;
     lib.playLog = [{ t: Date.now(), why, song: st.id && songs[st.id] ? songs[st.id].name.replace(/\.[^.]+$/, "") : "" }, ...(lib.playLog || [])].slice(0, 20);
     save("playLog"); pc.n++;
   }
-  pc.f = frame; pc.t = now; pc.c = ctx.currentTime;
+  pc.f = frame; pc.t = now; pc.c = ctx.currentTime; pc.stalls = pc.worst = 0;
 }
 // an MP3's own length, from its frames' header: what the decoder should give back
 async function mp3Seconds(blob) {
@@ -748,7 +749,7 @@ function drawLoud() {
 }
 
 // ---------------------------------------------------------------- Info: the song measured (the user, 2026-11-01)
-// Nine panels, one under another: Audio Truth Summary, Clarity & Masking, Frequency Balance, Punch & Transients,
+// Ten panels, one under another: EQ (the user, 2026-11-23: first), Audio Truth Summary, Clarity & Masking, Frequency Balance, Punch & Transients,
 // Loudness & Dynamics, Spectrogram, Stereo & Phase, Reference Comparison, Markers & Notes. Measured once a song by
 // insight-worker.js when Info is looked at (and the analysis has finished), kept in the app (kv "ins1:<id>:<length>"),
 // drawn with the playhead; a tap on a picture or a time moves the song there. Every number is measured; words
@@ -758,6 +759,7 @@ let insWorker = null, insFor = null, insRef = null, insDrawn = -1, insAt = 0;
 const insKey = () => `ins${INS_V}:${st.id}:${Math.round(st.duration * 10)}`;
 const infoShown = () => !$("#np").hidden && npMode === "studio" && $("#tab-intel").classList.contains("on");
 const ipOpen = p => { const d = $("#ip-" + p); return !!d && d.open; };
+const eqShown = () => infoShown() && ipOpen("eq");
 const onScreen = el => { const r = el.getBoundingClientRect(); return r.height > 0 && r.bottom > 0 && r.top < innerHeight; };
 const IBG = "#0E0D26", IGRID = "#232250", ITXT = "#6C6996", IGOLD = "#E8C373", IPURP = "#A855F7", ICYAN = "#22D3EE", IORNG = "#F97316";
 const neg = (v, d = 1) => v.toFixed(d).replace("-", "−");
@@ -1072,6 +1074,7 @@ $("#refPick").onclick = () => {
 kvGet("insRef", null).then(v => { if (v && v.v === 1) { insRef = v; insRefRender(); } }).catch(() => { });
 // ---- the panels: open/closed kept, ? explains, a jump row, times and pictures seek
 const IHELP = {
+  eq: ["EQ", "Drag a dot on the curve: sideways = frequency, up or down = gain. Draw traces the whole curve with your finger. Changes are live; Save copy can include the EQ (the copy's name then says “EQ”)."],
   summary: ["Audio Truth Summary", "Every line is a measurement of this file. Lines under To check broke a rule of thumb: true peak above −1 dBTP, clipped runs, peak-to-loudness ratio under 8 dB, low-mid or upper-mid buildup in over 15% of the song, mono loss over 3 dB, left and right out of phase, over 10% stereo below 120 Hz. There is no overall score: a single grade would hide what was measured."],
   clarity: ["Clarity & Masking", "The song in 1-second steps. Orange: the share of 200–500 Hz (where mud builds) against the song's own usual level; blue: the same for 2–5 kHz (where harshness sits). Shaded: 3 dB or more over usual. Risk: Low under 5% of the song, Medium 5–15%, High over 15%. Spectral density is an estimate: how many third-octave bands are within 6 dB of the loudest one. A stereo mix has no instruments to tell apart, so it measures crowded bands, not which instrument hides which."],
   balance: ["Frequency Balance & Spectrum", "Purple: the song's average spectrum in twelfth-octave bands; blue: the moment at the playhead; grey: the reference song, turned to the same loudness. The table gives each band's share of the song's energy. Tilt is a straight line through 100 Hz–10 kHz: 0 dB per octave means equal energy in every octave (like pink noise); lower numbers mean darker. No genre curves are built in: compare with a real song under Reference Comparison."],
@@ -1087,7 +1090,7 @@ $("#tab-intel").querySelectorAll(".ipanel").forEach(d => {
   try { if ((JSON.parse(localStorage.getItem("ipClosed") || "[]")).includes(p)) d.open = false; } catch (_) { }
   d.addEventListener("toggle", () => {
     try { const s = new Set(JSON.parse(localStorage.getItem("ipClosed") || "[]")); d.open ? s.delete(p) : s.add(p); localStorage.setItem("ipClosed", JSON.stringify([...s])); } catch (_) { }
-    if (d.open) requestAnimationFrame(() => insDraw(true));
+    if (d.open) requestAnimationFrame(() => { if (p === "eq") { fillEqEdit(); drawEq(); } insDraw(true); });
   });
   d.querySelector(".iq").onclick = e => { e.preventDefault(); e.stopPropagation(); const [t, x] = IHELP[p]; ask(t, x, "", "OK", "", false); };
 });
@@ -2324,7 +2327,7 @@ const EQ_MIN = 20, EQ_MAX = 20000, EQ_DB = 18;
 const eqX = (f, w) => Math.log(f / EQ_MIN) / Math.log(EQ_MAX / EQ_MIN) * w;
 const eqF = (x, w) => EQ_MIN * Math.pow(EQ_MAX / EQ_MIN, Math.max(0, Math.min(1, x / w)));
 function drawEq() {
-  const cv = $("#eqCurve"); if (!cv || !$("#tab-eq").classList.contains("on")) return;
+  const cv = $("#eqCurve"); if (!cv || !eqShown()) return;
   const dpr = sizeCanvas(cv), w = cv.width / dpr, h = cv.height / dpr, c = cv.getContext("2d");
   c.setTransform(dpr, 0, 0, dpr, 0, 0); c.fillStyle = "#0E0D26"; c.fillRect(0, 0, w, h);
   const y = db => h / 2 - db / EQ_DB * (h / 2 - 14);
@@ -2701,8 +2704,7 @@ function selectTool(name) {
   $("#tools").querySelectorAll("button").forEach(x => x.classList.toggle("on", x.dataset.tab === name));
   document.querySelectorAll(".tab").forEach(t => t.classList.toggle("on", t.id === "tab-" + name));
   if (name === "loud") drawLoud();
-  if (name === "intel") requestAnimationFrame(() => insDraw(true));
-  if (name === "eq") { fillEqEdit(); drawEq(); }
+  if (name === "intel") requestAnimationFrame(() => { fillEqEdit(); drawEq(); insDraw(true); });
   if (name === "save") refreshSave();                      // the sizes beside each format, for this song
 }
 function renderRecList() {
@@ -3034,8 +3036,7 @@ function setNpMode(m) {
   npMode = m;
   $("#np").classList.toggle("studio", m === "studio");
   placeWave();
-  $("#npMode").querySelectorAll("button").forEach(b => b.classList.toggle("on", b.dataset.mode === m));
-  requestAnimationFrame(() => { drawWave(); if ($("#tab-eq").classList.contains("on")) drawEq(); if (infoShown()) insDraw(true); });
+  requestAnimationFrame(() => { drawWave(); if (infoShown()) { fillEqEdit(); drawEq(); insDraw(true); } });
 }
 function openNP(mode) {
   if (mode) setNpMode(mode);
@@ -3045,9 +3046,7 @@ function openNP(mode) {
 }
 function closeNP() { $("#np").hidden = true; $("#np").classList.remove("onetool"); document.body.classList.remove("npopen"); updateMini(); placeWave(); }
 $("#npClose").onclick = closeNP;
-// tapping Listen / Tools yourself shows the whole Tools page again (its tab row with every tool)
-$("#npMode").querySelectorAll("button").forEach(b => b.onclick = () => { $("#np").classList.remove("onetool"); setNpMode(b.dataset.mode); });
-$("#mini").onclick = e => { if (e.target.closest(".minibtn")) return; openNP(); };
+$("#mini").onclick = e => { if (e.target.closest(".minibtn")) return; openNP("listen"); };
 // drag along the bottom player's progress line to move forward or back; the song jumps on release
 var miniSeeking = false;
 (function miniSeek() {
@@ -3475,7 +3474,7 @@ function tick(now) {
       if (quiet && !rec.warned) { rec.warned = true; if (navigator.vibrate) try { navigator.vibrate([60, 60, 60]); } catch (_) { } }
     }
   } else if (st.buffer && st.playing && now - lastDraw > 40) {
-    lastDraw = now; $("#tnow").textContent = fmtTime(st.pos); $("#hNow").textContent = fmtTime(st.pos); if (!miniSeeking) $("#miniProg").style.width = (st.pos / st.duration * 100) + "%"; lyricsTick(st.pos); if ($("#tab-eq").classList.contains("on")) drawEq(); $("#seek").value = Math.round(st.pos / st.duration * 1000); drawWave();
+    lastDraw = now; $("#tnow").textContent = fmtTime(st.pos); $("#hNow").textContent = fmtTime(st.pos); if (!miniSeeking) $("#miniProg").style.width = (st.pos / st.duration * 100) + "%"; lyricsTick(st.pos); if (eqShown() && onScreen($("#eqCurve"))) drawEq(); $("#seek").value = Math.round(st.pos / st.duration * 1000); drawWave();
     if (infoShown() && now - insLiveAt > 80) { insLiveAt = now; insDraw(); }
     const i = st.sections.findIndex(s => st.pos >= s.start && st.pos < s.end);
     document.querySelectorAll(".sec").forEach((d, k) => d.classList.toggle("now", k === i));
@@ -3578,17 +3577,34 @@ function phoneEntries(json, kind, prefix) {
   }
   return out;
 }
+let phoneSeen = "";
 function loadPhone(ask) {
   if (!ANDROID || !ANDROID.listMusic) return;
   const r = ANDROID.listMusic(!!ask);
   if (r === "PERMISSION") { phoneState = "denied"; renderList(); return; }       // the app asked; avbPhoneReady() follows
-  phoneIds = phoneEntries(r, "phone", "m:"); phoneState = "ok"; renderList();
+  if (r === phoneSeen && phoneState === "ok") return;                            // nothing new: the list stays exactly as it is
+  phoneSeen = r; phoneIds = phoneEntries(r, "phone", "m:"); phoneState = "ok"; renderList();
 }
+// a song downloaded (or saved by another app) shows up without restarting (the user, 2026-11-12): Android says
+// when its music library changes (avbMediaChanged), and the list is looked at again whenever the app comes back.
+// Never while songs are being selected: the list must not move under the finger.
+let phoneRecheckAt = 0, phoneRecheckWait = null;
+function phoneRecheck() {
+  if (!ANDROID || !ANDROID.listMusic || phoneState !== "ok") return;
+  if (sel.where) { clearTimeout(phoneRecheckWait); phoneRecheckWait = setTimeout(phoneRecheck, 3000); return; }
+  if (Date.now() - phoneRecheckAt < 1500) { clearTimeout(phoneRecheckWait); phoneRecheckWait = setTimeout(phoneRecheck, 1600); return; }
+  phoneRecheckAt = Date.now();
+  loadPhone(false); loadRecordings();
+}
+window.avbMediaChanged = phoneRecheck;
+document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") phoneRecheck(); });
+window.addEventListener("focus", () => { if (DESKTOP) phoneRecheck(); });       // the computer: back in the window after a download
+let recsSeen = "";
 function loadRecordings() {
   if (!ANDROID || !ANDROID.listRecordings) return;
   const r = ANDROID.listRecordings();
-  if (r === "PERMISSION") return;
-  recordingIds = phoneEntries(r, "recording", "r:"); renderList(); if ($("#page-recs").classList.contains("on")) renderRecList();
+  if (r === "PERMISSION" || r === recsSeen) return;
+  recsSeen = r; recordingIds = phoneEntries(r, "recording", "r:"); renderList(); if ($("#page-recs").classList.contains("on")) renderRecList();
 }
 window.avbPhoneReady = () => { loadPhone(false); loadRecordings(); };
 if (ANDROID) { $("#viewQueue").hidden = true; if (view === "queue") view = "phone"; $("#viewPhone").hidden = false; $("#viewArtists").hidden = false; $("#viewAlbums").hidden = false; setTimeout(() => { loadPhone(true); loadRecordings(); }, 300); }

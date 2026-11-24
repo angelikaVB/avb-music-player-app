@@ -59,7 +59,6 @@
   </section>
   <section class="homemix" id="homeMix" hidden></section>
   <nav class="chips hometools" id="homeTools" hidden>
-    <button data-tool="eq">EQ</button>
     <button data-tool="intel">Info</button>
     <button data-tool="save">Save copy</button>
     <button data-tool="lyrics" id="lyrChip">Lyrics</button>
@@ -159,11 +158,10 @@
 </div>
 
 
-<!-- NOW PLAYING: Listen (artwork, controls, lyrics) or Studio (waveform and the production tools) -->
+<!-- NOW PLAYING: the song and its lyrics (mini player, Lyrics), or one tool (Info, EQ, Save copy); the arrow goes back -->
 <section class="np" id="np" hidden>
   <div class="nptop">
     <button class="npclose" id="npClose" title="Close"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></button>
-    <div class="seg" id="npMode"><button data-mode="listen" class="on">Listen</button><button data-mode="studio">Tools</button></div>
     <span class="npreclabel">Recording</span>
     <button class="npicon" id="shareBtn" title="Share this song"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V3M7 8l5-5 5 5M5 13v6a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6"/></svg></button>
   </div>
@@ -245,8 +243,31 @@
         <div class="sections" id="sections"></div>
 
         <!-- the song measured (insight-worker.js): one full-width panel each, in this order; Loudness and Notes live here too -->
-        <nav class="chips ijump" id="iJump"><button data-p="summary">Summary</button><button data-p="clarity">Clarity</button><button data-p="balance">Balance</button><button data-p="punch">Punch</button><button data-p="loud">Loudness</button><button data-p="spectro">Spectro</button><button data-p="stereo">Stereo</button><button data-p="compare">Compare</button><button data-p="marks">Notes</button></nav>
+        <nav class="chips ijump" id="iJump"><button data-p="eq">EQ</button><button data-p="summary">Summary</button><button data-p="clarity">Clarity</button><button data-p="balance">Balance</button><button data-p="punch">Punch</button><button data-p="loud">Loudness</button><button data-p="spectro">Spectro</button><button data-p="stereo">Stereo</button><button data-p="compare">Compare</button><button data-p="marks">Notes</button></nav>
         <div class="faint istatus" id="iStatus"></div>
+        <details class="ipanel" id="ip-eq" open><summary><span class="ipico"></span><b>EQ</b><button class="iq" data-help="eq">?</button></summary><div class="ipbody">
+        <div class="row">
+          <label class="check eqon"><input type="checkbox" id="eqOn" checked> EQ on</label>
+          <select id="eqPreset" class="ghost">
+            <option value="">Presets</option>
+            <option value="flat">Flat</option><option value="vocal">Vocal clarity</option><option value="bass">More bass</option>
+            <option value="boomy">Less boomy</option><option value="warm">Warm</option><option value="bright">Bright</option>
+            <option value="scoop">Mid scoop</option><option value="harsh">Less harsh</option><option value="phone">Telephone</option>
+          </select>
+          <button class="ghost" id="eqDraw" title="Draw the EQ with your finger">✎ Draw</button><button class="ghost" id="eqFlat" title="Every band, the output and the balance back to neutral">↺ Reset</button>
+        </div>
+        <div class="eqhint" id="eqHint"></div>
+        <canvas id="eqCurve"></canvas>
+        <div class="eqbands" id="eqBands"></div>
+        <div class="eqedit" id="eqEdit">
+          <div class="row"><b id="eqName"></b><label class="check" id="eqBandOnWrap"><input type="checkbox" id="eqBandOn"> on</label></div>
+          <div class="row"><label>Frequency</label><input type="range" id="eqF" min="0" max="1000"><span class="val" id="eqFv"></span></div>
+          <div class="row" id="eqGrow"><label>Gain</label><input type="range" id="eqG" min="-180" max="180"><span class="val" id="eqGv"></span></div>
+          <div class="row"><label>Width (Q)</label><input type="range" id="eqQ" min="0" max="1000"><span class="val" id="eqQv"></span></div>
+        </div>
+        <div class="row"><label>Output</label><input type="range" id="eqOut" min="-120" max="120"><span class="val" id="eqOutv"></span></div>
+        <div class="row"><label>Balance</label><input type="range" id="balance" min="-100" max="100" value="0"><span class="val" id="balanceV">Center</span></div>
+        </div></details>
         <details class="ipanel" id="ip-summary" open><summary><span class="ipico"></span><b>Audio Truth Summary</b><button class="iq" data-help="summary">?</button></summary><div class="ipbody" id="ipSummary"></div></details>
         <details class="ipanel" id="ip-clarity" open><summary><span class="ipico"></span><b>Clarity &amp; Masking</b><button class="iq" data-help="clarity">?</button></summary><div class="ipbody"><canvas class="ican" id="ipClarityC"></canvas><div id="ipClarity"></div></div></details>
         <details class="ipanel" id="ip-balance" open><summary><span class="ipico"></span><b>Frequency Balance &amp; Spectrum</b><button class="iq" data-help="balance">?</button></summary><div class="ipbody"><canvas class="ican tall" id="ipSpecC"></canvas><div id="ipBalance"></div></div></details>
@@ -275,31 +296,6 @@
         <label class="check"><input type="checkbox" id="finer"> Finer engine (slower on a phone)</label>
         <div class="row" id="rowChange"><button class="ghost" id="resetChange">Reset</button><span class="status" id="changeStatus"></span></div>
         <div class="faint">Rubber Band (GPL) runs in the phone; the song keeps playing as it was until the changed version is ready.</div>
-      </div>
-
-      <div class="tab" id="tab-eq">
-        <div class="row">
-          <label class="check eqon"><input type="checkbox" id="eqOn" checked> EQ on</label>
-          <select id="eqPreset" class="ghost">
-            <option value="">Presets</option>
-            <option value="flat">Flat</option><option value="vocal">Vocal clarity</option><option value="bass">More bass</option>
-            <option value="boomy">Less boomy</option><option value="warm">Warm</option><option value="bright">Bright</option>
-            <option value="scoop">Mid scoop</option><option value="harsh">Less harsh</option><option value="phone">Telephone</option>
-          </select>
-          <button class="ghost" id="eqDraw" title="Draw the EQ with your finger">✎ Draw</button><button class="ghost" id="eqFlat" title="Every band, the output and the balance back to neutral">↺ Reset</button>
-        </div>
-        <div class="eqhint" id="eqHint"></div>
-        <canvas id="eqCurve"></canvas>
-        <div class="eqbands" id="eqBands"></div>
-        <div class="eqedit" id="eqEdit">
-          <div class="row"><b id="eqName"></b><label class="check" id="eqBandOnWrap"><input type="checkbox" id="eqBandOn"> on</label></div>
-          <div class="row"><label>Frequency</label><input type="range" id="eqF" min="0" max="1000"><span class="val" id="eqFv"></span></div>
-          <div class="row" id="eqGrow"><label>Gain</label><input type="range" id="eqG" min="-180" max="180"><span class="val" id="eqGv"></span></div>
-          <div class="row"><label>Width (Q)</label><input type="range" id="eqQ" min="0" max="1000"><span class="val" id="eqQv"></span></div>
-        </div>
-        <div class="row"><label>Output</label><input type="range" id="eqOut" min="-120" max="120"><span class="val" id="eqOutv"></span></div>
-        <div class="row"><label>Balance</label><input type="range" id="balance" min="-100" max="100" value="0"><span class="val" id="balanceV">Center</span></div>
-        <div class="faint">Drag a dot on the curve: sideways = frequency, up/down = gain. Changes are live; Save a copy can include the EQ (its name then says “EQ”).</div>
       </div>
 
       <div class="tab" id="tab-save">

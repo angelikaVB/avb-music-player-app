@@ -1,7 +1,7 @@
 {
- "code": 132,
- "name": "12.2",
- "url": "https://angelikavb.github.io/avb-music-player-app/AVB-Player-12.2.apk",
- "sha256": "c3f06748ce0f8b07085c8c2f4f0f075b76fcd75590a48f5131b031bef2adfaba",
- "notes": "12.2: MIDI files play; Apple Lossless, CAF and .au open; online lyrics only for the same song."
+ "code": 134,
+ "name": "12.4",
+ "url": "https://angelikavb.github.io/avb-music-player-app/AVB-Player-12.4.apk",
+ "sha256": "01eb25bd266f871d3839c970c690f551f2e23d9c65f6c80cea93572b2824e1fd",
+ "notes": "Info opens straight away, with EQ first. New downloads show up without restarting. Playback check says where the sound goes and what held it up."
 }
