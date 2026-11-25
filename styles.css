@@ -213,6 +213,7 @@ button.primary, label.primary { font-weight: 700; letter-spacing: -.005em; borde
 .sheet button:active { background: var(--panel2); }
 .sheet button + button { border-top: 1px solid var(--line); }
 .sheet button.danger { color: #FCA5A5; }
+.sheet button.upd { color: var(--orange); }
 .sheet button:last-child { color: var(--text3); text-align: center; margin-top: 4px; }
 .sheet .sheettitle { font-size: 12px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; padding: 4px 10px 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .toast { bottom: calc(24px + env(safe-area-inset-bottom)); font-weight: 600; font-size: 14px; }

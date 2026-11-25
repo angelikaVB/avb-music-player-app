@@ -1821,7 +1821,7 @@ swipeToClose($("#mkEdit"), () => closeMarkEdit());
 $("#shade").addEventListener("click", e => { e.preventDefault(); $("#sheet").classList.remove("on"); });
 function sheet(items, title, note) {
   const s = $("#sheet");
-  s.innerHTML = (title ? `<div class="sheettitle">${title.replace(/</g, "&lt;")}</div>` : "") + (note ? `<div class="sheetnote">${note.replace(/</g, "&lt;")}</div>` : "") + items.map((it, i) => `<button class="${it.danger ? "danger" : ""}" data-i="${i}">${it.label}</button>`).join("") + `<button data-i="-1">Cancel</button>`;
+  s.innerHTML = (title ? `<div class="sheettitle">${title.replace(/</g, "&lt;")}</div>` : "") + (note ? `<div class="sheetnote">${note.replace(/</g, "&lt;")}</div>` : "") + items.map((it, i) => `<button class="${it.danger ? "danger" : it.cls || ""}" data-i="${i}">${it.label}</button>`).join("") + `<button data-i="-1">Cancel</button>`;
   s.classList.add("on");
   s.querySelectorAll("button").forEach(b => b.onclick = () => { s.classList.remove("on"); const i = +b.dataset.i; if (i >= 0) items[i].run(); });
 }
@@ -2905,8 +2905,8 @@ $("#settingsBtn").onclick = () => {
     : { label: "Share AVB Player (WhatsApp, text)", run: () => ANDROID.shareApp(APK_URL) });
   else if (/Android/.test(navigator.userAgent)) items.push({ label: "Download the Android app", run: () => { location.href = APK_URL; } });
   if (ANDROID && ANDROID.updateCheck) items.push(updateInfo
-    ? { label: `Update to AVB Player ${updateInfo.name}`, run: startUpdate }
-    : { label: "Check for updates", run: () => { updateManual = true; toast("Checking for updates"); ANDROID.updateCheck(); } });
+    ? { label: `Update to AVB Player ${updateInfo.name}`, cls: "upd", run: startUpdate }
+    : { label: "Check for updates", cls: "upd", run: () => { updateManual = true; toast("Checking for updates"); ANDROID.updateCheck(); } });
   if (canLink()) items.push({ label: "Song from a link (YouTube, SoundCloud, Bandcamp)", run: () => songFromLink() });
   items.push({ label: DESKTOP ? "Add a song from another folder" : ANDROID ? "Open a song from Drive or another app" : "Add music from your files", run: () => $("#files2").click() });
   items.push({ label: "Save the markers and notes of every song in one spreadsheet (to Downloads)", run: exportAllMarks });

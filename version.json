@@ -1,7 +1,7 @@
 {
- "code": 136,
- "name": "12.6",
- "url": "https://angelikavb.github.io/avb-music-player-app/AVB-Player-12.6.apk",
- "sha256": "63cc05cbc872a31d6f9a8bf14dd5e80dd2ca6a0ce86149d2aeba49671d601c02",
- "notes": "Songs saved from a link now show in your song list (All music), including ones you got earlier."
+ "code": 137,
+ "name": "12.7",
+ "url": "https://angelikavb.github.io/avb-music-player-app/AVB-Player-12.7.apk",
+ "sha256": "cb88ae2e8ffd32384d3f7652aef5855dc1add5a7debf6edf32d51294a1069886",
+ "notes": "Check for updates is orange in Settings."
 }
