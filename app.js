@@ -1358,7 +1358,7 @@ let pcToken = 0;
 window.avbPcSent = (token, ok, words) => { const f = pcWaiters[token]; delete pcWaiters[token]; if (f) f({ ok, words }); };
 // Song from a link (the user, 2026-11-01: as Music Tools' Other tab; "the phone should not be finding the PC"): a
 // YouTube, SoundCloud or Bandcamp link - pasted, or YouTube's Share -> AVB Player - is read by the phone itself
-// (LinkFetch, NewPipe Extractor); its best audio, as the site serves it, goes into Music/AVB Player and plays
+// (LinkFetch, NewPipe Extractor); its best audio, made into a WAV (WavMaker), goes into Music/AVB Player and plays
 const linkWaiters = {};
 let linkToken = 0;
 window.avbLinkProgress = (token, stage, pct) => { const w = linkWaiters[token]; if (w) w.stage = stage + (pct >= 0 ? ` ${pct}%` : ""); };
@@ -1366,7 +1366,7 @@ window.avbLinkDone = (token, ok, words, id) => { const w = linkWaiters[token]; d
 const canLink = () => !!(ANDROID && ANDROID.linkGet && !DESKTOP);
 async function songFromLink(page) {
   if (!canLink()) { toast("Song from a link works in the phone app"); return; }
-  if (page == null) page = await ask("Song from a link", "Paste a YouTube, SoundCloud or Bandcamp link. The song is saved in Music/AVB Player as the site serves it (YouTube: AAC, about 128 kbps).", "", "Get it");
+  if (page == null) page = await ask("Song from a link", "Paste a YouTube, SoundCloud or Bandcamp link. The song is saved in Music/AVB Player as a WAV, about 17 MB a minute. Its quality is that of the site's audio (YouTube: Opus, up to 20 kHz).", "", "Get it");
   const m = String(page || "").match(/https?:\/\/\S+/);
   if (!m) { if (page) toast("That is not a link"); return; }
   const token = ++linkToken, w = { stage: "Starting" }, t0 = performance.now();
@@ -1374,7 +1374,7 @@ async function songFromLink(page) {
   const res = await new Promise(r => { w.done = r; linkWaiters[token] = w; ANDROID.linkGet(m[0], token); });
   clearInterval(clock);
   if (!res.ok) { ask("Song from a link", "Could not get that song: " + res.words, "", "OK", "", false); return; }
-  toast("Saved in Music/AVB Player: " + res.words);
+  toast("Saved in Music/AVB Player: " + res.words, 8000);
   for (let i = 0; i < 6 && !songs[res.id]; i++) { loadPhone(false); if (!songs[res.id]) await new Promise(r => setTimeout(r, 500)); }
   if (songs[res.id]) { lib.queue = [res.id, ...lib.queue.filter(x => x !== res.id)]; save("queue"); playIndex(0, true); showPage("music"); }
 }
@@ -3540,7 +3540,7 @@ function fmtTime(s) { s = Math.max(0, s || 0); const m = Math.floor(s / 60); ret
 let toastTimer = 0;
 window.addEventListener("error", e => toast("Something went wrong: " + (e.message || e.error || "unknown")));
 window.addEventListener("unhandledrejection", e => toast("Something went wrong: " + (e.reason && (e.reason.message || e.reason) || "unknown")));
-function toast(t) { const e = $("#toast"); e.textContent = t; e.classList.add("on"); clearTimeout(toastTimer); toastTimer = setTimeout(() => e.classList.remove("on"), 3500); }
+function toast(t, ms) { const e = $("#toast"); e.textContent = t; e.classList.add("on"); clearTimeout(toastTimer); toastTimer = setTimeout(() => e.classList.remove("on"), ms || 3500); }
 
 renderList(); drawWave(); refreshSave();
 if (lib.queue.length && lib.index >= 0 && songs[lib.queue[lib.index]]) { $("#title").textContent = songs[lib.queue[lib.index]].name.replace(/\.[^.]+$/, ""); $("#listen").textContent = "Tap play to continue"; }

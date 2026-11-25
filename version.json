@@ -1,7 +1,7 @@
 {
- "code": 137,
- "name": "12.7",
- "url": "https://angelikavb.github.io/avb-music-player-app/AVB-Player-12.7.apk",
- "sha256": "cb88ae2e8ffd32384d3f7652aef5855dc1add5a7debf6edf32d51294a1069886",
- "notes": "Check for updates is orange in Settings."
+ "code": 138,
+ "name": "12.8",
+ "url": "https://angelikavb.github.io/avb-music-player-app/AVB-Player-12.8.apk",
+ "sha256": "21bb260aa99be8d05954ccc70a41c23419f000334ee764d834a1068661cf217b",
+ "notes": "A song from a link (YouTube, SoundCloud, Bandcamp) is now saved as a stereo WAV, made from the best audio the site offers. YouTube: its Opus stream, which reaches 20 kHz."
 }
