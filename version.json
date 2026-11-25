@@ -1,7 +1,7 @@
 {
- "code": 138,
- "name": "12.8",
- "url": "https://angelikavb.github.io/avb-music-player-app/AVB-Player-12.8.apk",
- "sha256": "21bb260aa99be8d05954ccc70a41c23419f000334ee764d834a1068661cf217b",
- "notes": "A song from a link (YouTube, SoundCloud, Bandcamp) is now saved as a stereo WAV, made from the best audio the site offers. YouTube: its Opus stream, which reaches 20 kHz."
+ "code": 139,
+ "name": "12.9",
+ "url": "https://angelikavb.github.io/avb-music-player-app/AVB-Player-12.9.apk",
+ "sha256": "be6d314785d42d4445aac0572c1dc2a716f27d5f85838b0e8b4b255dcbbbdcc0",
+ "notes": "Updated the part that reads YouTube, SoundCloud and Bandcamp links (NewPipe Extractor 0.27.1, with its SoundCloud and Bandcamp fixes)."
 }
