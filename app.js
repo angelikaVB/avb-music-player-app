@@ -37,6 +37,8 @@ const st = {
   view: { a: 0, b: 1 }, rendering: null,
 };
 
+// A/B: B is another song held beside the playing one (see abPress)
+const ab = { id: null, name: "", ready: false, on: false, match: false, lufs: null, token: 0, loading: "" };
 // ---------------------------------------------------------------- audio
 let ctx = null, node = null, reopening = null, latHint = 0;
 // buffer sizes to try, in turn: a different one makes the phone open a different output
@@ -106,6 +108,7 @@ function reopenAudio(clock) {
       send({ cmd: "loop", loop: loop ? [Math.round(st.a * st.sr), Math.round(st.b * st.sr)] : null });
       if (st.playing) send({ cmd: "play" });
     }
+    if (ab.id) { const on = ab.on; ab.on = false; abShow(); abLoad(ab.id).then(() => { if (on && ab.ready && st.speed === 1 && !st.semis) { ab.on = true; send({ cmd: "ab", on: true }); abShow(); } }); }
     pc = null;
     lib.playLog = [{ t: Date.now(), why: `REOPENED the sound output · audio clock was ${clock.toFixed(3)} · ${was} to ${LAT[latHint]} · sound to ${ANDROID && ANDROID.outName ? ANDROID.outName() : "unknown"}`, song: songs[id] ? songs[id].name.replace(/\.[^.]+$/, "") : "" }, ...(lib.playLog || [])].slice(0, 20);
     save("playLog");
@@ -162,7 +165,7 @@ function analyse() {
     if (st.id !== id) return;
     const d = e.data;
     if (d.stage === "peaks") { st.peaks = d.peaks; st.info = { ...st.info, peakDb: d.peakDb, rmsDb: d.rmsDb }; drawWave(); fillStats(); }
-    if (d.stage === "loudness") { st.loud = d; fillStats(); drawLoud(); }
+    if (d.stage === "loudness") { st.loud = d; fillStats(); drawLoud(); abGain(); }
     if (d.stage === "checks") { st.checks = d; fillStats(); drawWave(); }
     if (d.stage === "tempo") { st.music = { ...(st.music || {}), ...d }; refreshMusic(); }
     if (d.stage === "key") { st.music = { ...(st.music || {}), ...d }; refreshMusic(); }
@@ -198,6 +201,7 @@ async function loadSong(id, autoplay = true) {
   st.id = id; st.name = rec.name; st.playing = false; st.pos = 0; st.a = st.b = null; st.loopOn = false; st.bpmScale = 1; st.changed = false;
   st.music = null; st.sections = []; st.peaks = null; st.loud = null; st.checks = null; st.tags = null; st.view = { a: 0, b: 1 }; st.vzoom = 1;
   st.analysed = false; insReset();
+  ab.on = false; abShow();
   send({ cmd: "unload" }); send({ cmd: "loop", loop: null });
   $("#title").textContent = rec.name.replace(/\.[^.]+$/, "");
   $("#npArtist").textContent = songs[id] && songs[id].artist && !/^<unknown>$/i.test(songs[id].artist) ? songs[id].artist : "";
@@ -543,10 +547,68 @@ function markButton(which) {
 }
 function loopRange(a, b) { st.a = a; st.b = b; st.loopOn = true; syncMarkers(); if (!(st.pos >= a && st.pos < b)) seek(a); }
 
+// ---------------------------------------------------------------- A/B (the user, 2026-11-26: "can i do A B comparison here? if not can we introduce")
+// A is the song playing; B is another song, held on the audio thread beside it. The A/B button (key B) switches
+// which one sounds, at the same moment of the song, with an 8 ms fade. B stays chosen from song to song until removed.
+function abShow() {
+  const c = $("#abChip"), s = $("#abSet"); if (!c) return;
+  c.textContent = ab.loading ? ab.loading : !ab.id ? "A/B" : ab.on ? "Playing B" : "Playing A";
+  c.classList.toggle("on", !!ab.on); c.classList.toggle("cmp", !!ab.id || !!ab.loading);
+  s.hidden = !ab.id; if (ab.id) s.textContent = `B: ${ab.name}`;
+}
+function abGain() {
+  const la = st.loud && st.loud.integrated, g = ab.match && Number.isFinite(la) && Number.isFinite(ab.lufs) ? Math.pow(10, Math.max(-12, Math.min(12, la - ab.lufs)) / 20) : 1;
+  send({ cmd: "altgain", gain: g }); return g;
+}
+async function abLoad(id) {
+  const s0 = songs[id]; if (!s0) return;
+  const token = ++ab.token, t0 = performance.now();
+  ab.id = id; ab.name = s0.name.replace(/\.[^.]+$/, ""); ab.ready = false; ab.on = false; ab.lufs = null;
+  send({ cmd: "ab", on: false }); send({ cmd: "alt", channels: null });
+  const clock = setInterval(() => { if (token === ab.token) { ab.loading = `Reading B… ${((performance.now() - t0) / 1000).toFixed(0)} s`; abShow(); } }, 500);
+  ab.loading = "Reading B… 0 s"; abShow();
+  try {
+    await audio();
+    const rec = s0.url ? null : await songGet(id); const blob = rec && rec.blob ? rec.blob : await (await fetch(s0.url)).blob();
+    const buf = await decodeSong(await blob.arrayBuffer(), s0.name);
+    if (token !== ab.token) return;
+    const chans = channelsOf(buf);
+    node.port.postMessage({ cmd: "alt", channels: chans, gain: 1 }, chans.map(c => c.buffer));
+    ab.ready = true;
+    insMeasure(channelsOf(buf), buf.sampleRate, true, () => { }).then(r => { if (token === ab.token) { ab.lufs = r.integrated; abGain(); } }).catch(() => { });
+  } catch (err) { if (token === ab.token) { ab.id = null; toast("Cannot open that song for A/B: " + (err && err.message || err)); } }
+  finally { clearInterval(clock); if (token === ab.token) { ab.loading = ""; abShow(); } }
+}
+function abPick() {
+  const seen = new Set(), ids = [];
+  for (const id of [...(shownIds.music || []), ...lib.recent, ...lib.favorites]) if (id !== st.id && songs[id] && !seen.has(id)) { seen.add(id); ids.push(id); if (ids.length >= 60) break; }
+  if (!ids.length) { toast("No other song to compare with yet"); return; }
+  sheet(ids.map(id => ({ label: esc(songs[id].name.replace(/\.[^.]+$/, "")), run: () => abLoad(id) })), "A/B: which song is B?",
+    "A is the song playing. The A/B button (key B on the computer) then switches between them at the same moment.");
+}
+function abPress() {
+  if (ab.loading) return;
+  if (!ab.id || !ab.ready) { abPick(); return; }
+  if (!st.buffer) return;
+  if (ab.id === st.id) { toast("B is this same song: pick another under B"); return; }
+  if (st.speed !== 1 || st.semis) { toast("A/B compares the songs as recorded: set Tempo and Pitch back first"); return; }
+  ab.on = !ab.on; send({ cmd: "ab", on: ab.on }); abShow();
+}
+function abMenu() {
+  sheet([
+    { label: "Choose another song as B", run: abPick },
+    { label: ab.match ? "Play B as it is (loudness matching is on)" : "Match B's loudness to A", run: () => {
+      ab.match = !ab.match; abGain();
+      toast(!ab.match ? "B plays as it is" : Number.isFinite(ab.lufs) && st.loud && Number.isFinite(st.loud.integrated) ? `B turned ${sgn(Math.max(-12, Math.min(12, st.loud.integrated - ab.lufs)))} dB to A's loudness` : "B is turned to A's loudness as soon as both are measured"); } },
+    { label: "Stop comparing", run: () => { ab.token++; ab.id = null; ab.ready = false; ab.on = false; ab.loading = ""; send({ cmd: "ab", on: false }); send({ cmd: "alt", channels: null }); abShow(); } },
+  ], `B: ${ab.name}`, "The waveform and the numbers stay the playing song's (A).");
+}
+
 // ---------------------------------------------------------------- tempo & key
 async function applyChange() {
   const speed = +$("#speed").value / 100, semis = st.semis, keepVoice = $("#keepVoice").checked, finer = $("#finer").checked;
   st.speed = speed;
+  if (ab.on && (speed !== 1 || semis)) { ab.on = false; send({ cmd: "ab", on: false }); abShow(); toast("A/B is off: it compares the songs as recorded, not with a tempo or key change"); }
   if (st.id) {                                               // remembered for this song only
     if (speed === 1 && !semis) delete lib.change[st.id]; else lib.change[st.id] = { speed: Math.round(speed * 1e6) / 1e4, semis };
     save("change");
@@ -3218,6 +3280,8 @@ $("#cutLoop").onclick = () => { if (st.a === null || st.b === null) return; st.l
 $("#cutFmt").onclick = () => {
   const items = [];
   for (const o of $("#fmt").querySelectorAll("option")) {
+  if (t === "ab") { abPress(); return; }
+  if (t === "abset") { abMenu(); return; }
     const [k, n] = o.value.split("-"), why = saveReason("keep", { kind: k, n: +n });
     if (why && !why.startsWith("Mark")) continue;                                // above the file's own quality
     const sz = copySize("keep", o.value);
@@ -3550,7 +3614,7 @@ $("#filter").addEventListener("paste", e => {
 });
 $("#filter").oninput = () => { document.body.classList.toggle("searching", !!$("#filter").value.trim()); renderList(); };
 window.addEventListener("resize", () => { drawWave(); drawLoud(); drawEq(); drawRecorder(); drawMeter(); });
-document.addEventListener("keydown", e => { if (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA") return; if (e.code === "Space") { e.preventDefault(); togglePlay(); } if (e.key === "ArrowLeft") seek(st.pos - 5); if (e.key === "ArrowRight") seek(st.pos + 5); });
+document.addEventListener("keydown", e => { if (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA") return; if (e.code === "Space") { e.preventDefault(); togglePlay(); } if ((e.key === "b" || e.key === "B") && !e.ctrlKey && !e.altKey && !e.metaKey && st.buffer) abPress(); if (e.key === "ArrowLeft") seek(st.pos - 5); if (e.key === "ArrowRight") seek(st.pos + 5); });
 
 // clock
 let lastDraw = 0;

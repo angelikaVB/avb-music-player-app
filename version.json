@@ -1,7 +1,7 @@
 {
- "code": 140,
- "name": "13.0",
- "url": "https://angelikavb.github.io/avb-music-player-app/AVB-Player-13.0.apk",
- "sha256": "d95c2569d28d5e950145841c9616248a31bf61c55dc320ab6569acb2a8ba6871",
- "notes": "13.0: Save as no longer offers mono. MP3 and M4A songs show and keep their own sample rate."
+ "code": 141,
+ "name": "13.1",
+ "url": "https://angelikavb.github.io/avb-music-player-app/AVB-Player-13.1.apk",
+ "sha256": "0e543dd879b286231899763d42f899cf47047559fa761a46b7034123f8fecde4",
+ "notes": "A/B: compare two songs by ear. Tap A/B under the waveform, pick the other song, then tap to switch between them at the same moment. B's loudness can be matched to A."
 }

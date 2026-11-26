@@ -973,6 +973,15 @@ body:not(.drill) #libHead { display: none; }
   content: ""; display: inline-block; width: 15px; height: 15px; margin-right: 6px; vertical-align: -2.5px; background: currentColor;
   -webkit-mask: var(--ico) center / contain no-repeat; mask: var(--ico) center / contain no-repeat; }
 #homeTools button::before { background: #C4B5FD; }
+/* A/B: an icon of two-way arrows; its B chip has none; the row wraps on a phone so neither is cut off */
+#homeTools { flex-wrap: wrap; overflow-x: visible; gap: 6px; }
+#homeTools button { padding: 7px 10px; }
+#homeTools button.on { color: #2A1A04 !important; }
+#homeTools #abChip:not(.cmp)::before { content: none; }
+#homeTools [data-tool="abset"]::before { content: none; }
+#homeTools [data-tool="abset"] { max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+#homeTools #abChip.on::before { background: currentColor; }
+#homeTools [data-tool="ab"] { --ico: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M7 8h13l-3-3M17 16H4l3 3'/%3E%3C/svg%3E"); }
 #homeTools [data-tool="intel"] { --ico: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='9'/%3E%3Cpath d='M12 11v6M12 7.5v.01'/%3E%3C/svg%3E"); }
 #homeTools [data-tool="loud"] { --ico: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 18v-6M10 18V7M14 18V9M18 18v-4'/%3E%3C/svg%3E"); }
 #homeTools [data-tool="notes"] { --ico: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 20h4L18.5 9.5a2.1 2.1 0 0 0-4-4L4 16v4z'/%3E%3Cpath d='M13.5 6.5l4 4'/%3E%3C/svg%3E"); }
