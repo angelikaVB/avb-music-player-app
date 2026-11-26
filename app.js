@@ -360,7 +360,8 @@ function bitsOf(rec) {
 }
 async function sniffBits(blob, name) { return (await sniffHeader(blob, name)).bits; }
 async function sniffHeader(blob, name) {
-  // WAV / FLAC / AIFF headers say their sample rate and depth; compressed formats get the rate only where easy
+  // WAV / FLAC / AIFF headers say their sample rate and depth; MP3 and M4A their rate (the decoder resamples to
+  // the phone's own, so the decoded rate is not the song's)
   const f = fmtOf(name);
   try {
     const head = new DataView(await blob.slice(0, 4096).arrayBuffer());
@@ -377,8 +378,59 @@ async function sniffHeader(blob, name) {
       const bits = ((((head.getUint8(20) & 1) << 4) | (head.getUint8(21) >> 4)) & 0x1f) + 1;
       return { rate, bits };
     }
+    if (f === "MP3") return { rate: await mp3Rate(blob), bits: 0 };
+    if (f === "M4A" || f === "MP4" || f === "M4B") return { rate: await mp4Rate(blob), bits: 0 };
   } catch (_) { }
   return { rate: 0, bits: 0 };
+}
+// the first MP3 frame after any ID3 tag, believed only when a second frame follows it where its length says
+async function mp3Rate(blob) {
+  const tag = new Uint8Array(await blob.slice(0, 10).arrayBuffer());
+  const skip = tag[0] === 0x49 && tag[1] === 0x44 && tag[2] === 0x33 ? 10 + (tag[5] & 0x10 ? 10 : 0) + ((tag[6] << 21) | (tag[7] << 14) | (tag[8] << 7) | tag[9]) : 0;
+  const b = new Uint8Array(await blob.slice(skip, skip + 65536).arrayBuffer());
+  const frame = i => {
+    if (i + 4 > b.length || b[i] !== 0xff || (b[i + 1] & 0xe0) !== 0xe0) return null;
+    const ver = (b[i + 1] >> 3) & 3, layer = (b[i + 1] >> 1) & 3, bi = b[i + 2] >> 4, ri = (b[i + 2] >> 2) & 3;
+    if (ver === 1 || layer !== 1 || bi === 0 || bi === 15 || ri === 3) return null;
+    const rate = [44100, 48000, 32000][ri] / (ver === 3 ? 1 : ver === 2 ? 2 : 4);
+    const kbps = (ver === 3 ? [0, 32, 40, 48, 56, 64, 80, 96, 112, 128, 160, 192, 224, 256, 320] : [0, 8, 16, 24, 32, 40, 48, 56, 64, 80, 96, 112, 128, 144, 160])[bi];
+    return { rate, size: Math.floor((ver === 3 ? 144000 : 72000) * kbps / rate) + ((b[i + 2] >> 1) & 1) };
+  };
+  for (let i = 0; i + 4 <= b.length; i++) {
+    const one = frame(i), two = one && frame(i + one.size);
+    if (two && two.rate === one.rate) return one.rate;
+  }
+  return 0;
+}
+// moov > trak > mdia > minf > stbl > stsd: the audio entry's rate (ALAC: its own setup box).  AAC declared at 24 kHz
+// or less is left unknown: HE-AAC declares half of what it plays
+async function mp4Rate(blob) {
+  const kind = (v, p) => String.fromCharCode(v.getUint8(p), v.getUint8(p + 1), v.getUint8(p + 2), v.getUint8(p + 3));
+  for (let p = 0, n = 0; p + 8 <= blob.size && n < 200; n++) {
+    const h = new DataView(await blob.slice(p, p + 16).arrayBuffer());
+    let size = h.getUint32(0), head = 8;
+    if (size === 1 && h.byteLength >= 16) { size = h.getUint32(8) * 4294967296 + h.getUint32(12); head = 16; }
+    if (size === 0) size = blob.size - p;
+    if (size < head) return 0;
+    if (kind(h, 4) !== "moov") { p += size; continue; }
+    const v = new DataView(await blob.slice(p + head, p + Math.min(size, 33554432)).arrayBuffer());
+    const find = (from, to) => {
+      for (let q = from; q + 8 <= to;) {
+        const sz = v.getUint32(q), id = kind(v, q + 4);
+        if (sz < 8 || q + sz > to) return 0;
+        if (id === "trak" || id === "mdia" || id === "minf" || id === "stbl") { const r = find(q + 8, q + sz); if (r) return r; }
+        else if (id === "stsd" && sz >= 52) {
+          const e = q + 16, type = kind(v, e + 4);
+          if (type === "mp4a") { const r = v.getUint32(e + 32) >>> 16; return r > 24000 ? r : 0; }
+          if (type === "alac") return e + 72 <= q + sz && kind(v, e + 40) === "alac" ? v.getUint32(e + 68) : 0;
+        }
+        q += sz;
+      }
+      return 0;
+    };
+    return find(0, v.byteLength);
+  }
+  return 0;
 }
 
 // ---------------------------------------------------------------- transport
@@ -1226,7 +1278,6 @@ function saveName(part, f) {
   if (f.kind === "mp3") tags.push(`${f.n} kbps`);
   else if (!st.info.bits || f.n !== st.info.bits) tags.push(f.n === 32 ? "32-bit float" : `${f.n}-bit`);
   if (f.rate) tags.push((f.rate / 1000).toFixed(1).replace(".0", "") + " kHz");
-  if (f.mono) tags.push("mono");
   return `${stem}${tags.length ? ` (${tags.join(", ")})` : ""}.${f.kind}`;
 }
 let saving = null;
@@ -1238,7 +1289,6 @@ async function makeCopy(part, f, onStage) {
   if (eqActive()) { onStage("Applying the EQ"); chans = await renderEq(chans, sr); }
   if (st.info.rate && st.info.rate !== sr) { onStage("Back to " + (st.info.rate / 1000).toFixed(1).replace(".0", "") + " kHz"); chans = await resample(chans, sr, st.info.rate); sr = st.info.rate; }
   if (f.rate && f.rate < sr) { onStage("Down to " + (f.rate / 1000).toFixed(1).replace(".0", "") + " kHz"); chans = await resample(chans, sr, f.rate); sr = f.rate; }
-  if (f.mono && chans.length > 1) { const m = new Float32Array(chans[0].length); for (const c of chans) for (let i = 0; i < m.length; i++) m[i] += c[i] / chans.length; chans = [m]; }
   let peak = 0; for (const c of chans) for (let i = 0; i < c.length; i++) peak = Math.max(peak, Math.abs(c[i]));
   let note = "";
   if (peak > 1 && !(f.kind === "wav" && f.n === 32)) { const g = 0.989 / peak; for (const c of chans) for (let i = 0; i < c.length; i++) c[i] *= g; note = ` · lowered ${(20 * Math.log10(g)).toFixed(1)} dB so it does not clip`; }
@@ -1310,7 +1360,7 @@ async function shareCopy(f) {
     await deliverShare(blob, name);
   } catch (err) { clearInterval(clock); toast("Could not make the copy: " + (err && err.message || err)); }
 }
-// Save as (the ⋯ menu): the whole song as a smaller file - MP3, or a WAV at 16-bit, 44.1 kHz or mono - each with its
+// Save as (the ⋯ menu): the whole song as a smaller file - MP3, or a WAV at 16-bit or 44.1 kHz - each with its
 // size; your tempo/key and EQ go into it, as in Save a copy; it goes to Downloads
 async function saveAsMenu(id) {
   if (st.id !== id) { await loadSong(id, false); if (st.id !== id || !st.buffer) return; }
@@ -1324,11 +1374,10 @@ async function saveAsMenu(id) {
     [{ kind: "wav", n: 16 }, "WAV 16-bit"],
   ];
   if (rate > 44100) fmts.push([{ kind: "wav", n: 16, rate: 44100 }, "WAV 16-bit · 44.1 kHz"]);
-  if (ch > 1) fmts.push([{ kind: "wav", n: 16, rate: rate > 44100 ? 44100 : 0, mono: true }, `WAV 16-bit${rate > 44100 ? " · 44.1 kHz" : ""} · mono`]);
   const items = [];
   for (const [f, label] of fmts) {
-    if (!f.rate && !f.mono && saveReason("whole", f)) continue;            // above the song's own quality, or the same file
-    const bytes = f.kind === "mp3" ? dur * f.n * 1000 / 8 : dur * (f.rate || rate) * (f.mono ? 1 : ch) * 2 + 44;
+    if (!f.rate && saveReason("whole", f)) continue;            // above the song's own quality, or the same file
+    const bytes = f.kind === "mp3" ? dur * f.n * 1000 / 8 : dur * (f.rate || rate) * ch * 2 + 44;
     items.push({ label: `${label} · ${(bytes / 1e6).toFixed(1)} MB`, run: () => saveAs(f) });
   }
   if (!items.length) { toast("This song is already as small as these formats"); return; }

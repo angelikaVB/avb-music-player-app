@@ -1,7 +1,7 @@
 {
- "code": 139,
- "name": "12.9",
- "url": "https://angelikavb.github.io/avb-music-player-app/AVB-Player-12.9.apk",
- "sha256": "be6d314785d42d4445aac0572c1dc2a716f27d5f85838b0e8b4b255dcbbbdcc0",
- "notes": "Updated the part that reads YouTube, SoundCloud and Bandcamp links (NewPipe Extractor 0.27.1, with its SoundCloud and Bandcamp fixes)."
+ "code": 140,
+ "name": "13.0",
+ "url": "https://angelikavb.github.io/avb-music-player-app/AVB-Player-13.0.apk",
+ "sha256": "d95c2569d28d5e950145841c9616248a31bf61c55dc320ab6569acb2a8ba6871",
+ "notes": "13.0: Save as no longer offers mono. MP3 and M4A songs show and keep their own sample rate."
 }
